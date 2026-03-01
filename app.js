@@ -283,55 +283,72 @@ function loadChannels(serverId) {
 }
 
 // --- VOICE CHAT & WEBRTC ENGINE ---
+// --- VOICE CHAT & WEBRTC ENGINE ---
+let myCurrentPeerId = null; // Stores our random, valid PeerJS ID
 
 function initVoiceChat() {
-    // We use our safe email as our exact Peer ID so others can call us by name
-    myPeer = new Peer(currentUserSafeEmail);
+    // 1. Let PeerJS generate a random, valid ID automatically
+    myPeer = new Peer();
 
-    myPeer.on('open', id => console.log('My Peer ID is: ' + id));
+    myPeer.on('open', id => {
+        myCurrentPeerId = id;
+        console.log('✅ Connected to Voice Server! Your ID is: ' + id);
+    });
+
+    myPeer.on('error', err => {
+        console.error('PeerJS Error:', err);
+    });
 
     // When someone else calls us
     myPeer.on('call', call => {
-        // Answer the call and send them our audio
         call.answer(localAudioStream);
         
+        // Retrieve their email from the metadata they sent us
+        const callerEmail = call.metadata ? call.metadata.callerEmail : call.peer;
+        
         call.on('stream', userAudioStream => {
-            addVoiceUserUI(call.peer, userAudioStream);
+            addVoiceUserUI(callerEmail, userAudioStream);
         });
 
-        activeCalls[call.peer] = call;
+        activeCalls[callerEmail] = call;
         
         call.on('close', () => {
-            removeVoiceUserUI(call.peer);
+            removeVoiceUserUI(callerEmail);
         });
     });
 }
 
 async function joinVoiceChannel(serverId, channelId) {
-    if (currentVoiceChannel === channelId) return; // Already in it
-    leaveVoiceChannel(); // Leave current VC if in one
+    if (currentVoiceChannel === channelId) return; 
+    
+    if (!myCurrentPeerId) {
+        alert("Voice server is still connecting. Give it a few seconds and try again!");
+        return;
+    }
+
+    leaveVoiceChannel(); 
 
     try {
-        // Ask for Microphone access
         localAudioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         
         currentVoiceChannel = channelId;
         document.getElementById('voice-area').style.display = 'flex';
 
-        // Add ourselves to the Firebase VC roster
+        // 2. Save our RANDOM Peer ID to the Firebase Roster instead of 'true'
         const vcRef = ref(db, `voice_rosters/${serverId}/${channelId}/${currentUserSafeEmail}`);
-        await set(vcRef, true);
+        await set(vcRef, myCurrentPeerId); 
         
-        // Auto-remove if we close the tab
         onDisconnect(vcRef).remove();
 
-        // Listen for who is in the channel to call them
+        // Listen for who is in the channel
         onValue(ref(db, `voice_rosters/${serverId}/${channelId}`), (snapshot) => {
             snapshot.forEach((child) => {
-                const peerId = child.key;
-                // If they are not us, and we haven't called them yet, call them!
-                if (peerId !== currentUserSafeEmail && !activeCalls[peerId]) {
-                    connectToNewUser(peerId, localAudioStream);
+                const peerEmail = child.key; // Their email
+                const peerJsId = child.val(); // Their random PeerJS ID
+                
+                // If they are not us, and we haven't called them yet, call their random ID!
+                if (peerEmail !== currentUserSafeEmail && !activeCalls[peerEmail]) {
+                    connectToNewUser(peerEmail, peerJsId, localAudioStream);
                 }
             });
         });
@@ -342,55 +359,27 @@ async function joinVoiceChannel(serverId, channelId) {
     }
 }
 
-function connectToNewUser(peerId, stream) {
-    // 1. Safety Check: Make sure our own Peer connection is actually active
-    if (!myPeer || myPeer.disconnected) {
-        console.warn("PeerJS isn't ready yet. Waiting...");
-        return;
-    }
+function connectToNewUser(peerEmail, peerJsId, stream) {
+    if (!myPeer || !myCurrentPeerId) return;
 
-    const call = myPeer.call(peerId, stream);
+    // 3. Call their random ID, and send our email as metadata so they know who we are!
+    const call = myPeer.call(peerJsId, stream, {
+        metadata: { callerEmail: currentUserSafeEmail }
+    });
     
-    // 2. Safety Check: If PeerJS couldn't establish the call, stop here so it doesn't crash
-    if (!call) {
-        console.warn(`Could not connect to ${peerId}. They might still be loading.`);
-        return;
-    }
+    if (!call) return; // Safety check
     
-    // If the call succeeds, attach the audio streams
     call.on('stream', userAudioStream => {
-        addVoiceUserUI(peerId, userAudioStream);
+        addVoiceUserUI(peerEmail, userAudioStream);
     });
     
     call.on('close', () => {
-        removeVoiceUserUI(peerId);
+        removeVoiceUserUI(peerEmail);
     });
 
-    activeCalls[peerId] = call;
+    activeCalls[peerEmail] = call;
 }
 
-function leaveVoiceChannel() {
-    if (!currentVoiceChannel) return;
-
-    // Disconnect all calls
-    Object.keys(activeCalls).forEach(peerId => {
-        activeCalls[peerId].close();
-        removeVoiceUserUI(peerId);
-    });
-    activeCalls = {};
-
-    // Stop our microphone
-    if (localAudioStream) {
-        localAudioStream.getTracks().forEach(track => track.stop());
-    }
-
-    // Remove ourselves from Firebase roster
-    remove(ref(db, `voice_rosters/${currentServerId}/${currentVoiceChannel}/${currentUserSafeEmail}`));
-
-    currentVoiceChannel = null;
-    document.getElementById('voice-area').style.display = 'none';
-    document.getElementById('voice-users-list').innerHTML = ''; // Clear UI
-}
 
 // UI Controls for Voice
 document.getElementById('disconnect-vc-btn').addEventListener('click', leaveVoiceChannel);
