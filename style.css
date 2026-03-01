@@ -1,3 +1,4 @@
+/* --- Base Styles --- */
 body {
     background-color: #36393f;
     color: #dcddde;
@@ -9,18 +10,32 @@ body {
     align-items: center;
 }
 
-/* Auth Screen */
-#auth-section { background-color: #2f3136; padding: 30px; border-radius: 8px; width: 300px; text-align: center; }
-#auth-section input { width: 90%; padding: 10px; margin-bottom: 10px; border-radius: 4px; border: none; background: #202225; color: white;}
+/* --- Auth Screen --- */
+#auth-section { 
+    background-color: #2f3136; 
+    padding: 30px; 
+    border-radius: 8px; 
+    width: 300px; 
+    text-align: center; 
+}
+#auth-section input { 
+    width: 90%; 
+    padding: 10px; 
+    margin-bottom: 10px; 
+    border-radius: 4px; 
+    border: none; 
+    background: #202225; 
+    color: white;
+}
 
-/* App Layout */
+/* --- App Layout --- */
 #app-container {
     display: flex;
     width: 100vw;
     height: 100vh;
 }
 
-/* Far Left: Servers */
+/* --- Far Left: Server Sidebar --- */
 #server-sidebar {
     width: 72px;
     background-color: #202225;
@@ -35,51 +50,28 @@ body {
     width: 48px;
     height: 48px;
     background-color: #36393f;
-    border-radius: 50%; /* Circle */
+    border-radius: 50%;
     display: flex;
     justify-content: center;
     align-items: center;
     margin-bottom: 10px;
     cursor: pointer;
     font-weight: bold;
+    font-size: 20px;
     transition: 0.2s ease;
 }
-.server-icon:hover { background-color: #5865F2; border-radius: 16px; color: white; }
+.server-icon:hover { 
+    background-color: #5865F2; 
+    border-radius: 16px; 
+    color: white; 
+}
 
-/* Middle: Channels */
+/* --- Middle: Channel Sidebar --- */
 #channel-sidebar {
     width: 240px;
     background-color: #2f3136;
     display: flex;
     flex-direction: column;
-}
-
-#server-name-display { padding: 15px; margin: 0; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
-#channel-list { flex-grow: 1; padding: 10px; overflow-y: auto; }
-
-.channel-item {
-    padding: 8px;
-    margin-bottom: 2px;
-    border-radius: 4px;
-    cursor: pointer;
-    color: #8e9297;
-}
-.channel-item:hover { background-color: #393c43; color: white; }
-
-#user-controls {
-    background-color: #292b2f;
-    padding: 10px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-/* Right: Chat */
-#chat-area {
-    flex-grow: 1;
-    display: flex;
-    flex-direction: column;
-    background-color: #36393f;
 }
 
 #sidebar-header {
@@ -89,17 +81,167 @@ body {
     align-items: center;
     box-shadow: 0 1px 2px rgba(0,0,0,0.2);
 }
-#sidebar-header h3 { margin: 0; font-size: 14px; }
-.server-icon { font-size: 20px; }
-#invite-code-display { cursor: pointer; user-select: all; }
+#sidebar-header h3 { 
+    margin: 0; 
+    font-size: 14px; 
+}
 
-#chat-header { padding: 15px; border-bottom: 1px solid #202225; font-weight: bold; }
-#messages { flex-grow: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; }
-.message { margin-bottom: 15px; }
-.message-sender { font-weight: bold; color: white; margin-right: 10px; }
+#channel-list { 
+    flex-grow: 1; 
+    padding: 10px; 
+    overflow-y: auto; 
+}
 
-#message-input-area { padding: 20px; display: flex; }
-#msg-input { flex-grow: 1; padding: 15px; border-radius: 8px; border: none; background-color: #40444b; color: white; outline: none; }
-button { background-color: #5865F2; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; margin-left: 10px;}
-button:hover { background-color: #4752c4; }
-.small-btn { padding: 5px 10px; font-size: 12px; }
+.channel-item {
+    padding: 8px;
+    margin-bottom: 2px;
+    border-radius: 4px;
+    cursor: pointer;
+    color: #8e9297;
+}
+.channel-item:hover { 
+    background-color: #393c43; 
+    color: white; 
+}
+
+/* User Controls at bottom of Channel Sidebar */
+#user-controls {
+    background-color: #292b2f;
+    padding: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+}
+#user-controls:hover {
+    background-color: #393c43;
+}
+#user-info {
+    flex-grow: 1;
+    margin-left: 10px;
+}
+
+/* --- Right: Chat Area --- */
+#chat-area {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    background-color: #36393f;
+}
+
+#chat-header { 
+    padding: 15px; 
+    border-bottom: 1px solid #202225; 
+    font-weight: bold; 
+}
+
+#messages { 
+    flex-grow: 1; 
+    padding: 20px; 
+    overflow-y: auto; 
+    display: flex; 
+    flex-direction: column; 
+}
+
+#message-input-area { 
+    padding: 20px; 
+    display: flex; 
+}
+#msg-input { 
+    flex-grow: 1; 
+    padding: 15px; 
+    border-radius: 8px; 
+    border: none; 
+    background-color: #40444b; 
+    color: white; 
+    outline: none; 
+}
+
+/* --- Buttons --- */
+button { 
+    background-color: #5865F2; 
+    color: white; 
+    border: none; 
+    padding: 10px 15px; 
+    border-radius: 4px; 
+    cursor: pointer; 
+    margin-left: 10px;
+}
+button:hover { 
+    background-color: #4752c4; 
+}
+button:disabled {
+    background-color: #40444b;
+    cursor: not-allowed;
+    color: gray;
+}
+.small-btn { 
+    padding: 5px 10px; 
+    font-size: 12px; 
+    margin-left: 5px;
+}
+
+/* --- Avatars & Messages --- */
+.avatar-small { 
+    width: 32px; 
+    height: 32px; 
+    border-radius: 50%; 
+    object-fit: cover; 
+}
+.avatar-large { 
+    width: 64px; 
+    height: 64px; 
+    border-radius: 50%; 
+    object-fit: cover; 
+}
+
+.message { 
+    margin-bottom: 15px; 
+}
+.message-header { 
+    display: flex; 
+    align-items: center; 
+    gap: 10px; 
+    margin-bottom: 5px; 
+}
+.message-sender { 
+    font-weight: bold; 
+    color: white; 
+}
+.friend-item { 
+    display: flex; 
+    align-items: center; 
+    gap: 10px; 
+}
+
+/* --- Profile Settings Modal --- */
+#profile-modal {
+    position: fixed; 
+    top: 0; 
+    left: 0; 
+    width: 100vw; 
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex; 
+    justify-content: center; 
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background-color: #36393f; 
+    padding: 25px; 
+    border-radius: 8px; 
+    width: 350px;
+}
+.modal-content input[type="text"], 
+.modal-content input[type="number"] { 
+    width: 90%; 
+    padding: 10px;
+    margin-top: 5px; 
+    margin-bottom: 15px; 
+    border-radius: 4px;
+    border: none;
+    background-color: #202225;
+    color: white;
+}

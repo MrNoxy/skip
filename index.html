@@ -18,7 +18,7 @@
     <div id="app-container" style="display: none;">
         
         <div id="server-sidebar">
-            <div class="server-icon" id="home-btn" title="Direct Messages">🏠</div>
+            <div class="server-icon" id="home-btn" title="Friends & DMs">🏠</div>
             <div id="server-list"></div>
             <div class="server-icon" id="create-server-btn" title="Create Server">+</div>
             <div class="server-icon" id="join-server-btn" title="Join Server">🔗</div>
@@ -34,8 +34,12 @@
             <div id="channel-list">
                 </div>
             
-            <div id="user-controls">
-                <span id="user-display">User</span>
+            <div id="user-controls" title="Click to edit profile">
+                <img id="my-avatar" class="avatar-small" src="https://via.placeholder.com/150" alt="Me">
+                <div id="user-info">
+                    <div id="user-display" style="font-weight: bold;">User</div>
+                    <div id="user-tag-display" style="font-size: 12px; color: gray;">#0000</div>
+                </div>
                 <button id="logout-btn" class="small-btn">Log Out</button>
             </div>
         </div>
@@ -43,12 +47,30 @@
         <div id="chat-area">
             <div id="chat-header">
                 <span id="chat-title">Select a chat to start messaging</span>
-                <span id="invite-code-display" style="font-size: 12px; color: gray; margin-left: 15px;"></span>
+                <span id="invite-code-display" style="font-size: 12px; color: gray; margin-left: 15px; user-select: all; cursor: pointer;"></span>
             </div>
             <div id="messages"></div>
             <div id="message-input-area">
                 <input type="text" id="msg-input" placeholder="Message..." disabled>
                 <button id="send-btn" disabled>Send</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="profile-modal" style="display: none;">
+        <div class="modal-content">
+            <h3>Edit Profile</h3>
+            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+                <img id="profile-preview" class="avatar-large" src="https://via.placeholder.com/150" alt="Avatar">
+                <input type="file" id="avatar-upload" accept="image/*">
+            </div>
+            <label>Username</label>
+            <input type="text" id="edit-username" placeholder="Username">
+            <label>Tag (4 digits)</label>
+            <input type="number" id="edit-tag" placeholder="6996">
+            <div style="margin-top: 15px;">
+                <button id="save-profile-btn">Save Changes</button>
+                <button id="close-profile-btn" style="background-color: #ed4245;">Cancel</button>
             </div>
         </div>
     </div>
