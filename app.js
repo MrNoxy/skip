@@ -22,11 +22,12 @@ let currentServerId = null;
 let currentChatId = null; 
 let chatType = null; 
 let currentUserSafeEmail = null;
-let myProfile = {}; // Stores my username, tag, and avatar
+let myProfile = {}; 
 
 const appContainer = document.getElementById('app-container');
 const authSection = document.getElementById('auth-section');
 
+// Helper to handle Firebase's dislike for periods in database keys
 function sanitizeEmail(email) { return email.replace(/\./g, ','); }
 
 // --- AUTH & PROFILE CREATION ---
@@ -39,23 +40,34 @@ document.getElementById('register-btn').addEventListener('click', async () => {
         
         // Generate default Discord-like tag
         const baseName = email.split('@')[0];
-        const randomTag = Math.floor(1000 + Math.random() * 9000).toString(); // e.g. "6996"
-        const defaultAvatar = "https://via.placeholder.com/150/5865F2/FFFFFF?text=" + baseName.charAt(0).toUpperCase();
+        const randomTag = Math.floor(1000 + Math.random() * 9000).toString(); 
+        
+        // Using UI Avatars instead of placeholder.com
+        const defaultAvatar = `https://ui-avatars.com/api/?name=${baseName.charAt(0)}&background=5865F2&color=fff&size=150`;
 
         const profileData = { 
-            email: email, uid: userCredential.user.uid, 
-            username: baseName, tag: randomTag, avatar: defaultAvatar 
+            email: email, 
+            uid: userCredential.user.uid, 
+            username: baseName, 
+            tag: randomTag, 
+            avatar: defaultAvatar 
         };
 
+        // Save profile data
         await set(ref(db, `users/${safeEmail}`), profileData);
-        // Save to a lookup table so friends can find you by tag!
-        await set(ref(db, `user_tags/${baseName}#${randomTag}`), safeEmail);
+        
+        // Save to lookup table (Replacing # with _ so Firebase doesn't crash)
+        await set(ref(db, `user_tags/${baseName}_${randomTag}`), safeEmail);
         
         alert("Registered successfully!");
     } catch (error) { alert(error.message); }
 });
 
-document.getElementById('login-btn').addEventListener('click', () => signInWithEmailAndPassword(auth, document.getElementById('email').value, document.getElementById('password').value).catch(e => alert(e.message)));
+document.getElementById('login-btn').addEventListener('click', () => {
+    signInWithEmailAndPassword(auth, document.getElementById('email').value, document.getElementById('password').value)
+        .catch(e => alert(e.message));
+});
+
 document.getElementById('logout-btn').addEventListener('click', () => signOut(auth));
 
 onAuthStateChanged(auth, async (user) => {
@@ -88,7 +100,7 @@ let tempBase64Avatar = null;
 
 // Open modal
 document.getElementById('user-controls').addEventListener('click', (e) => {
-    if(e.target.id === 'logout-btn') return; // Don't open if clicking logout
+    if(e.target.id === 'logout-btn') return; 
     document.getElementById('edit-username').value = myProfile.username;
     document.getElementById('edit-tag').value = myProfile.tag;
     document.getElementById('profile-preview').src = myProfile.avatar;
@@ -105,10 +117,10 @@ document.getElementById('avatar-upload').addEventListener('change', (e) => {
     if (file) {
         const reader = new FileReader();
         reader.onloadend = () => {
-            tempBase64Avatar = reader.result; // This is the Base64 string!
+            tempBase64Avatar = reader.result; 
             document.getElementById('profile-preview').src = tempBase64Avatar;
         };
-        reader.readAsDataURL(file); // Triggers the conversion
+        reader.readAsDataURL(file); 
     }
 });
 
@@ -119,13 +131,15 @@ document.getElementById('save-profile-btn').addEventListener('click', async () =
     
     if(!newUsername || !newTag) return alert("Fields cannot be empty");
 
-    const oldFullTag = `${myProfile.username}#${myProfile.tag}`;
-    const newFullTag = `${newUsername}#${newTag}`;
+    // Use underscores instead of # for database paths
+    const oldDbTag = `${myProfile.username}_${myProfile.tag}`;
+    const newDbTag = `${newUsername}_${newTag}`;
 
-    // Update Database
-    await remove(ref(db, `user_tags/${oldFullTag}`)); // Remove old lookup
-    await set(ref(db, `user_tags/${newFullTag}`), currentUserSafeEmail); // Add new lookup
+    // Update Database lookup
+    await remove(ref(db, `user_tags/${oldDbTag}`)); 
+    await set(ref(db, `user_tags/${newDbTag}`), currentUserSafeEmail); 
     
+    // Update Profile
     await set(ref(db, `users/${currentUserSafeEmail}/username`), newUsername);
     await set(ref(db, `users/${currentUserSafeEmail}/tag`), newTag);
     await set(ref(db, `users/${currentUserSafeEmail}/avatar`), tempBase64Avatar);
@@ -149,17 +163,18 @@ document.getElementById('add-friend-btn').addEventListener('click', async () => 
     let inputTag = prompt("Enter friend's tag (e.g. @noxy#6996 or noxy#6996):");
     if (!inputTag) return;
 
-    // Remove the @ if they typed it
     if(inputTag.startsWith('@')) inputTag = inputTag.substring(1);
 
+    // Convert the # to _ for the database search
+    const dbSearchTag = inputTag.replace('#', '_');
+    
     // Look up the safeEmail associated with this tag
-    const tagSnapshot = await get(child(ref(db), `user_tags/${inputTag}`));
+    const tagSnapshot = await get(child(ref(db), `user_tags/${dbSearchTag}`));
     
     if (tagSnapshot.exists()) {
         const friendSafeEmail = tagSnapshot.val();
         if(friendSafeEmail === currentUserSafeEmail) return alert("You can't add yourself!");
 
-        // Get friend's full profile to save their avatar locally in the friend list
         const friendProfileSnap = await get(child(ref(db), `users/${friendSafeEmail}`));
         const friendProfile = friendProfileSnap.val();
 
@@ -188,7 +203,6 @@ function loadFriendsList() {
             const friendDiv = document.createElement('div');
             friendDiv.classList.add('channel-item', 'friend-item');
             
-            // Render their avatar in the sidebar!
             friendDiv.innerHTML = `
                 <img src="${friendData.avatar}" class="avatar-small">
                 <span>${friendData.username}</span>
@@ -206,7 +220,7 @@ function loadFriendsList() {
     });
 }
 
-// --- SERVERS & CHANNELS (Same as before) ---
+// --- SERVERS & CHANNELS ---
 document.getElementById('create-server-btn').addEventListener('click', () => {
     const serverName = prompt("Enter Server Name:");
     if (serverName) {
@@ -287,7 +301,7 @@ function loadChannels(serverId) {
     });
 }
 
-// --- MESSAGES WITH AVATARS ---
+// --- MESSAGES ---
 function enableChat() {
     document.getElementById('msg-input').disabled = false;
     document.getElementById('send-btn').disabled = false;
@@ -302,14 +316,13 @@ function loadMessages(dbPath) {
         const msgElement = document.createElement('div');
         msgElement.classList.add('message');
         
-        // Render the message with the user's avatar and tag!
         msgElement.innerHTML = `
             <div class="message-header">
                 <img src="${data.avatar}" class="avatar-small">
                 <span class="message-sender">${data.username}</span>
                 <span style="font-size: 0.8em; color: gray;">${new Date(data.timestamp).toLocaleTimeString()}</span>
             </div>
-            <div style="margin-left: 42px;">${data.text}</div>
+            <div style="margin-left: 42px; word-break: break-word;">${data.text}</div>
         `;
         messagesDiv.appendChild(msgElement);
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
@@ -323,7 +336,7 @@ function sendMessage() {
         const path = chatType === 'server' ? `messages/${currentChatId}` : `dms/${currentChatId}`;
         push(ref(db, path), {
             sender: auth.currentUser.email,
-            username: myProfile.username, // Attach current profile details to the message
+            username: myProfile.username, 
             avatar: myProfile.avatar,
             text: text,
             timestamp: Date.now()
