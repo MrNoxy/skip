@@ -3,29 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Discord Clone</title>
+    <title>My Discord Clone - Servers</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div id="auth-section">
-        <h2>Welcome</h2>
+        <h2>Welcome Back</h2>
         <input type="email" id="email" placeholder="Email">
         <input type="password" id="password" placeholder="Password">
         <button id="login-btn">Login</button>
         <button id="register-btn">Register</button>
     </div>
 
-    <div id="chat-section" style="display: none;">
-        <div id="header">
-            <span id="user-display"></span>
-            <button id="logout-btn">Logout</button>
+    <div id="app-container" style="display: none;">
+        
+        <div id="server-sidebar">
+            <div class="server-icon" id="home-btn">🏠</div>
+            <div id="server-list"></div>
+            <div class="server-icon" id="create-server-btn">+</div>
         </div>
-        
-        <div id="messages"></div>
-        
-        <div id="message-input-area">
-            <input type="text" id="msg-input" placeholder="Type a message...">
-            <button id="send-btn">Send</button>
+
+        <div id="channel-sidebar">
+            <h3 id="server-name-display">Direct Messages</h3>
+            <div id="channel-list">
+                </div>
+            <button id="create-channel-btn" style="display: none;">+ Add Channel</button>
+            
+            <div id="user-controls">
+                <span id="user-display">User</span>
+                <button id="logout-btn" class="small-btn">Log Out</button>
+            </div>
+        </div>
+
+        <div id="chat-area">
+            <div id="chat-header">Select a channel to start chatting</div>
+            <div id="messages"></div>
+            <div id="message-input-area">
+                <input type="text" id="msg-input" placeholder="Message..." disabled>
+                <button id="send-btn" disabled>Send</button>
+            </div>
         </div>
     </div>
 
