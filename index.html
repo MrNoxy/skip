@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Discord Clone</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="auth-section">
+        <h2>Welcome</h2>
+        <input type="email" id="email" placeholder="Email">
+        <input type="password" id="password" placeholder="Password">
+        <button id="login-btn">Login</button>
+        <button id="register-btn">Register</button>
+    </div>
+
+    <div id="chat-section" style="display: none;">
+        <div id="header">
+            <span id="user-display"></span>
+            <button id="logout-btn">Logout</button>
+        </div>
+        
+        <div id="messages"></div>
+        
+        <div id="message-input-area">
+            <input type="text" id="msg-input" placeholder="Type a message...">
+            <button id="send-btn">Send</button>
+        </div>
+    </div>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>
