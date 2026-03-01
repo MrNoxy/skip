@@ -26,8 +26,9 @@ let myProfile = {};
 
 // Voice State Tracking
 let myPeer = null;
+let myCurrentPeerId = null; // Stores our valid PeerJS ID
 let localAudioStream = null;
-let activeCalls = {}; // Stores Call objects to manage peers
+let activeCalls = {}; 
 let currentVoiceChannel = null;
 let isMuted = false;
 let isDeafened = false;
@@ -37,7 +38,7 @@ const authSection = document.getElementById('auth-section');
 
 function sanitizeEmail(email) { return email.replace(/\./g, ','); }
 
-// --- AUTH & PROFILE CREATION ---
+// --- AUTH & PROFILE ---
 document.getElementById('register-btn').addEventListener('click', async () => {
     const email = document.getElementById('email').value;
     const pass = document.getElementById('password').value;
@@ -81,7 +82,7 @@ onAuthStateChanged(auth, async (user) => {
             }
         });
 
-        initVoiceChat(); // Initialize PeerJS
+        initVoiceChat(); // Connect to Voice Server on login
 
         loadMyServers();
         loadFriendsList();
@@ -91,7 +92,7 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// --- PROFILE SETTINGS (Same as before) ---
+// --- PROFILE MODAL ---
 const profileModal = document.getElementById('profile-modal');
 let tempBase64Avatar = null;
 
@@ -133,10 +134,9 @@ document.getElementById('save-profile-btn').addEventListener('click', async () =
     await set(ref(db, `users/${currentUserSafeEmail}/avatar`), tempBase64Avatar);
 
     profileModal.style.display = 'none';
-    alert("Profile updated!");
 });
 
-// --- NAVIGATION & FRIENDS (Same as before) ---
+// --- NAVIGATION & FRIENDS ---
 document.getElementById('home-btn').addEventListener('click', () => {
     currentServerId = null;
     document.getElementById('server-name-display').innerText = "Friends & DMs";
@@ -200,7 +200,7 @@ document.getElementById('create-server-btn').addEventListener('click', () => {
         set(ref(db, `server_members/${serverId}/${currentUserSafeEmail}`), true);
         set(ref(db, `users/${currentUserSafeEmail}/servers/${serverId}`), true);
         push(ref(db, `channels/${serverId}`), { name: "general", type: "text" });
-        push(ref(db, `channels/${serverId}`), { name: "General Voice", type: "voice" }); // Auto voice channel
+        push(ref(db, `channels/${serverId}`), { name: "General Voice", type: "voice" }); 
     }
 });
 
@@ -282,28 +282,21 @@ function loadChannels(serverId) {
     });
 }
 
-// --- VOICE CHAT & WEBRTC ENGINE ---
-// --- VOICE CHAT & WEBRTC ENGINE ---
-let myCurrentPeerId = null; // Stores our random, valid PeerJS ID
-
+// --- VOICE CHAT ENGINE ---
 function initVoiceChat() {
-    // 1. Let PeerJS generate a random, valid ID automatically
-    myPeer = new Peer();
+    myPeer = new Peer(); // Generates a random valid ID
 
     myPeer.on('open', id => {
         myCurrentPeerId = id;
         console.log('✅ Connected to Voice Server! Your ID is: ' + id);
     });
 
-    myPeer.on('error', err => {
-        console.error('PeerJS Error:', err);
-    });
+    myPeer.on('error', err => console.error('PeerJS Error:', err));
 
-    // When someone else calls us
+    // When we RECEIVE a call
     myPeer.on('call', call => {
         call.answer(localAudioStream);
         
-        // Retrieve their email from the metadata they sent us
         const callerEmail = call.metadata ? call.metadata.callerEmail : call.peer;
         
         call.on('stream', userAudioStream => {
@@ -312,19 +305,13 @@ function initVoiceChat() {
 
         activeCalls[callerEmail] = call;
         
-        call.on('close', () => {
-            removeVoiceUserUI(callerEmail);
-        });
+        call.on('close', () => removeVoiceUserUI(callerEmail));
     });
 }
 
 async function joinVoiceChannel(serverId, channelId) {
     if (currentVoiceChannel === channelId) return; 
-    
-    if (!myCurrentPeerId) {
-        alert("Voice server is still connecting. Give it a few seconds and try again!");
-        return;
-    }
+    if (!myCurrentPeerId) return alert("Voice server connecting. Give it a sec!");
 
     leaveVoiceChannel(); 
 
@@ -334,110 +321,108 @@ async function joinVoiceChannel(serverId, channelId) {
         currentVoiceChannel = channelId;
         document.getElementById('voice-area').style.display = 'flex';
 
-        // 2. Save our RANDOM Peer ID to the Firebase Roster instead of 'true'
+        // Save our valid Peer ID to Firebase
         const vcRef = ref(db, `voice_rosters/${serverId}/${channelId}/${currentUserSafeEmail}`);
         await set(vcRef, myCurrentPeerId); 
-        
         onDisconnect(vcRef).remove();
 
-        // Listen for who is in the channel
+        // Check who is already in the channel
         onValue(ref(db, `voice_rosters/${serverId}/${channelId}`), (snapshot) => {
             snapshot.forEach((child) => {
-                const peerEmail = child.key; // Their email
-                const peerJsId = child.val(); // Their random PeerJS ID
+                const peerEmail = child.key; 
+                const peerJsId = child.val(); 
                 
-                // If they are not us, and we haven't called them yet, call their random ID!
                 if (peerEmail !== currentUserSafeEmail && !activeCalls[peerEmail]) {
                     connectToNewUser(peerEmail, peerJsId, localAudioStream);
                 }
             });
         });
 
-    } catch (err) {
-        alert("Microphone access denied or not found.");
-        console.error(err);
-    }
+    } catch (err) { alert("Microphone access denied."); console.error(err); }
 }
 
 function connectToNewUser(peerEmail, peerJsId, stream) {
     if (!myPeer || !myCurrentPeerId) return;
 
-    // 3. Call their random ID, and send our email as metadata so they know who we are!
-    const call = myPeer.call(peerJsId, stream, {
-        metadata: { callerEmail: currentUserSafeEmail }
-    });
-    
-    if (!call) return; // Safety check
+    // Call their valid PeerJS ID, send our email as metadata
+    const call = myPeer.call(peerJsId, stream, { metadata: { callerEmail: currentUserSafeEmail } });
+    if (!call) return; 
     
     call.on('stream', userAudioStream => {
         addVoiceUserUI(peerEmail, userAudioStream);
     });
     
-    call.on('close', () => {
-        removeVoiceUserUI(peerEmail);
-    });
+    call.on('close', () => removeVoiceUserUI(peerEmail));
 
     activeCalls[peerEmail] = call;
 }
 
+function leaveVoiceChannel() {
+    if (!currentVoiceChannel) return;
 
-// UI Controls for Voice
+    Object.keys(activeCalls).forEach(peerEmail => {
+        activeCalls[peerEmail].close();
+        removeVoiceUserUI(peerEmail);
+    });
+    activeCalls = {};
+
+    if (localAudioStream) localAudioStream.getTracks().forEach(track => track.stop());
+
+    remove(ref(db, `voice_rosters/${currentServerId}/${currentVoiceChannel}/${currentUserSafeEmail}`));
+
+    currentVoiceChannel = null;
+    document.getElementById('voice-area').style.display = 'none';
+    document.getElementById('voice-users-list').innerHTML = ''; 
+}
+
+// Voice UI Controls
 document.getElementById('disconnect-vc-btn').addEventListener('click', leaveVoiceChannel);
 
 document.getElementById('mute-btn').addEventListener('click', (e) => {
     isMuted = !isMuted;
-    localAudioStream.getAudioTracks()[0].enabled = !isMuted;
+    if(localAudioStream) localAudioStream.getAudioTracks()[0].enabled = !isMuted;
     e.target.classList.toggle('muted-state');
 });
 
 document.getElementById('deafen-btn').addEventListener('click', (e) => {
     isDeafened = !isDeafened;
     e.target.classList.toggle('muted-state');
-    
-    // Mute/unmute all incoming HTML audio elements
-    const audioTags = document.querySelectorAll('.vc-audio-element');
-    audioTags.forEach(audio => audio.muted = isDeafened);
+    document.querySelectorAll('.vc-audio-element').forEach(audio => audio.muted = isDeafened);
 });
 
-function addVoiceUserUI(peerId, stream) {
-    if (document.getElementById(`vc-user-${peerId}`)) return; // Prevent duplicates
+function addVoiceUserUI(peerEmail, stream) {
+    if (document.getElementById(`vc-user-${peerEmail}`)) return; 
 
     const userList = document.getElementById('voice-users-list');
     const div = document.createElement('div');
     div.classList.add('vc-user');
-    div.id = `vc-user-${peerId}`;
+    div.id = `vc-user-${peerEmail}`;
 
-    // Get their username from DB to display nicely
-    get(child(ref(db), `users/${peerId}`)).then(snapshot => {
-        const username = snapshot.exists() ? snapshot.val().username : peerId;
-        
+    get(child(ref(db), `users/${peerEmail}`)).then(snapshot => {
+        const username = snapshot.exists() ? snapshot.val().username : peerEmail;
         div.innerHTML = `
             <span>👤 ${username}</span>
-            <input type="range" min="0" max="1" step="0.01" value="1" id="vol-${peerId}">
-            <audio id="audio-${peerId}" class="vc-audio-element" autoplay></audio>
+            <input type="range" min="0" max="1" step="0.01" value="1" id="vol-${peerEmail}">
+            <audio id="audio-${peerEmail}" class="vc-audio-element" autoplay></audio>
         `;
-        
         userList.appendChild(div);
 
-        // Attach WebRTC stream to the <audio> tag
-        const audioElement = document.getElementById(`audio-${peerId}`);
+        const audioElement = document.getElementById(`audio-${peerEmail}`);
         audioElement.srcObject = stream;
         if(isDeafened) audioElement.muted = true;
 
-        // Bind volume slider
-        document.getElementById(`vol-${peerId}`).addEventListener('input', (e) => {
+        document.getElementById(`vol-${peerEmail}`).addEventListener('input', (e) => {
             audioElement.volume = e.target.value;
         });
     });
 }
 
-function removeVoiceUserUI(peerId) {
-    const el = document.getElementById(`vc-user-${peerId}`);
+function removeVoiceUserUI(peerEmail) {
+    const el = document.getElementById(`vc-user-${peerEmail}`);
     if (el) el.remove();
 }
 
-
-// --- MESSAGES (Same as before) ---
+// --- MESSAGES ---
 function enableChat() {
     document.getElementById('msg-input').disabled = false;
     document.getElementById('send-btn').disabled = false;
