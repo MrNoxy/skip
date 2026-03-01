@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-import { getDatabase, ref, push, onChildAdded, onValue, set, get, child, remove } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { getDatabase, ref, push, onChildAdded, onValue, set, get, child, remove, onDisconnect } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 
 // !!! PASTE YOUR FIREBASE CONFIG HERE !!!
 const firebaseConfig = {
@@ -24,10 +24,17 @@ let chatType = null;
 let currentUserSafeEmail = null;
 let myProfile = {}; 
 
+// Voice State Tracking
+let myPeer = null;
+let localAudioStream = null;
+let activeCalls = {}; // Stores Call objects to manage peers
+let currentVoiceChannel = null;
+let isMuted = false;
+let isDeafened = false;
+
 const appContainer = document.getElementById('app-container');
 const authSection = document.getElementById('auth-section');
 
-// Helper to handle Firebase's dislike for periods in database keys
 function sanitizeEmail(email) { return email.replace(/\./g, ','); }
 
 // --- AUTH & PROFILE CREATION ---
@@ -37,28 +44,14 @@ document.getElementById('register-btn').addEventListener('click', async () => {
     try {
         const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
         const safeEmail = sanitizeEmail(email);
-        
-        // Generate default Discord-like tag
         const baseName = email.split('@')[0];
         const randomTag = Math.floor(1000 + Math.random() * 9000).toString(); 
-        
-        // Using UI Avatars instead of placeholder.com
         const defaultAvatar = `https://ui-avatars.com/api/?name=${baseName.charAt(0)}&background=5865F2&color=fff&size=150`;
 
-        const profileData = { 
-            email: email, 
-            uid: userCredential.user.uid, 
-            username: baseName, 
-            tag: randomTag, 
-            avatar: defaultAvatar 
-        };
+        const profileData = { email: email, uid: userCredential.user.uid, username: baseName, tag: randomTag, avatar: defaultAvatar };
 
-        // Save profile data
         await set(ref(db, `users/${safeEmail}`), profileData);
-        
-        // Save to lookup table (Replacing # with _ so Firebase doesn't crash)
         await set(ref(db, `user_tags/${baseName}_${randomTag}`), safeEmail);
-        
         alert("Registered successfully!");
     } catch (error) { alert(error.message); }
 });
@@ -68,7 +61,10 @@ document.getElementById('login-btn').addEventListener('click', () => {
         .catch(e => alert(e.message));
 });
 
-document.getElementById('logout-btn').addEventListener('click', () => signOut(auth));
+document.getElementById('logout-btn').addEventListener('click', () => {
+    leaveVoiceChannel();
+    signOut(auth);
+});
 
 onAuthStateChanged(auth, async (user) => {
     if (user) {
@@ -76,7 +72,6 @@ onAuthStateChanged(auth, async (user) => {
         appContainer.style.display = 'flex';
         currentUserSafeEmail = sanitizeEmail(user.email);
         
-        // Load my profile data
         onValue(ref(db, `users/${currentUserSafeEmail}`), (snapshot) => {
             if(snapshot.exists()) {
                 myProfile = snapshot.val();
@@ -86,6 +81,8 @@ onAuthStateChanged(auth, async (user) => {
             }
         });
 
+        initVoiceChat(); // Initialize PeerJS
+
         loadMyServers();
         loadFriendsList();
     } else {
@@ -94,11 +91,10 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// --- PROFILE SETTINGS (AVATAR & TAG) ---
+// --- PROFILE SETTINGS (Same as before) ---
 const profileModal = document.getElementById('profile-modal');
 let tempBase64Avatar = null;
 
-// Open modal
 document.getElementById('user-controls').addEventListener('click', (e) => {
     if(e.target.id === 'logout-btn') return; 
     document.getElementById('edit-username').value = myProfile.username;
@@ -108,10 +104,8 @@ document.getElementById('user-controls').addEventListener('click', (e) => {
     profileModal.style.display = 'flex';
 });
 
-// Close modal
 document.getElementById('close-profile-btn').addEventListener('click', () => profileModal.style.display = 'none');
 
-// Convert Image to Base64 String
 document.getElementById('avatar-upload').addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -124,22 +118,16 @@ document.getElementById('avatar-upload').addEventListener('change', (e) => {
     }
 });
 
-// Save Profile
 document.getElementById('save-profile-btn').addEventListener('click', async () => {
     const newUsername = document.getElementById('edit-username').value.trim();
     const newTag = document.getElementById('edit-tag').value.trim();
-    
     if(!newUsername || !newTag) return alert("Fields cannot be empty");
 
-    // Use underscores instead of # for database paths
     const oldDbTag = `${myProfile.username}_${myProfile.tag}`;
     const newDbTag = `${newUsername}_${newTag}`;
 
-    // Update Database lookup
     await remove(ref(db, `user_tags/${oldDbTag}`)); 
     await set(ref(db, `user_tags/${newDbTag}`), currentUserSafeEmail); 
-    
-    // Update Profile
     await set(ref(db, `users/${currentUserSafeEmail}/username`), newUsername);
     await set(ref(db, `users/${currentUserSafeEmail}/tag`), newTag);
     await set(ref(db, `users/${currentUserSafeEmail}/avatar`), tempBase64Avatar);
@@ -148,50 +136,37 @@ document.getElementById('save-profile-btn').addEventListener('click', async () =
     alert("Profile updated!");
 });
 
-// --- NAVIGATION ---
+// --- NAVIGATION & FRIENDS (Same as before) ---
 document.getElementById('home-btn').addEventListener('click', () => {
     currentServerId = null;
     document.getElementById('server-name-display').innerText = "Friends & DMs";
     document.getElementById('add-friend-btn').style.display = 'block';
     document.getElementById('create-channel-btn').style.display = 'none';
+    document.getElementById('create-voice-btn').style.display = 'none';
     document.getElementById('invite-code-display').innerText = "";
     loadFriendsList();
 });
 
-// --- ADD FRIENDS BY TAG ---
 document.getElementById('add-friend-btn').addEventListener('click', async () => {
-    let inputTag = prompt("Enter friend's tag (e.g. @noxy#6996 or noxy#6996):");
+    let inputTag = prompt("Enter friend's tag (e.g. noxy#6996):");
     if (!inputTag) return;
-
     if(inputTag.startsWith('@')) inputTag = inputTag.substring(1);
-
-    // Convert the # to _ for the database search
     const dbSearchTag = inputTag.replace('#', '_');
     
-    // Look up the safeEmail associated with this tag
     const tagSnapshot = await get(child(ref(db), `user_tags/${dbSearchTag}`));
-    
     if (tagSnapshot.exists()) {
         const friendSafeEmail = tagSnapshot.val();
         if(friendSafeEmail === currentUserSafeEmail) return alert("You can't add yourself!");
 
         const friendProfileSnap = await get(child(ref(db), `users/${friendSafeEmail}`));
         const friendProfile = friendProfileSnap.val();
-
         const dmsArray = [currentUserSafeEmail, friendSafeEmail].sort();
         const dmId = dmsArray.join('_');
 
-        // Add to each other's friend lists
-        await set(ref(db, `users/${currentUserSafeEmail}/friends/${friendSafeEmail}`), { 
-            username: friendProfile.username, tag: friendProfile.tag, avatar: friendProfile.avatar, dmId: dmId 
-        });
-        await set(ref(db, `users/${friendSafeEmail}/friends/${currentUserSafeEmail}`), { 
-            username: myProfile.username, tag: myProfile.tag, avatar: myProfile.avatar, dmId: dmId 
-        });
+        await set(ref(db, `users/${currentUserSafeEmail}/friends/${friendSafeEmail}`), { username: friendProfile.username, tag: friendProfile.tag, avatar: friendProfile.avatar, dmId: dmId });
+        await set(ref(db, `users/${friendSafeEmail}/friends/${currentUserSafeEmail}`), { username: myProfile.username, tag: myProfile.tag, avatar: myProfile.avatar, dmId: dmId });
         alert(`Added ${inputTag} to friends!`);
-    } else {
-        alert("User not found. Make sure the tag and capitalization are exact.");
-    }
+    } else { alert("User not found."); }
 });
 
 function loadFriendsList() {
@@ -202,12 +177,7 @@ function loadFriendsList() {
             const friendData = childSnapshot.val();
             const friendDiv = document.createElement('div');
             friendDiv.classList.add('channel-item', 'friend-item');
-            
-            friendDiv.innerHTML = `
-                <img src="${friendData.avatar}" class="avatar-small">
-                <span>${friendData.username}</span>
-            `;
-            
+            friendDiv.innerHTML = `<img src="${friendData.avatar}" class="avatar-small"><span>${friendData.username}</span>`;
             friendDiv.addEventListener('click', () => {
                 chatType = 'dm';
                 currentChatId = friendData.dmId;
@@ -229,7 +199,8 @@ document.getElementById('create-server-btn').addEventListener('click', () => {
         set(newServerRef, { name: serverName, owner: auth.currentUser.email });
         set(ref(db, `server_members/${serverId}/${currentUserSafeEmail}`), true);
         set(ref(db, `users/${currentUserSafeEmail}/servers/${serverId}`), true);
-        push(ref(db, `channels/${serverId}`), { name: "general" });
+        push(ref(db, `channels/${serverId}`), { name: "general", type: "text" });
+        push(ref(db, `channels/${serverId}`), { name: "General Voice", type: "voice" }); // Auto voice channel
     }
 });
 
@@ -257,12 +228,12 @@ function loadMyServers() {
                     const serverDiv = document.createElement('div');
                     serverDiv.classList.add('server-icon');
                     serverDiv.innerText = serverData.name.charAt(0).toUpperCase();
-                    
                     serverDiv.addEventListener('click', () => {
                         currentServerId = serverId;
                         document.getElementById('server-name-display').innerText = serverData.name;
                         document.getElementById('add-friend-btn').style.display = 'none';
-                        document.getElementById('create-channel-btn').style.display = 'block';
+                        document.getElementById('create-channel-btn').style.display = 'inline-block';
+                        document.getElementById('create-voice-btn').style.display = 'inline-block';
                         document.getElementById('invite-code-display').innerText = `Invite Code: ${serverId}`;
                         loadChannels(serverId);
                     });
@@ -274,8 +245,13 @@ function loadMyServers() {
 }
 
 document.getElementById('create-channel-btn').addEventListener('click', () => {
-    const channelName = prompt("Channel Name:");
-    if (channelName && currentServerId) push(ref(db, `channels/${currentServerId}`), { name: channelName.toLowerCase() });
+    const channelName = prompt("Text Channel Name:");
+    if (channelName && currentServerId) push(ref(db, `channels/${currentServerId}`), { name: channelName.toLowerCase(), type: "text" });
+});
+
+document.getElementById('create-voice-btn').addEventListener('click', () => {
+    const channelName = prompt("Voice Channel Name:");
+    if (channelName && currentServerId) push(ref(db, `channels/${currentServerId}`), { name: channelName, type: "voice" });
 });
 
 function loadChannels(serverId) {
@@ -287,21 +263,179 @@ function loadChannels(serverId) {
             const channelData = childSnapshot.val();
             const channelDiv = document.createElement('div');
             channelDiv.classList.add('channel-item');
-            channelDiv.innerText = `# ${channelData.name}`;
             
-            channelDiv.addEventListener('click', () => {
-                chatType = 'server';
-                currentChatId = channelId;
-                document.getElementById('chat-title').innerText = `# ${channelData.name}`;
-                enableChat();
-                loadMessages(`messages/${channelId}`);
-            });
+            if(channelData.type === "voice") {
+                channelDiv.innerText = `🔊 ${channelData.name}`;
+                channelDiv.addEventListener('click', () => joinVoiceChannel(serverId, channelId));
+            } else {
+                channelDiv.innerText = `# ${channelData.name}`;
+                channelDiv.addEventListener('click', () => {
+                    chatType = 'server';
+                    currentChatId = channelId;
+                    document.getElementById('chat-title').innerText = `# ${channelData.name}`;
+                    enableChat();
+                    loadMessages(`messages/${channelId}`);
+                });
+            }
             channelList.appendChild(channelDiv);
         });
     });
 }
 
-// --- MESSAGES ---
+// --- VOICE CHAT & WEBRTC ENGINE ---
+
+function initVoiceChat() {
+    // We use our safe email as our exact Peer ID so others can call us by name
+    myPeer = new Peer(currentUserSafeEmail);
+
+    myPeer.on('open', id => console.log('My Peer ID is: ' + id));
+
+    // When someone else calls us
+    myPeer.on('call', call => {
+        // Answer the call and send them our audio
+        call.answer(localAudioStream);
+        
+        call.on('stream', userAudioStream => {
+            addVoiceUserUI(call.peer, userAudioStream);
+        });
+
+        activeCalls[call.peer] = call;
+        
+        call.on('close', () => {
+            removeVoiceUserUI(call.peer);
+        });
+    });
+}
+
+async function joinVoiceChannel(serverId, channelId) {
+    if (currentVoiceChannel === channelId) return; // Already in it
+    leaveVoiceChannel(); // Leave current VC if in one
+
+    try {
+        // Ask for Microphone access
+        localAudioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        
+        currentVoiceChannel = channelId;
+        document.getElementById('voice-area').style.display = 'flex';
+
+        // Add ourselves to the Firebase VC roster
+        const vcRef = ref(db, `voice_rosters/${serverId}/${channelId}/${currentUserSafeEmail}`);
+        await set(vcRef, true);
+        
+        // Auto-remove if we close the tab
+        onDisconnect(vcRef).remove();
+
+        // Listen for who is in the channel to call them
+        onValue(ref(db, `voice_rosters/${serverId}/${channelId}`), (snapshot) => {
+            snapshot.forEach((child) => {
+                const peerId = child.key;
+                // If they are not us, and we haven't called them yet, call them!
+                if (peerId !== currentUserSafeEmail && !activeCalls[peerId]) {
+                    connectToNewUser(peerId, localAudioStream);
+                }
+            });
+        });
+
+    } catch (err) {
+        alert("Microphone access denied or not found.");
+        console.error(err);
+    }
+}
+
+function connectToNewUser(peerId, stream) {
+    const call = myPeer.call(peerId, stream);
+    
+    call.on('stream', userAudioStream => {
+        addVoiceUserUI(peerId, userAudioStream);
+    });
+    
+    call.on('close', () => {
+        removeVoiceUserUI(peerId);
+    });
+
+    activeCalls[peerId] = call;
+}
+
+function leaveVoiceChannel() {
+    if (!currentVoiceChannel) return;
+
+    // Disconnect all calls
+    Object.keys(activeCalls).forEach(peerId => {
+        activeCalls[peerId].close();
+        removeVoiceUserUI(peerId);
+    });
+    activeCalls = {};
+
+    // Stop our microphone
+    if (localAudioStream) {
+        localAudioStream.getTracks().forEach(track => track.stop());
+    }
+
+    // Remove ourselves from Firebase roster
+    remove(ref(db, `voice_rosters/${currentServerId}/${currentVoiceChannel}/${currentUserSafeEmail}`));
+
+    currentVoiceChannel = null;
+    document.getElementById('voice-area').style.display = 'none';
+    document.getElementById('voice-users-list').innerHTML = ''; // Clear UI
+}
+
+// UI Controls for Voice
+document.getElementById('disconnect-vc-btn').addEventListener('click', leaveVoiceChannel);
+
+document.getElementById('mute-btn').addEventListener('click', (e) => {
+    isMuted = !isMuted;
+    localAudioStream.getAudioTracks()[0].enabled = !isMuted;
+    e.target.classList.toggle('muted-state');
+});
+
+document.getElementById('deafen-btn').addEventListener('click', (e) => {
+    isDeafened = !isDeafened;
+    e.target.classList.toggle('muted-state');
+    
+    // Mute/unmute all incoming HTML audio elements
+    const audioTags = document.querySelectorAll('.vc-audio-element');
+    audioTags.forEach(audio => audio.muted = isDeafened);
+});
+
+function addVoiceUserUI(peerId, stream) {
+    if (document.getElementById(`vc-user-${peerId}`)) return; // Prevent duplicates
+
+    const userList = document.getElementById('voice-users-list');
+    const div = document.createElement('div');
+    div.classList.add('vc-user');
+    div.id = `vc-user-${peerId}`;
+
+    // Get their username from DB to display nicely
+    get(child(ref(db), `users/${peerId}`)).then(snapshot => {
+        const username = snapshot.exists() ? snapshot.val().username : peerId;
+        
+        div.innerHTML = `
+            <span>👤 ${username}</span>
+            <input type="range" min="0" max="1" step="0.01" value="1" id="vol-${peerId}">
+            <audio id="audio-${peerId}" class="vc-audio-element" autoplay></audio>
+        `;
+        
+        userList.appendChild(div);
+
+        // Attach WebRTC stream to the <audio> tag
+        const audioElement = document.getElementById(`audio-${peerId}`);
+        audioElement.srcObject = stream;
+        if(isDeafened) audioElement.muted = true;
+
+        // Bind volume slider
+        document.getElementById(`vol-${peerId}`).addEventListener('input', (e) => {
+            audioElement.volume = e.target.value;
+        });
+    });
+}
+
+function removeVoiceUserUI(peerId) {
+    const el = document.getElementById(`vc-user-${peerId}`);
+    if (el) el.remove();
+}
+
+
+// --- MESSAGES (Same as before) ---
 function enableChat() {
     document.getElementById('msg-input').disabled = false;
     document.getElementById('send-btn').disabled = false;
@@ -315,7 +449,6 @@ function loadMessages(dbPath) {
         const data = snapshot.val();
         const msgElement = document.createElement('div');
         msgElement.classList.add('message');
-        
         msgElement.innerHTML = `
             <div class="message-header">
                 <img src="${data.avatar}" class="avatar-small">

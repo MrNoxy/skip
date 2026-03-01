@@ -245,3 +245,58 @@ button:disabled {
     background-color: #202225;
     color: white;
 }
+
+/* --- Voice Chat UI --- */
+#voice-area {
+    background-color: #292b2f;
+    border-top: 1px solid #202225;
+    border-bottom: 1px solid #202225;
+    display: flex;
+    flex-direction: column;
+}
+#voice-status {
+    color: #43b581;
+    font-size: 12px;
+    font-weight: bold;
+    padding: 10px;
+    text-align: center;
+    border-bottom: 1px solid #202225;
+}
+#voice-users-list {
+    max-height: 150px;
+    overflow-y: auto;
+    padding: 5px 10px;
+}
+.vc-user {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    margin-bottom: 5px;
+}
+.vc-user input[type=range] {
+    width: 60px;
+}
+#voice-controls {
+    display: flex;
+    justify-content: space-around;
+    padding: 10px;
+    background-color: #202225;
+}
+.vc-btn {
+    background: none;
+    font-size: 16px;
+    padding: 5px;
+    border-radius: 4px;
+}
+.vc-btn:hover { background-color: #36393f; }
+.muted-state { position: relative; }
+.muted-state::after {
+    content: "/";
+    position: absolute;
+    color: #ed4245;
+    font-weight: bold;
+    font-size: 20px;
+    left: 8px;
+    top: 0px;
+}

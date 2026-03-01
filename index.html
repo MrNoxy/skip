@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Discord Clone</title>
     <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
 <body>
     <div id="auth-section">
@@ -28,14 +29,25 @@
             <div id="sidebar-header">
                 <h3 id="server-name-display">Friends & DMs</h3>
                 <button id="add-friend-btn" class="small-btn">+ Friend</button>
-                <button id="create-channel-btn" class="small-btn" style="display: none;">+ Channel</button>
+                <button id="create-channel-btn" class="small-btn" style="display: none;">+ Text</button>
+                <button id="create-voice-btn" class="small-btn" style="display: none;">+ Voice</button>
             </div>
             
-            <div id="channel-list">
-                </div>
+            <div id="channel-list"></div>
             
+            <div id="voice-area" style="display: none;">
+                <div id="voice-status">🔊 Connected to Voice</div>
+                <div id="voice-users-list">
+                    </div>
+                <div id="voice-controls">
+                    <button id="mute-btn" class="vc-btn" title="Mute Microphone">🎤</button>
+                    <button id="deafen-btn" class="vc-btn" title="Deafen Audio">🎧</button>
+                    <button id="disconnect-vc-btn" class="vc-btn" title="Disconnect" style="color: #ed4245;">✖</button>
+                </div>
+            </div>
+
             <div id="user-controls" title="Click to edit profile">
-                <img id="my-avatar" class="avatar-small" src="https://cdn.pixabay.com/photo/2023/02/18/11/00/icon-7797704_640.png" alt="Me">
+                <img id="my-avatar" class="avatar-small" src="" alt="Me">
                 <div id="user-info">
                     <div id="user-display" style="font-weight: bold;">User</div>
                     <div id="user-tag-display" style="font-size: 12px; color: gray;">#0000</div>
