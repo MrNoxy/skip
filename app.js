@@ -343,8 +343,21 @@ async function joinVoiceChannel(serverId, channelId) {
 }
 
 function connectToNewUser(peerId, stream) {
+    // 1. Safety Check: Make sure our own Peer connection is actually active
+    if (!myPeer || myPeer.disconnected) {
+        console.warn("PeerJS isn't ready yet. Waiting...");
+        return;
+    }
+
     const call = myPeer.call(peerId, stream);
     
+    // 2. Safety Check: If PeerJS couldn't establish the call, stop here so it doesn't crash
+    if (!call) {
+        console.warn(`Could not connect to ${peerId}. They might still be loading.`);
+        return;
+    }
+    
+    // If the call succeeds, attach the audio streams
     call.on('stream', userAudioStream => {
         addVoiceUserUI(peerId, userAudioStream);
     });
