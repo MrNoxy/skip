@@ -10,6 +10,11 @@ body {
     align-items: center;
 }
 
+/* Fix iOS Zoom Issue */
+input {
+    font-size: 16px !important; 
+}
+
 /* --- Auth Screen --- */
 #auth-section { 
     background-color: #2f3136; 
@@ -150,6 +155,7 @@ body {
 #message-input-area { 
     padding: 20px; 
     display: flex; 
+    align-items: center;
 }
 #msg-input { 
     flex-grow: 1; 
@@ -159,6 +165,17 @@ body {
     background-color: #40444b; 
     color: white; 
     outline: none;
+}
+#upload-img-btn {
+    background-color: #40444b;
+    margin-right: 10px;
+    margin-left: 0;
+    font-size: 18px;
+    padding: 12px;
+    border-radius: 8px;
+}
+#upload-img-btn:hover:not(:disabled) {
+    background-color: #5865F2;
 }
 
 /* --- Buttons --- */
@@ -171,7 +188,7 @@ button {
     cursor: pointer; 
     margin-left: 10px;
 }
-button:hover { 
+button:hover:not(:disabled) { 
     background-color: #4752c4;
 }
 button:disabled {
@@ -229,6 +246,13 @@ button:disabled {
     margin-bottom: 5px; 
 }
 .message-sender { font-weight: bold; color: white; }
+.message-image {
+    max-width: 250px;
+    max-height: 250px;
+    border-radius: 8px;
+    margin-top: 5px;
+    display: block;
+}
 .friend-item { display: flex; align-items: center; gap: 10px; }
 
 /* --- Profile Settings Modal --- */
@@ -282,11 +306,11 @@ button:disabled {
     #channel-sidebar { width: calc(100vw - 72px); flex-shrink: 0; }
     #chat-area { width: 100vw; display: none; }
     
-    /* When inside a chat on mobile, hide sidebars and show only chat */
     body.mobile-chat-active #server-sidebar { display: none; }
     body.mobile-chat-active #channel-sidebar { display: none; }
     body.mobile-chat-active #chat-area { display: flex; }
     
     #mobile-back-btn { display: inline-block; }
     .modal-content { width: 80%; }
+    .message-image { max-width: 200px; max-height: 200px; } /* Slightly smaller images on mobile */
 }
