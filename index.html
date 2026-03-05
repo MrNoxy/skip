@@ -19,10 +19,10 @@
     <div id="app-container" style="display: none;">
         
         <div id="server-sidebar">
-            <div class="server-icon" id="home-btn" title="Direct Messages">🏠</div>
+            <div class="server-icon" id="home-btn" title="Direct Messages">💬</div>
             <div id="server-list"></div>
             <div class="server-icon" id="create-server-btn" title="Create Server">+</div>
-            <div class="server-icon" id="join-server-btn" title="Join Server">🔗</div>
+            <div class="server-icon" id="join-server-btn" title="Join Server">🌍</div>
         </div>
 
         <div id="channel-sidebar">
@@ -36,13 +36,12 @@
             <div id="channel-list"></div>
             
             <div id="voice-area" style="display: none;">
-                <div id="voice-status">🔊 Connected to Voice</div>
-                <div id="voice-users-list">
-                    </div>
+                <div id="voice-status">🎙️ Connected to Voice</div>
+                <div id="voice-users-list"></div>
                 <div id="voice-controls">
                     <button id="mute-btn" class="vc-btn" title="Mute Microphone">🎤</button>
                     <button id="deafen-btn" class="vc-btn" title="Deafen Audio">🎧</button>
-                    <button id="disconnect-vc-btn" class="vc-btn" title="Disconnect" style="color: #ed4245;">✖</button>
+                    <button id="disconnect-vc-btn" class="vc-btn" title="Disconnect" style="color: #ed4245;">❌</button>
                 </div>
             </div>
 
@@ -58,6 +57,7 @@
 
         <div id="chat-area">
             <div id="chat-header">
+                <button id="mobile-back-btn" class="small-btn">⬅</button>
                 <span id="chat-title">Select a chat to start messaging</span>
                 <span id="invite-code-display" style="font-size: 12px; color: gray; margin-left: 15px; user-select: all; cursor: pointer;"></span>
             </div>
