@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Skip | Chat with your friends</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
@@ -63,6 +63,8 @@
             </div>
             <div id="messages"></div>
             <div id="message-input-area">
+                <button id="upload-img-btn" disabled title="Send Image">📷</button>
+                <input type="file" id="image-upload" accept="image/*" style="display: none;">
                 <input type="text" id="msg-input" placeholder="Message..." disabled>
                 <button id="send-btn" disabled>Send</button>
             </div>
