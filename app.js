@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-import { getDatabase, ref, push, onChildAdded, onValue, set, get, child, remove, onDisconnect } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { getDatabase, ref, push, onChildAdded, onValue, set, get, child, remove, onDisconnect, query, limitToLast } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 
 // !!! PASTE YOUR FIREBASE CONFIG HERE !!!
 const firebaseConfig = {
@@ -23,10 +23,13 @@ let currentChatId = null;
 let chatType = null; 
 let currentUserSafeEmail = null;
 let myProfile = {}; 
+let unsubscribeMessages = null; // Used to fix duplicate messages bug
+const appStartTime = Date.now(); // Used for unread notifications
+let unreadState = { dms: new Set(), channels: new Set(), servers: new Set() };
 
 // Voice State Tracking
 let myPeer = null;
-let myCurrentPeerId = null; // Stores our valid PeerJS ID
+let myCurrentPeerId = null; 
 let localAudioStream = null;
 let activeCalls = {}; 
 let currentVoiceChannel = null;
@@ -82,10 +85,10 @@ onAuthStateChanged(auth, async (user) => {
             }
         });
 
-        initVoiceChat(); // Connect to Voice Server on login
-
+        initVoiceChat(); 
         loadMyServers();
         loadFriendsList();
+        startNotificationListeners(); // Start tracking red dots!
     } else {
         authSection.style.display = 'block';
         appContainer.style.display = 'none';
@@ -138,6 +141,7 @@ document.getElementById('save-profile-btn').addEventListener('click', async () =
 
 // --- NAVIGATION & FRIENDS ---
 document.getElementById('home-btn').addEventListener('click', () => {
+    document.body.classList.remove('mobile-chat-active'); // Ensure mobile view navigates back
     currentServerId = null;
     document.getElementById('server-name-display').innerText = "Friends & DMs";
     document.getElementById('add-friend-btn').style.display = 'block';
@@ -145,6 +149,10 @@ document.getElementById('home-btn').addEventListener('click', () => {
     document.getElementById('create-voice-btn').style.display = 'none';
     document.getElementById('invite-code-display').innerText = "";
     loadFriendsList();
+});
+
+document.getElementById('mobile-back-btn').addEventListener('click', () => {
+    document.body.classList.remove('mobile-chat-active');
 });
 
 document.getElementById('add-friend-btn').addEventListener('click', async () => {
@@ -177,7 +185,9 @@ function loadFriendsList() {
             const friendData = childSnapshot.val();
             const friendDiv = document.createElement('div');
             friendDiv.classList.add('channel-item', 'friend-item');
+            friendDiv.id = `dm-${friendData.dmId}`;
             friendDiv.innerHTML = `<img src="${friendData.avatar}" class="avatar-small"><span>${friendData.username}</span>`;
+            
             friendDiv.addEventListener('click', () => {
                 chatType = 'dm';
                 currentChatId = friendData.dmId;
@@ -186,6 +196,9 @@ function loadFriendsList() {
                 loadMessages(`dms/${currentChatId}`);
             });
             channelList.appendChild(friendDiv);
+
+            // Re-apply unread state
+            if (unreadState.dms.has(friendData.dmId)) updateBadge(`dm-${friendData.dmId}`, true, false);
         });
     });
 }
@@ -227,8 +240,11 @@ function loadMyServers() {
                     const serverData = serverSnapshot.val();
                     const serverDiv = document.createElement('div');
                     serverDiv.classList.add('server-icon');
+                    serverDiv.id = `server-${serverId}`;
                     serverDiv.innerText = serverData.name.charAt(0).toUpperCase();
+                    
                     serverDiv.addEventListener('click', () => {
+                        document.body.classList.remove('mobile-chat-active');
                         currentServerId = serverId;
                         document.getElementById('server-name-display').innerText = serverData.name;
                         document.getElementById('add-friend-btn').style.display = 'none';
@@ -238,6 +254,8 @@ function loadMyServers() {
                         loadChannels(serverId);
                     });
                     serverList.appendChild(serverDiv);
+                    
+                    if (unreadState.servers.has(serverId)) updateBadge(`server-${serverId}`, true, true);
                 }
             });
         });
@@ -263,6 +281,7 @@ function loadChannels(serverId) {
             const channelData = childSnapshot.val();
             const channelDiv = document.createElement('div');
             channelDiv.classList.add('channel-item');
+            channelDiv.id = `channel-${channelId}`;
             
             if(channelData.type === "voice") {
                 channelDiv.innerText = `🔊 ${channelData.name}`;
@@ -278,33 +297,27 @@ function loadChannels(serverId) {
                 });
             }
             channelList.appendChild(channelDiv);
+
+            if (unreadState.channels.has(channelId)) updateBadge(`channel-${channelId}`, true, false);
         });
     });
 }
 
 // --- VOICE CHAT ENGINE ---
 function initVoiceChat() {
-    myPeer = new Peer(); // Generates a random valid ID
+    myPeer = new Peer(); 
 
     myPeer.on('open', id => {
         myCurrentPeerId = id;
-        console.log('✅ Connected to Voice Server! Your ID is: ' + id);
     });
 
     myPeer.on('error', err => console.error('PeerJS Error:', err));
 
-    // When we RECEIVE a call
     myPeer.on('call', call => {
         call.answer(localAudioStream);
-        
         const callerEmail = call.metadata ? call.metadata.callerEmail : call.peer;
-        
-        call.on('stream', userAudioStream => {
-            addVoiceUserUI(callerEmail, userAudioStream);
-        });
-
+        call.on('stream', userAudioStream => { addVoiceUserUI(callerEmail, userAudioStream); });
         activeCalls[callerEmail] = call;
-        
         call.on('close', () => removeVoiceUserUI(callerEmail));
     });
 }
@@ -317,43 +330,32 @@ async function joinVoiceChannel(serverId, channelId) {
 
     try {
         localAudioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        
         currentVoiceChannel = channelId;
         document.getElementById('voice-area').style.display = 'flex';
 
-        // Save our valid Peer ID to Firebase
         const vcRef = ref(db, `voice_rosters/${serverId}/${channelId}/${currentUserSafeEmail}`);
         await set(vcRef, myCurrentPeerId); 
         onDisconnect(vcRef).remove();
 
-        // Check who is already in the channel
         onValue(ref(db, `voice_rosters/${serverId}/${channelId}`), (snapshot) => {
             snapshot.forEach((child) => {
                 const peerEmail = child.key; 
                 const peerJsId = child.val(); 
-                
                 if (peerEmail !== currentUserSafeEmail && !activeCalls[peerEmail]) {
                     connectToNewUser(peerEmail, peerJsId, localAudioStream);
                 }
             });
         });
-
     } catch (err) { alert("Microphone access denied."); console.error(err); }
 }
 
 function connectToNewUser(peerEmail, peerJsId, stream) {
     if (!myPeer || !myCurrentPeerId) return;
-
-    // Call their valid PeerJS ID, send our email as metadata
     const call = myPeer.call(peerJsId, stream, { metadata: { callerEmail: currentUserSafeEmail } });
     if (!call) return; 
     
-    call.on('stream', userAudioStream => {
-        addVoiceUserUI(peerEmail, userAudioStream);
-    });
-    
+    call.on('stream', userAudioStream => { addVoiceUserUI(peerEmail, userAudioStream); });
     call.on('close', () => removeVoiceUserUI(peerEmail));
-
     activeCalls[peerEmail] = call;
 }
 
@@ -375,7 +377,6 @@ function leaveVoiceChannel() {
     document.getElementById('voice-users-list').innerHTML = ''; 
 }
 
-// Voice UI Controls
 document.getElementById('disconnect-vc-btn').addEventListener('click', leaveVoiceChannel);
 
 document.getElementById('mute-btn').addEventListener('click', (e) => {
@@ -392,7 +393,6 @@ document.getElementById('deafen-btn').addEventListener('click', (e) => {
 
 function addVoiceUserUI(peerEmail, stream) {
     if (document.getElementById(`vc-user-${peerEmail}`)) return; 
-
     const userList = document.getElementById('voice-users-list');
     const div = document.createElement('div');
     div.classList.add('vc-user');
@@ -410,7 +410,6 @@ function addVoiceUserUI(peerEmail, stream) {
         const audioElement = document.getElementById(`audio-${peerEmail}`);
         audioElement.srcObject = stream;
         if(isDeafened) audioElement.muted = true;
-
         document.getElementById(`vol-${peerEmail}`).addEventListener('input', (e) => {
             audioElement.volume = e.target.value;
         });
@@ -422,17 +421,23 @@ function removeVoiceUserUI(peerEmail) {
     if (el) el.remove();
 }
 
-// --- MESSAGES ---
+// --- MESSAGES & NOTIFICATIONS ---
 function enableChat() {
     document.getElementById('msg-input').disabled = false;
     document.getElementById('send-btn').disabled = false;
+    document.body.classList.add('mobile-chat-active'); // Hides sidebar on mobile view
 }
 
 function loadMessages(dbPath) {
     const messagesDiv = document.getElementById('messages');
     messagesDiv.innerHTML = ''; 
     
-    onChildAdded(ref(db, dbPath), (snapshot) => {
+    // 🔥 FIX: Prevent duplicate messages by unsubscribing from the old listener before attaching a new one
+    if (unsubscribeMessages) {
+        unsubscribeMessages();
+    }
+
+    unsubscribeMessages = onChildAdded(ref(db, dbPath), (snapshot) => {
         const data = snapshot.val();
         const msgElement = document.createElement('div');
         msgElement.classList.add('message');
@@ -447,6 +452,10 @@ function loadMessages(dbPath) {
         messagesDiv.appendChild(msgElement);
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
     });
+
+    // Clear notifications since we are now actively viewing this chat
+    if (chatType === 'dm') clearUnread('dm', currentChatId);
+    else if (chatType === 'server') clearUnread('channel', currentChatId, currentServerId);
 }
 
 function sendMessage() {
@@ -467,3 +476,77 @@ function sendMessage() {
 
 document.getElementById('send-btn').addEventListener('click', sendMessage);
 document.getElementById('msg-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
+
+// --- NOTIFICATION ENGINE ---
+function startNotificationListeners() {
+    // Check DMs for unreads
+    onValue(ref(db, `users/${currentUserSafeEmail}/friends`), (snap) => {
+        snap.forEach(childSnap => {
+            const friend = childSnap.val();
+            const dmRef = query(ref(db, `dms/${friend.dmId}`), limitToLast(1));
+            onChildAdded(dmRef, (msgSnap) => {
+                const msg = msgSnap.val();
+                if (currentChatId !== friend.dmId && msg.timestamp > appStartTime) markUnread('dm', friend.dmId);
+            });
+        });
+    });
+
+    // Check Server Channels for unreads
+    onValue(ref(db, `users/${currentUserSafeEmail}/servers`), (snap) => {
+        snap.forEach(childSnap => {
+            const serverId = childSnap.key;
+            onValue(ref(db, `channels/${serverId}`), (chSnap) => {
+                chSnap.forEach(chChild => {
+                    const channelId = chChild.key;
+                    if (chChild.val().type === 'text') {
+                        const chRef = query(ref(db, `messages/${channelId}`), limitToLast(1));
+                        onChildAdded(chRef, (msgSnap) => {
+                            const msg = msgSnap.val();
+                            if (currentChatId !== channelId && msg.timestamp > appStartTime) markUnread('channel', channelId, serverId);
+                        });
+                    }
+                });
+            });
+        });
+    });
+}
+
+function markUnread(type, id, serverId = null) {
+    if (type === 'dm') {
+        unreadState.dms.add(id);
+        updateBadge(`dm-${id}`, true, false);
+        updateBadge('home-btn', true, true);
+    } else if (type === 'channel') {
+        unreadState.channels.add(id);
+        unreadState.servers.add(serverId);
+        updateBadge(`channel-${id}`, true, false);
+        updateBadge(`server-${serverId}`, true, true);
+    }
+}
+
+function clearUnread(type, id, serverId = null) {
+    if (type === 'dm') {
+        unreadState.dms.delete(id);
+        updateBadge(`dm-${id}`, false);
+        if (unreadState.dms.size === 0) updateBadge('home-btn', false);
+    } else if (type === 'channel') {
+        unreadState.channels.delete(id);
+        updateBadge(`channel-${id}`, false);
+        updateBadge(`server-${serverId}`, false); // Clears server dot when you click ANY unread channel inside it. Good enough for simple apps!
+    }
+}
+
+function updateBadge(elementId, show, isDot = false) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    let badge = el.querySelector('.unread-indicator');
+    if (show) {
+        if (!badge) {
+            badge = document.createElement('div');
+            badge.className = `unread-indicator ${isDot ? 'dot' : 'pill'}`;
+            el.appendChild(badge);
+        }
+    } else {
+        if (badge) badge.remove();
+    }
+}
