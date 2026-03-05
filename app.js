@@ -23,8 +23,8 @@ let currentChatId = null;
 let chatType = null; 
 let currentUserSafeEmail = null;
 let myProfile = {}; 
-let unsubscribeMessages = null; // Used to fix duplicate messages bug
-const appStartTime = Date.now(); // Used for unread notifications
+let unsubscribeMessages = null; 
+const appStartTime = Date.now(); 
 let unreadState = { dms: new Set(), channels: new Set(), servers: new Set() };
 
 // Voice State Tracking
@@ -88,7 +88,7 @@ onAuthStateChanged(auth, async (user) => {
         initVoiceChat(); 
         loadMyServers();
         loadFriendsList();
-        startNotificationListeners(); // Start tracking red dots!
+        startNotificationListeners(); 
     } else {
         authSection.style.display = 'block';
         appContainer.style.display = 'none';
@@ -141,7 +141,7 @@ document.getElementById('save-profile-btn').addEventListener('click', async () =
 
 // --- NAVIGATION & FRIENDS ---
 document.getElementById('home-btn').addEventListener('click', () => {
-    document.body.classList.remove('mobile-chat-active'); // Ensure mobile view navigates back
+    document.body.classList.remove('mobile-chat-active'); 
     currentServerId = null;
     document.getElementById('server-name-display').innerText = "Friends & DMs";
     document.getElementById('add-friend-btn').style.display = 'block';
@@ -197,7 +197,6 @@ function loadFriendsList() {
             });
             channelList.appendChild(friendDiv);
 
-            // Re-apply unread state
             if (unreadState.dms.has(friendData.dmId)) updateBadge(`dm-${friendData.dmId}`, true, false);
         });
     });
@@ -425,35 +424,38 @@ function removeVoiceUserUI(peerEmail) {
 function enableChat() {
     document.getElementById('msg-input').disabled = false;
     document.getElementById('send-btn').disabled = false;
-    document.body.classList.add('mobile-chat-active'); // Hides sidebar on mobile view
+    document.getElementById('upload-img-btn').disabled = false; // Enable image upload button
+    document.body.classList.add('mobile-chat-active'); 
 }
 
 function loadMessages(dbPath) {
     const messagesDiv = document.getElementById('messages');
     messagesDiv.innerHTML = ''; 
     
-    // 🔥 FIX: Prevent duplicate messages by unsubscribing from the old listener before attaching a new one
-    if (unsubscribeMessages) {
-        unsubscribeMessages();
-    }
+    if (unsubscribeMessages) unsubscribeMessages();
 
     unsubscribeMessages = onChildAdded(ref(db, dbPath), (snapshot) => {
         const data = snapshot.val();
         const msgElement = document.createElement('div');
         msgElement.classList.add('message');
+        
+        let contentHtml = `<div style="margin-left: 42px; word-break: break-word;">${data.text || ''}</div>`;
+        if (data.imageUrl) {
+            contentHtml += `<img src="${data.imageUrl}" class="message-image" style="margin-left: 42px;">`;
+        }
+
         msgElement.innerHTML = `
             <div class="message-header">
                 <img src="${data.avatar}" class="avatar-small">
                 <span class="message-sender">${data.username}</span>
                 <span style="font-size: 0.8em; color: gray;">${new Date(data.timestamp).toLocaleTimeString()}</span>
             </div>
-            <div style="margin-left: 42px; word-break: break-word;">${data.text}</div>
+            ${contentHtml}
         `;
         messagesDiv.appendChild(msgElement);
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
     });
 
-    // Clear notifications since we are now actively viewing this chat
     if (chatType === 'dm') clearUnread('dm', currentChatId);
     else if (chatType === 'server') clearUnread('channel', currentChatId, currentServerId);
 }
@@ -477,9 +479,43 @@ function sendMessage() {
 document.getElementById('send-btn').addEventListener('click', sendMessage);
 document.getElementById('msg-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
 
+// --- IMAGE UPLOAD LOGIC ---
+document.getElementById('upload-img-btn').addEventListener('click', () => {
+    document.getElementById('image-upload').click();
+});
+
+document.getElementById('image-upload').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file || !currentChatId) return;
+
+    // Safety check so you don't blow up Firebase size limits!
+    if (file.size > 2 * 1024 * 1024) {
+        alert("File too large. Please select an image under 2MB.");
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+        const base64Image = reader.result;
+        const path = chatType === 'server' ? `messages/${currentChatId}` : `dms/${currentChatId}`;
+        
+        push(ref(db, path), {
+            sender: auth.currentUser.email,
+            username: myProfile.username,
+            avatar: myProfile.avatar,
+            text: "", 
+            imageUrl: base64Image,
+            timestamp: Date.now()
+        });
+
+        // Clear the file input
+        document.getElementById('image-upload').value = "";
+    };
+    reader.readAsDataURL(file);
+});
+
 // --- NOTIFICATION ENGINE ---
 function startNotificationListeners() {
-    // Check DMs for unreads
     onValue(ref(db, `users/${currentUserSafeEmail}/friends`), (snap) => {
         snap.forEach(childSnap => {
             const friend = childSnap.val();
@@ -491,7 +527,6 @@ function startNotificationListeners() {
         });
     });
 
-    // Check Server Channels for unreads
     onValue(ref(db, `users/${currentUserSafeEmail}/servers`), (snap) => {
         snap.forEach(childSnap => {
             const serverId = childSnap.key;
@@ -532,7 +567,7 @@ function clearUnread(type, id, serverId = null) {
     } else if (type === 'channel') {
         unreadState.channels.delete(id);
         updateBadge(`channel-${id}`, false);
-        updateBadge(`server-${serverId}`, false); // Clears server dot when you click ANY unread channel inside it. Good enough for simple apps!
+        updateBadge(`server-${serverId}`, false); 
     }
 }
 
