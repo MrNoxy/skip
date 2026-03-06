@@ -331,9 +331,9 @@ function loadFriendsList() {
     const channelList = document.getElementById('channel-list');
     onValue(ref(db, `users/${currentUserSafeEmail}/friends`), (snapshot) => {
         channelList.innerHTML = '';
-        snapshot.forEach((child) => {
-            const fEmail = child.key; 
-            const fData = child.val();
+        snapshot.forEach((childSnapshot) => {
+            const fEmail = childSnapshot.key; 
+            const fData = childSnapshot.val();
             const div = document.createElement('div'); 
             
             div.classList.add('channel-item', 'friend-item'); 
@@ -411,8 +411,8 @@ function loadMyServers() {
     const serverList = document.getElementById('server-list');
     onValue(ref(db, `users/${currentUserSafeEmail}/servers`), (snap) => {
         serverList.innerHTML = '';
-        snap.forEach((child) => {
-            const serverId = child.key;
+        snap.forEach((childSnapshot) => {
+            const serverId = childSnapshot.key;
             get(child(ref(db), `servers/${serverId}`)).then((sSnap) => {
                 if (sSnap.exists()) {
                     const sData = sSnap.val();
@@ -579,9 +579,9 @@ function loadRoles() {
     const list = document.getElementById('ss-roles-list');
     onValue(ref(db, `servers/${currentServerId}/roles`), (snap) => {
         list.innerHTML = '';
-        snap.forEach(child => {
-            const roleId = child.key; 
-            const rData = child.val();
+        snap.forEach(childSnapshot => {
+            const roleId = childSnapshot.key; 
+            const rData = childSnapshot.val();
             const div = document.createElement('div'); 
             div.className = 'role-setting-item';
             
@@ -760,9 +760,9 @@ async function joinVoiceChannel(serverId, channelId) {
         onDisconnect(vcRef).remove(); 
         
         onValue(ref(db, `voice_rosters/${serverId}/${channelId}`), (snap) => { 
-            snap.forEach((child) => { 
-                const pEmail = child.key; 
-                const pId = child.val(); 
+            snap.forEach((childSnapshot) => { 
+                const pEmail = childSnapshot.key; 
+                const pId = childSnapshot.val(); 
                 if (pEmail !== currentUserSafeEmail && !activeCalls[pEmail]) { 
                     const call = myPeer.call(pId, localAudioStream, { metadata: { callerEmail: currentUserSafeEmail } }); 
                     call.on('stream', stream => addVoiceUserUI(pEmail, stream)); 
@@ -1051,8 +1051,8 @@ document.getElementById('close-image-modal').addEventListener('click', () => {
 // Notifications
 function startNotificationListeners() {
     onValue(ref(db, `users/${currentUserSafeEmail}/friends`), (snap) => { 
-        snap.forEach(child => { 
-            const dmId = child.val().dmId; 
+        snap.forEach(childSnapshot => { 
+            const dmId = childSnapshot.val().dmId; 
             onChildAdded(query(ref(db, `dms/${dmId}`), limitToLast(1)), (msg) => { 
                 if (currentChatId !== dmId && msg.val().timestamp > appStartTime) {
                     markUnread('dm', dmId); 
@@ -1062,8 +1062,8 @@ function startNotificationListeners() {
     });
     
     onValue(ref(db, `users/${currentUserSafeEmail}/servers`), (snap) => { 
-        snap.forEach(child => { 
-            const serverId = child.key; 
+        snap.forEach(childSnapshot => { 
+            const serverId = childSnapshot.key; 
             onValue(ref(db, `channels/${serverId}`), (cSnap) => { 
                 cSnap.forEach(c => { 
                     if (c.val().type === 'text') {
