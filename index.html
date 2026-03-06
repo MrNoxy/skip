@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Skip | Chat with your friends</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
@@ -19,10 +19,10 @@
     <div id="app-container" style="display: none;">
         
         <div id="server-sidebar">
-            <div class="server-icon" id="home-btn" title="Direct Messages">🏠</div>
+            <div class="server-icon" id="home-btn" title="Direct Messages">💬</div>
             <div id="server-list"></div>
             <div class="server-icon" id="create-server-btn" title="Create Server">+</div>
-            <div class="server-icon" id="join-server-btn" title="Join Server">🔗</div>
+            <div class="server-icon" id="join-server-btn" title="Join Server">🌍</div>
         </div>
 
         <div id="channel-sidebar">
@@ -36,33 +36,45 @@
             <div id="channel-list"></div>
             
             <div id="voice-area" style="display: none;">
-                <div id="voice-status">🔊 Connected to Voice</div>
-                <div id="voice-users-list">
-                    </div>
+                <div id="voice-status">🎙️ Connected to Voice</div>
+                <div id="voice-users-list"></div>
                 <div id="voice-controls">
                     <button id="mute-btn" class="vc-btn" title="Mute Microphone">🎤</button>
                     <button id="deafen-btn" class="vc-btn" title="Deafen Audio">🎧</button>
-                    <button id="disconnect-vc-btn" class="vc-btn" title="Disconnect" style="color: #ed4245;">✖</button>
+                    <button id="disconnect-vc-btn" class="vc-btn" title="Disconnect" style="color: #ed4245;">❌</button>
                 </div>
             </div>
 
             <div id="user-controls" title="Click to edit profile">
-                <img id="my-avatar" class="avatar-small" src="" alt="Me">
+                <div class="avatar-container">
+                    <img id="my-avatar" class="avatar-small" src="" alt="Me">
+                    <div id="my-status-indicator" class="status-indicator status-online" title="Change Status"></div>
+                </div>
                 <div id="user-info">
                     <div id="user-display" style="font-weight: bold;">User</div>
                     <div id="user-tag-display" style="font-size: 12px; color: gray;">#0000</div>
                 </div>
                 <button id="logout-btn" class="small-btn">Log Out</button>
+
+                <div id="status-selector" style="display:none;">
+                    <div class="status-option" data-status="online">🟢 Online</div>
+                    <div class="status-option" data-status="idle">🌙 Idle</div>
+                    <div class="status-option" data-status="dnd">🔴 Do Not Disturb</div>
+                    <div class="status-option" data-status="offline">⚪ Invisible</div>
+                </div>
             </div>
         </div>
 
         <div id="chat-area">
             <div id="chat-header">
+                <button id="mobile-back-btn" class="small-btn">⬅</button>
                 <span id="chat-title">Select a chat to start messaging</span>
                 <span id="invite-code-display" style="font-size: 12px; color: gray; margin-left: 15px; user-select: all; cursor: pointer;"></span>
             </div>
             <div id="messages"></div>
             <div id="message-input-area">
+                <button id="upload-img-btn" disabled title="Send Image">📷</button>
+                <input type="file" id="image-upload" accept="image/*" style="display: none;">
                 <input type="text" id="msg-input" placeholder="Message..." disabled>
                 <button id="send-btn" disabled>Send</button>
             </div>
@@ -85,6 +97,12 @@
                 <button id="close-profile-btn" style="background-color: #ed4245;">Cancel</button>
             </div>
         </div>
+    </div>
+
+    <div id="image-modal" style="display: none;">
+        <div id="close-image-modal">&times;</div>
+        <img id="enlarged-image" src="" alt="Enlarged">
+        <a id="download-image-btn" href="" download="image.png">⬇ Download Image</a>
     </div>
 
     <script type="module" src="app.js"></script>
