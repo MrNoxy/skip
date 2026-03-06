@@ -86,10 +86,74 @@ input {
     justify-content: space-between;
     align-items: center;
     box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    position: relative;
 }
-#sidebar-header h3 { 
+
+#server-header-clickable {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    flex-grow: 1;
+    border-radius: 4px;
+    padding: 4px 6px;
+    margin-left: -6px;
+    transition: 0.2s;
+}
+
+#server-header-clickable:hover {
+    background-color: rgba(79, 84, 92, 0.32);
+}
+
+#server-name-display { 
     margin: 0; 
-    font-size: 14px; 
+    font-size: 15px;
+    font-weight: bold;
+    margin-right: 5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px;
+}
+
+#server-dropdown-arrow {
+    font-size: 10px;
+    color: #b9bbbe;
+}
+
+/* Server Dropdown UI */
+#server-dropdown {
+    position: absolute;
+    top: 55px;
+    left: 10px;
+    width: 200px;
+    background-color: #18191c;
+    border-radius: 4px;
+    box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+    z-index: 100;
+    padding: 6px;
+}
+
+.dropdown-item {
+    padding: 8px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #b9bbbe;
+    margin-bottom: 2px;
+}
+
+.dropdown-item:hover {
+    background-color: #5865F2;
+    color: white;
+}
+
+.invite-item {
+    color: #5865F2;
+}
+
+.invite-item:hover {
+    background-color: #5865F2;
+    color: white;
 }
 
 #channel-list { 
@@ -189,27 +253,12 @@ button {
     cursor: pointer; 
     margin-left: 10px;
 }
-button:hover:not(:disabled) { 
-    background-color: #4752c4;
-}
-button:disabled {
-    background-color: #40444b;
-    cursor: not-allowed;
-    color: gray;
-}
-.small-btn { 
-    padding: 5px 10px;
-    font-size: 12px; 
-    margin-left: 5px;
-}
+button:hover:not(:disabled) { background-color: #4752c4; }
+button:disabled { background-color: #40444b; cursor: not-allowed; color: gray; }
+.small-btn { padding: 5px 10px; font-size: 12px; margin-left: 5px; }
 
 /* --- Notifications & Statuses --- */
-.unread-indicator {
-    position: absolute;
-    background-color: #ed4245;
-    border-radius: 50%;
-    pointer-events: none;
-}
+.unread-indicator { position: absolute; background-color: #ed4245; border-radius: 50%; pointer-events: none; }
 .unread-indicator.dot { width: 12px; height: 12px; top: 0; right: 0; border: 2px solid #202225; }
 .unread-indicator.pill { width: 8px; height: 8px; top: 50%; right: 10px; transform: translateY(-50%); }
 
@@ -233,27 +282,12 @@ button:disabled {
 .status-option:hover { background-color: #3ba55c; color: white; }
 
 /* --- Avatars & Messages --- */
-.avatar-small { 
-    width: 32px; 
-    height: 32px;
-    border-radius: 50%; 
-    object-fit: cover; 
-}
-.avatar-large { 
-    width: 64px; 
-    height: 64px; 
-    border-radius: 50%; 
-    object-fit: cover;
-}
+.avatar-small { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
+.avatar-large { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; }
 
 .message { margin-bottom: 15px; position: relative; padding: 5px; border-radius: 4px; }
 .message:hover { background-color: rgba(4, 4, 5, 0.07); }
-.message-header { 
-    display: flex; 
-    align-items: center; 
-    gap: 10px;
-    margin-bottom: 5px; 
-}
+.message-header { display: flex; align-items: center; gap: 10px; margin-bottom: 5px; }
 .message-sender { font-weight: bold; color: white; }
 .message-image {
     max-width: 250px;
@@ -275,9 +309,10 @@ button:disabled {
     position: absolute; top: 5px; right: 10px;
 }
 .message:hover .msg-delete-btn { display: block; }
+.msg-delete-btn:hover { background: #c9383b; }
 
-/* --- Modals (Profile & Image Viewer) --- */
-#profile-modal {
+/* --- Modals --- */
+.modal-overlay {
     position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
     background: rgba(0, 0, 0, 0.7);
     display: flex; justify-content: center; align-items: center;
@@ -288,6 +323,7 @@ button:disabled {
     width: 90%; padding: 10px; margin-top: 5px; margin-bottom: 15px; 
     border-radius: 4px; border: none; background-color: #202225; color: white;
 }
+.text-center { text-align: center; }
 
 #image-modal {
     position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;

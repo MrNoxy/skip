@@ -24,7 +24,8 @@ let chatType = null;
 let currentUserSafeEmail = null;
 let myProfile = {}; 
 let unsubscribeMessages = null; 
-let unsubscribeMessagesRemoved = null; // New logic for message deletion
+let unsubscribeMessagesRemoved = null; 
+let messageToDeletePath = null; // Used for custom delete modal
 const appStartTime = Date.now(); 
 let unreadState = { dms: new Set(), channels: new Set(), servers: new Set() };
 
@@ -40,6 +41,9 @@ let isDeafened = false;
 const appContainer = document.getElementById('app-container');
 const authSection = document.getElementById('auth-section');
 
+// Safely generate base URL for invites (handles GitHub pages naturally)
+const appBaseUrl = window.location.href.split('?')[0];
+
 function sanitizeEmail(email) { return email.replace(/\./g, ','); }
 
 // --- AUTH & PROFILE ---
@@ -53,7 +57,8 @@ document.getElementById('register-btn').addEventListener('click', async () => {
         const randomTag = Math.floor(1000 + Math.random() * 9000).toString(); 
         const defaultAvatar = `https://ui-avatars.com/api/?name=${baseName.charAt(0)}&background=5865F2&color=fff&size=150`;
 
-        const profileData = { email: email, uid: userCredential.user.uid, username: baseName, tag: randomTag, avatar: defaultAvatar, status: 'online' };
+        // Save a permanent status and a live status
+        const profileData = { email: email, uid: userCredential.user.uid, username: baseName, tag: randomTag, avatar: defaultAvatar, status: 'online', saved_status: 'online' };
 
         await set(ref(db, `users/${safeEmail}`), profileData);
         await set(ref(db, `user_tags/${baseName}_${randomTag}`), safeEmail);
@@ -68,7 +73,6 @@ document.getElementById('login-btn').addEventListener('click', () => {
 
 document.getElementById('logout-btn').addEventListener('click', () => {
     leaveVoiceChannel();
-    // Set to offline before logging out
     if (currentUserSafeEmail) set(ref(db, `users/${currentUserSafeEmail}/status`), 'offline');
     signOut(auth);
 });
@@ -86,22 +90,25 @@ onAuthStateChanged(auth, async (user) => {
                 document.getElementById('user-tag-display').innerText = `#${myProfile.tag}`;
                 document.getElementById('my-avatar').src = myProfile.avatar;
                 
-                // Sync UI with current status
                 const currentStatus = myProfile.status || 'online';
                 document.getElementById('my-status-indicator').className = `status-indicator status-${currentStatus}`;
             }
         });
 
-        // Online Status tracking hook
+        // Smart Online Status Tracking
         const connectedRef = ref(db, '.info/connected');
         onValue(connectedRef, (snap) => {
             if (snap.val() === true) {
                 const myStatusRef = ref(db, `users/${currentUserSafeEmail}/status`);
-                // When we disconnect, firebase sets us to offline automatically
+                const mySavedStatusRef = ref(db, `users/${currentUserSafeEmail}/saved_status`);
+                
+                // When tab closes, automatically drop to offline
                 onDisconnect(myStatusRef).set('offline');
-                // Reconnect to whatever status we last saved
-                get(myStatusRef).then(s => {
-                    set(myStatusRef, s.val() || 'online');
+                
+                // Restore whatever they selected before closing
+                get(mySavedStatusRef).then(sSnap => {
+                    const savedState = sSnap.val() || 'online';
+                    set(myStatusRef, savedState);
                 });
             }
         });
@@ -110,6 +117,15 @@ onAuthStateChanged(auth, async (user) => {
         loadMyServers();
         loadFriendsList();
         startNotificationListeners(); 
+
+        // Check if joined via Link
+        const urlParams = new URLSearchParams(window.location.search);
+        const inviteParam = urlParams.get('invite');
+        if (inviteParam) {
+            await joinServerByCode(inviteParam);
+            window.history.replaceState({}, document.title, appBaseUrl); // Clean URL
+        }
+
     } else {
         authSection.style.display = 'block';
         appContainer.style.display = 'none';
@@ -120,7 +136,6 @@ onAuthStateChanged(auth, async (user) => {
 const profileModal = document.getElementById('profile-modal');
 let tempBase64Avatar = null;
 
-// Open Profile
 document.getElementById('user-controls').addEventListener('click', (e) => {
     if(e.target.id === 'logout-btn' || e.target.id === 'my-status-indicator' || e.target.closest('#status-selector')) return; 
     document.getElementById('edit-username').value = myProfile.username;
@@ -172,14 +187,21 @@ document.querySelectorAll('.status-option').forEach(opt => {
     opt.addEventListener('click', (e) => {
         const newStatus = e.target.getAttribute('data-status');
         set(ref(db, `users/${currentUserSafeEmail}/status`), newStatus);
+        set(ref(db, `users/${currentUserSafeEmail}/saved_status`), newStatus); // Save preference permanently
         document.getElementById('status-selector').style.display = 'none';
     });
 });
 
 document.addEventListener('click', (e) => {
-    const selector = document.getElementById('status-selector');
-    if (selector && !e.target.closest('#user-controls')) {
-        selector.style.display = 'none';
+    // Close status dropdown
+    const statusSelector = document.getElementById('status-selector');
+    if (statusSelector && !e.target.closest('#user-controls')) {
+        statusSelector.style.display = 'none';
+    }
+    // Close server dropdown
+    const serverDropdown = document.getElementById('server-dropdown');
+    if (serverDropdown && !e.target.closest('#sidebar-header')) {
+        serverDropdown.style.display = 'none';
     }
 });
 
@@ -188,10 +210,9 @@ document.getElementById('home-btn').addEventListener('click', () => {
     document.body.classList.remove('mobile-chat-active'); 
     currentServerId = null;
     document.getElementById('server-name-display').innerText = "Friends & DMs";
+    document.getElementById('server-dropdown-arrow').style.display = 'none';
     document.getElementById('add-friend-btn').style.display = 'block';
-    document.getElementById('create-channel-btn').style.display = 'none';
-    document.getElementById('create-voice-btn').style.display = 'none';
-    document.getElementById('invite-code-display').innerText = "";
+    document.getElementById('server-dropdown').style.display = 'none';
     loadFriendsList();
 });
 
@@ -249,7 +270,6 @@ function loadFriendsList() {
             });
             channelList.appendChild(friendDiv);
 
-            // Listen dynamically to their live status
             onValue(ref(db, `users/${friendSafeEmail}/status`), (statusSnap) => {
                 const status = statusSnap.val() || 'offline';
                 const statusIndicator = document.getElementById(`status-${friendSafeEmail}`);
@@ -277,16 +297,28 @@ document.getElementById('create-server-btn').addEventListener('click', () => {
     }
 });
 
+// Join via Link logic
+async function joinServerByCode(codeToJoin) {
+    const snapshot = await get(child(ref(db), `servers/${codeToJoin}`));
+    if (snapshot.exists()) {
+        await set(ref(db, `server_members/${codeToJoin}/${currentUserSafeEmail}`), true);
+        await set(ref(db, `users/${currentUserSafeEmail}/servers/${codeToJoin}`), true);
+        alert("Joined server!");
+    } else { alert("Invalid invite link or code."); }
+}
+
 document.getElementById('join-server-btn').addEventListener('click', async () => {
-    const inviteCode = prompt("Enter Server Invite Code:");
-    if (inviteCode) {
-        const snapshot = await get(child(ref(db), `servers/${inviteCode}`));
-        if (snapshot.exists()) {
-            await set(ref(db, `server_members/${inviteCode}/${currentUserSafeEmail}`), true);
-            await set(ref(db, `users/${currentUserSafeEmail}/servers/${inviteCode}`), true);
-            alert("Joined server!");
-        } else { alert("Invalid invite code."); }
+    const input = prompt("Enter Server Invite Link or Code:");
+    if (!input) return;
+    
+    // Safely extract just the ID if they pasted a full URL
+    let inviteCode = input;
+    if (input.includes('invite=')) {
+        inviteCode = input.split('invite=')[1].split('&')[0];
+    } else if (input.includes('/')) {
+        inviteCode = input.split('/').pop();
     }
+    await joinServerByCode(inviteCode);
 });
 
 function loadMyServers() {
@@ -307,10 +339,8 @@ function loadMyServers() {
                         document.body.classList.remove('mobile-chat-active');
                         currentServerId = serverId;
                         document.getElementById('server-name-display').innerText = serverData.name;
+                        document.getElementById('server-dropdown-arrow').style.display = 'inline';
                         document.getElementById('add-friend-btn').style.display = 'none';
-                        document.getElementById('create-channel-btn').style.display = 'inline-block';
-                        document.getElementById('create-voice-btn').style.display = 'inline-block';
-                        document.getElementById('invite-code-display').innerText = `Invite Code: ${serverId}`;
                         loadChannels(serverId);
                     });
                     serverList.appendChild(serverDiv);
@@ -322,14 +352,36 @@ function loadMyServers() {
     });
 }
 
-document.getElementById('create-channel-btn').addEventListener('click', () => {
-    const channelName = prompt("Text Channel Name:");
-    if (channelName && currentServerId) push(ref(db, `channels/${currentServerId}`), { name: channelName.toLowerCase(), type: "text" });
+// Server Header Menu Logic
+document.getElementById('server-header-clickable').addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (currentServerId) {
+        const dropdown = document.getElementById('server-dropdown');
+        dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+    }
 });
 
-document.getElementById('create-voice-btn').addEventListener('click', () => {
+document.getElementById('menu-server-settings').addEventListener('click', () => { alert("Server Settings module coming soon!"); document.getElementById('server-dropdown').style.display='none';});
+document.getElementById('menu-add-text').addEventListener('click', () => {
+    const channelName = prompt("Text Channel Name:");
+    if (channelName && currentServerId) push(ref(db, `channels/${currentServerId}`), { name: channelName.toLowerCase(), type: "text" });
+    document.getElementById('server-dropdown').style.display='none';
+});
+document.getElementById('menu-add-voice').addEventListener('click', () => {
     const channelName = prompt("Voice Channel Name:");
     if (channelName && currentServerId) push(ref(db, `channels/${currentServerId}`), { name: channelName, type: "voice" });
+    document.getElementById('server-dropdown').style.display='none';
+});
+document.getElementById('menu-invite').addEventListener('click', () => {
+    if (currentServerId) {
+        const inviteLink = `${appBaseUrl}?invite=${currentServerId}`;
+        navigator.clipboard.writeText(inviteLink).then(() => {
+            alert(`Invite link copied to clipboard!\n${inviteLink}`);
+        }).catch(err => {
+            prompt("Copy this link manually:", inviteLink);
+        });
+    }
+    document.getElementById('server-dropdown').style.display='none';
 });
 
 function loadChannels(serverId) {
@@ -493,7 +545,6 @@ function loadMessages(dbPath) {
     const messagesDiv = document.getElementById('messages');
     messagesDiv.innerHTML = ''; 
     
-    // Unsubscribe from previous chat listener
     if (unsubscribeMessages) unsubscribeMessages();
     if (unsubscribeMessagesRemoved) unsubscribeMessagesRemoved();
 
@@ -501,14 +552,13 @@ function loadMessages(dbPath) {
         const data = snapshot.val();
         const msgElement = document.createElement('div');
         msgElement.classList.add('message');
-        msgElement.id = `msg-${snapshot.key}`; // Tie DOM ID to DB Key
+        msgElement.id = `msg-${snapshot.key}`;
         
         let contentHtml = `<div style="margin-left: 42px; word-break: break-word;">${data.text || ''}</div>`;
         if (data.imageUrl) {
             contentHtml += `<img src="${data.imageUrl}" class="message-image" style="margin-left: 42px;">`;
         }
         
-        // Show delete button only if you sent it
         let deleteBtnHtml = '';
         if (data.sender === auth.currentUser.email) {
             deleteBtnHtml = `<button class="msg-delete-btn">🗑️ Delete</button>`;
@@ -526,17 +576,15 @@ function loadMessages(dbPath) {
         messagesDiv.appendChild(msgElement);
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
 
-        // Message Delete Logic
+        // Message Delete Logic via custom Modal
         const delBtn = msgElement.querySelector('.msg-delete-btn');
         if (delBtn) {
-            delBtn.addEventListener('click', async () => {
-                if(confirm("Are you sure you want to delete this message?")) {
-                    await remove(ref(db, `${dbPath}/${snapshot.key}`));
-                }
+            delBtn.addEventListener('click', () => {
+                messageToDeletePath = `${dbPath}/${snapshot.key}`;
+                document.getElementById('delete-modal').style.display = 'flex';
             });
         }
 
-        // Image Click Logic (Enlarge)
         const imgEl = msgElement.querySelector('.message-image');
         if (imgEl) {
             imgEl.addEventListener('click', () => {
@@ -547,7 +595,6 @@ function loadMessages(dbPath) {
         }
     });
 
-    // Remove message node when it's deleted from database
     unsubscribeMessagesRemoved = onChildRemoved(ref(db, dbPath), (snapshot) => {
         const msgEl = document.getElementById(`msg-${snapshot.key}`);
         if(msgEl) msgEl.remove();
@@ -556,6 +603,21 @@ function loadMessages(dbPath) {
     if (chatType === 'dm') clearUnread('dm', currentChatId);
     else if (chatType === 'server') clearUnread('channel', currentChatId, currentServerId);
 }
+
+// Global Custom Delete Handlers
+document.getElementById('confirm-delete-btn').addEventListener('click', async () => {
+    if (messageToDeletePath) {
+        await remove(ref(db, messageToDeletePath));
+        messageToDeletePath = null;
+        document.getElementById('delete-modal').style.display = 'none';
+    }
+});
+
+document.getElementById('cancel-delete-btn').addEventListener('click', () => {
+    messageToDeletePath = null;
+    document.getElementById('delete-modal').style.display = 'none';
+});
+
 
 function sendMessage() {
     const input = document.getElementById('msg-input');
@@ -609,7 +671,6 @@ document.getElementById('image-upload').addEventListener('change', (e) => {
     reader.readAsDataURL(file);
 });
 
-// Hide Image Viewer
 document.getElementById('close-image-modal').addEventListener('click', () => {
     document.getElementById('image-modal').style.display = 'none';
 });
