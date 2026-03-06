@@ -46,22 +46,12 @@
             </div>
 
             <div id="user-controls" title="Click to edit profile">
-                <div class="avatar-container">
-                    <img id="my-avatar" class="avatar-small" src="" alt="Me">
-                    <div id="my-status-indicator" class="status-indicator status-online" title="Change Status"></div>
-                </div>
+                <img id="my-avatar" class="avatar-small" src="" alt="Me">
                 <div id="user-info">
                     <div id="user-display" style="font-weight: bold;">User</div>
                     <div id="user-tag-display" style="font-size: 12px; color: gray;">#0000</div>
                 </div>
                 <button id="logout-btn" class="small-btn">Log Out</button>
-
-                <div id="status-selector" style="display:none;">
-                    <div class="status-option" data-status="online">🟢 Online</div>
-                    <div class="status-option" data-status="idle">🌙 Idle</div>
-                    <div class="status-option" data-status="dnd">🔴 Do Not Disturb</div>
-                    <div class="status-option" data-status="offline">⚪ Invisible</div>
-                </div>
             </div>
         </div>
 
@@ -97,12 +87,6 @@
                 <button id="close-profile-btn" style="background-color: #ed4245;">Cancel</button>
             </div>
         </div>
-    </div>
-
-    <div id="image-modal" style="display: none;">
-        <div id="close-image-modal">&times;</div>
-        <img id="enlarged-image" src="" alt="Enlarged">
-        <a id="download-image-btn" href="" download="image.png">⬇ Download Image</a>
     </div>
 
     <script type="module" src="app.js"></script>

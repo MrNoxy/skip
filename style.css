@@ -119,7 +119,6 @@ input {
     justify-content: space-between;
     align-items: center;
     cursor: pointer;
-    position: relative;
 }
 #user-controls:hover {
     background-color: #393c43;
@@ -203,34 +202,27 @@ button:disabled {
     margin-left: 5px;
 }
 
-/* --- Notifications & Statuses --- */
+/* --- Notifications (Unread Dots) --- */
 .unread-indicator {
     position: absolute;
     background-color: #ed4245;
     border-radius: 50%;
     pointer-events: none;
 }
-.unread-indicator.dot { width: 12px; height: 12px; top: 0; right: 0; border: 2px solid #202225; }
-.unread-indicator.pill { width: 8px; height: 8px; top: 50%; right: 10px; transform: translateY(-50%); }
-
-.avatar-container { position: relative; display: inline-block; }
-
-.status-indicator {
-    width: 12px; height: 12px; border-radius: 50%;
-    position: absolute; bottom: -2px; right: -2px; border: 2px solid #292b2f;
+.unread-indicator.dot {
+    width: 12px;
+    height: 12px;
+    top: 0;
+    right: 0;
+    border: 2px solid #202225;
 }
-.status-online { background-color: #3ba55c; }
-.status-idle { background-color: #faa61a; }
-.status-dnd { background-color: #ed4245; }
-.status-offline { background-color: #747f8d; }
-
-#status-selector {
-    position: absolute; bottom: 60px; left: 10px; background: #18191c;
-    border: 1px solid #202225; border-radius: 4px; padding: 5px; z-index: 100;
-    box-shadow: 0 8px 16px rgba(0,0,0,0.4); width: 160px;
+.unread-indicator.pill {
+    width: 8px;
+    height: 8px;
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%);
 }
-.status-option { padding: 8px; cursor: pointer; color: #dcddde; font-size: 14px; border-radius: 4px; }
-.status-option:hover { background-color: #3ba55c; color: white; }
 
 /* --- Avatars & Messages --- */
 .avatar-small { 
@@ -246,8 +238,7 @@ button:disabled {
     object-fit: cover;
 }
 
-.message { margin-bottom: 15px; position: relative; padding: 5px; border-radius: 4px; }
-.message:hover { background-color: rgba(4, 4, 5, 0.07); }
+.message { margin-bottom: 15px; }
 .message-header { 
     display: flex; 
     align-items: center; 
@@ -261,50 +252,23 @@ button:disabled {
     border-radius: 8px;
     margin-top: 5px;
     display: block;
-    cursor: pointer;
-    transition: 0.2s ease;
 }
-.message-image:hover { opacity: 0.85; }
-
 .friend-item { display: flex; align-items: center; gap: 10px; }
 
-/* Message Delete Button */
-.msg-delete-btn {
-    display: none; background: #ed4245; color: white; border: none;
-    padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;
-    position: absolute; top: 5px; right: 10px;
-}
-.message:hover .msg-delete-btn { display: block; }
-
-/* --- Modals (Profile & Image Viewer) --- */
+/* --- Profile Settings Modal --- */
 #profile-modal {
     position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
     background: rgba(0, 0, 0, 0.7);
     display: flex; justify-content: center; align-items: center;
     z-index: 1000;
 }
-.modal-content { background-color: #36393f; padding: 25px; border-radius: 8px; width: 350px; }
+.modal-content {
+    background-color: #36393f; padding: 25px; border-radius: 8px; width: 350px;
+}
 .modal-content input[type="text"], .modal-content input[type="number"] { 
     width: 90%; padding: 10px; margin-top: 5px; margin-bottom: 15px; 
     border-radius: 4px; border: none; background-color: #202225; color: white;
 }
-
-#image-modal {
-    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-    background: rgba(0, 0, 0, 0.85); display: flex; justify-content: center;
-    align-items: center; z-index: 2000; flex-direction: column;
-}
-#enlarged-image { max-width: 90vw; max-height: 80vh; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
-#close-image-modal {
-    position: absolute; top: 20px; right: 30px; font-size: 40px;
-    color: white; cursor: pointer; transition: 0.2s;
-}
-#close-image-modal:hover { color: #ed4245; }
-#download-image-btn {
-    margin-top: 20px; background: #5865F2; color: white; padding: 10px 20px;
-    text-decoration: none; border-radius: 4px; font-weight: bold; font-size: 14px;
-}
-#download-image-btn:hover { background: #4752c4; }
 
 /* --- Voice Chat UI --- */
 #voice-area {
@@ -316,7 +280,10 @@ button:disabled {
     text-align: center; border-bottom: 1px solid #202225;
 }
 #voice-users-list { max-height: 150px; overflow-y: auto; padding: 5px 10px; }
-.vc-user { display: flex; align-items: center; justify-content: space-between; font-size: 12px; margin-bottom: 5px; }
+.vc-user {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 12px; margin-bottom: 5px;
+}
 .vc-user input[type=range] { width: 60px; }
 #voice-controls { display: flex; justify-content: space-around; padding: 10px; background-color: #202225; }
 .vc-btn { background: none; font-size: 16px; padding: 5px; border-radius: 4px; }
@@ -328,7 +295,12 @@ button:disabled {
 }
 
 /* --- Mobile UI --- */
-#mobile-back-btn { display: none; background: #202225; margin-right: 15px; font-size: 16px; }
+#mobile-back-btn {
+    display: none;
+    background: #202225;
+    margin-right: 15px;
+    font-size: 16px;
+}
 
 @media (max-width: 768px) {
     #channel-sidebar { width: calc(100vw - 72px); flex-shrink: 0; }
@@ -340,5 +312,5 @@ button:disabled {
     
     #mobile-back-btn { display: inline-block; }
     .modal-content { width: 80%; }
-    .message-image { max-width: 200px; max-height: 200px; }
+    .message-image { max-width: 200px; max-height: 200px; } /* Slightly smaller images on mobile */
 }

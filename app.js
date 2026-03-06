@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-import { getDatabase, ref, push, onChildAdded, onChildRemoved, onValue, set, get, child, remove, onDisconnect, query, limitToLast } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { getDatabase, ref, push, onChildAdded, onValue, set, get, child, remove, onDisconnect, query, limitToLast } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 
 // !!! PASTE YOUR FIREBASE CONFIG HERE !!!
 const firebaseConfig = {
@@ -24,7 +24,6 @@ let chatType = null;
 let currentUserSafeEmail = null;
 let myProfile = {}; 
 let unsubscribeMessages = null; 
-let unsubscribeMessagesRemoved = null; // New logic for message deletion
 const appStartTime = Date.now(); 
 let unreadState = { dms: new Set(), channels: new Set(), servers: new Set() };
 
@@ -53,7 +52,7 @@ document.getElementById('register-btn').addEventListener('click', async () => {
         const randomTag = Math.floor(1000 + Math.random() * 9000).toString(); 
         const defaultAvatar = `https://ui-avatars.com/api/?name=${baseName.charAt(0)}&background=5865F2&color=fff&size=150`;
 
-        const profileData = { email: email, uid: userCredential.user.uid, username: baseName, tag: randomTag, avatar: defaultAvatar, status: 'online' };
+        const profileData = { email: email, uid: userCredential.user.uid, username: baseName, tag: randomTag, avatar: defaultAvatar };
 
         await set(ref(db, `users/${safeEmail}`), profileData);
         await set(ref(db, `user_tags/${baseName}_${randomTag}`), safeEmail);
@@ -68,8 +67,6 @@ document.getElementById('login-btn').addEventListener('click', () => {
 
 document.getElementById('logout-btn').addEventListener('click', () => {
     leaveVoiceChannel();
-    // Set to offline before logging out
-    if (currentUserSafeEmail) set(ref(db, `users/${currentUserSafeEmail}/status`), 'offline');
     signOut(auth);
 });
 
@@ -85,24 +82,6 @@ onAuthStateChanged(auth, async (user) => {
                 document.getElementById('user-display').innerText = myProfile.username;
                 document.getElementById('user-tag-display').innerText = `#${myProfile.tag}`;
                 document.getElementById('my-avatar').src = myProfile.avatar;
-                
-                // Sync UI with current status
-                const currentStatus = myProfile.status || 'online';
-                document.getElementById('my-status-indicator').className = `status-indicator status-${currentStatus}`;
-            }
-        });
-
-        // Online Status tracking hook
-        const connectedRef = ref(db, '.info/connected');
-        onValue(connectedRef, (snap) => {
-            if (snap.val() === true) {
-                const myStatusRef = ref(db, `users/${currentUserSafeEmail}/status`);
-                // When we disconnect, firebase sets us to offline automatically
-                onDisconnect(myStatusRef).set('offline');
-                // Reconnect to whatever status we last saved
-                get(myStatusRef).then(s => {
-                    set(myStatusRef, s.val() || 'online');
-                });
             }
         });
 
@@ -116,13 +95,12 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// --- PROFILE & STATUS MODALS ---
+// --- PROFILE MODAL ---
 const profileModal = document.getElementById('profile-modal');
 let tempBase64Avatar = null;
 
-// Open Profile
 document.getElementById('user-controls').addEventListener('click', (e) => {
-    if(e.target.id === 'logout-btn' || e.target.id === 'my-status-indicator' || e.target.closest('#status-selector')) return; 
+    if(e.target.id === 'logout-btn') return; 
     document.getElementById('edit-username').value = myProfile.username;
     document.getElementById('edit-tag').value = myProfile.tag;
     document.getElementById('profile-preview').src = myProfile.avatar;
@@ -159,28 +137,6 @@ document.getElementById('save-profile-btn').addEventListener('click', async () =
     await set(ref(db, `users/${currentUserSafeEmail}/avatar`), tempBase64Avatar);
 
     profileModal.style.display = 'none';
-});
-
-// Status Dropdown Logic
-document.getElementById('my-status-indicator').addEventListener('click', (e) => {
-    e.stopPropagation();
-    const selector = document.getElementById('status-selector');
-    selector.style.display = selector.style.display === 'none' ? 'block' : 'none';
-});
-
-document.querySelectorAll('.status-option').forEach(opt => {
-    opt.addEventListener('click', (e) => {
-        const newStatus = e.target.getAttribute('data-status');
-        set(ref(db, `users/${currentUserSafeEmail}/status`), newStatus);
-        document.getElementById('status-selector').style.display = 'none';
-    });
-});
-
-document.addEventListener('click', (e) => {
-    const selector = document.getElementById('status-selector');
-    if (selector && !e.target.closest('#user-controls')) {
-        selector.style.display = 'none';
-    }
 });
 
 // --- NAVIGATION & FRIENDS ---
@@ -226,19 +182,11 @@ function loadFriendsList() {
     onValue(ref(db, `users/${currentUserSafeEmail}/friends`), (snapshot) => {
         channelList.innerHTML = '';
         snapshot.forEach((childSnapshot) => {
-            const friendSafeEmail = childSnapshot.key;
             const friendData = childSnapshot.val();
             const friendDiv = document.createElement('div');
             friendDiv.classList.add('channel-item', 'friend-item');
             friendDiv.id = `dm-${friendData.dmId}`;
-            
-            friendDiv.innerHTML = `
-                <div class="avatar-container">
-                    <img src="${friendData.avatar}" class="avatar-small">
-                    <div class="status-indicator status-offline" id="status-${friendSafeEmail}"></div>
-                </div>
-                <span>${friendData.username}</span>
-            `;
+            friendDiv.innerHTML = `<img src="${friendData.avatar}" class="avatar-small"><span>${friendData.username}</span>`;
             
             friendDiv.addEventListener('click', () => {
                 chatType = 'dm';
@@ -248,15 +196,6 @@ function loadFriendsList() {
                 loadMessages(`dms/${currentChatId}`);
             });
             channelList.appendChild(friendDiv);
-
-            // Listen dynamically to their live status
-            onValue(ref(db, `users/${friendSafeEmail}/status`), (statusSnap) => {
-                const status = statusSnap.val() || 'offline';
-                const statusIndicator = document.getElementById(`status-${friendSafeEmail}`);
-                if(statusIndicator) {
-                    statusIndicator.className = `status-indicator status-${status}`;
-                }
-            });
 
             if (unreadState.dms.has(friendData.dmId)) updateBadge(`dm-${friendData.dmId}`, true, false);
         });
@@ -485,7 +424,7 @@ function removeVoiceUserUI(peerEmail) {
 function enableChat() {
     document.getElementById('msg-input').disabled = false;
     document.getElementById('send-btn').disabled = false;
-    document.getElementById('upload-img-btn').disabled = false; 
+    document.getElementById('upload-img-btn').disabled = false; // Enable image upload button
     document.body.classList.add('mobile-chat-active'); 
 }
 
@@ -493,25 +432,16 @@ function loadMessages(dbPath) {
     const messagesDiv = document.getElementById('messages');
     messagesDiv.innerHTML = ''; 
     
-    // Unsubscribe from previous chat listener
     if (unsubscribeMessages) unsubscribeMessages();
-    if (unsubscribeMessagesRemoved) unsubscribeMessagesRemoved();
 
     unsubscribeMessages = onChildAdded(ref(db, dbPath), (snapshot) => {
         const data = snapshot.val();
         const msgElement = document.createElement('div');
         msgElement.classList.add('message');
-        msgElement.id = `msg-${snapshot.key}`; // Tie DOM ID to DB Key
         
         let contentHtml = `<div style="margin-left: 42px; word-break: break-word;">${data.text || ''}</div>`;
         if (data.imageUrl) {
             contentHtml += `<img src="${data.imageUrl}" class="message-image" style="margin-left: 42px;">`;
-        }
-        
-        // Show delete button only if you sent it
-        let deleteBtnHtml = '';
-        if (data.sender === auth.currentUser.email) {
-            deleteBtnHtml = `<button class="msg-delete-btn">🗑️ Delete</button>`;
         }
 
         msgElement.innerHTML = `
@@ -519,38 +449,11 @@ function loadMessages(dbPath) {
                 <img src="${data.avatar}" class="avatar-small">
                 <span class="message-sender">${data.username}</span>
                 <span style="font-size: 0.8em; color: gray;">${new Date(data.timestamp).toLocaleTimeString()}</span>
-                ${deleteBtnHtml}
             </div>
             ${contentHtml}
         `;
         messagesDiv.appendChild(msgElement);
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
-
-        // Message Delete Logic
-        const delBtn = msgElement.querySelector('.msg-delete-btn');
-        if (delBtn) {
-            delBtn.addEventListener('click', async () => {
-                if(confirm("Are you sure you want to delete this message?")) {
-                    await remove(ref(db, `${dbPath}/${snapshot.key}`));
-                }
-            });
-        }
-
-        // Image Click Logic (Enlarge)
-        const imgEl = msgElement.querySelector('.message-image');
-        if (imgEl) {
-            imgEl.addEventListener('click', () => {
-                document.getElementById('enlarged-image').src = data.imageUrl;
-                document.getElementById('download-image-btn').href = data.imageUrl;
-                document.getElementById('image-modal').style.display = 'flex';
-            });
-        }
-    });
-
-    // Remove message node when it's deleted from database
-    unsubscribeMessagesRemoved = onChildRemoved(ref(db, dbPath), (snapshot) => {
-        const msgEl = document.getElementById(`msg-${snapshot.key}`);
-        if(msgEl) msgEl.remove();
     });
 
     if (chatType === 'dm') clearUnread('dm', currentChatId);
@@ -585,6 +488,7 @@ document.getElementById('image-upload').addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file || !currentChatId) return;
 
+    // Safety check so you don't blow up Firebase size limits!
     if (file.size > 2 * 1024 * 1024) {
         alert("File too large. Please select an image under 2MB.");
         return;
@@ -604,14 +508,10 @@ document.getElementById('image-upload').addEventListener('change', (e) => {
             timestamp: Date.now()
         });
 
+        // Clear the file input
         document.getElementById('image-upload').value = "";
     };
     reader.readAsDataURL(file);
-});
-
-// Hide Image Viewer
-document.getElementById('close-image-modal').addEventListener('click', () => {
-    document.getElementById('image-modal').style.display = 'none';
 });
 
 // --- NOTIFICATION ENGINE ---
