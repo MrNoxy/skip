@@ -26,6 +26,7 @@ let myProfile = {};
 let myServerPerms = { admin: false, manageChannels: false, deleteMessages: false };
 let unsubscribeMessages = null; 
 let unsubscribeMessagesRemoved = null; 
+let unsubscribeMembers = null; // Track members listener to prevent memory leaks
 let messageToDeletePath = null; 
 const appStartTime = Date.now(); 
 let unreadState = { dms: new Set(), channels: new Set(), servers: new Set() };
@@ -48,7 +49,7 @@ function sanitizeEmail(email) {
 }
 
 function generateCode() { 
-    return Math.random().toString(36).substring(2, 10); // Alphanumeric
+    return Math.random().toString(36).substring(2, 10); 
 }
 
 // ==========================================
@@ -295,6 +296,9 @@ document.getElementById('home-btn').addEventListener('click', () => {
     document.getElementById('server-dropdown-arrow').style.display = 'none';
     document.getElementById('add-friend-btn').style.display = 'block';
     document.getElementById('server-dropdown').style.display = 'none';
+    document.getElementById('toggle-members-btn').style.display = 'none';
+    document.getElementById('member-sidebar').style.display = 'none';
+    if(unsubscribeMembers) { unsubscribeMembers(); unsubscribeMembers = null; }
     loadFriendsList();
 });
 
@@ -350,6 +354,8 @@ function loadFriendsList() {
                 chatType = 'dm'; 
                 currentChatId = fData.dmId;
                 document.getElementById('chat-title').innerText = `@${fData.username}#${fData.tag}`;
+                document.getElementById('toggle-members-btn').style.display = 'none';
+                document.getElementById('member-sidebar').style.display = 'none';
                 enableChat(); 
                 loadMessages(`dms/${currentChatId}`, `@${fData.username}`);
             });
@@ -369,17 +375,16 @@ function loadFriendsList() {
 }
 
 // ==========================================
-// --- SERVERS, CHANNELS, & SETTINGS ---
+// --- SERVERS, CHANNELS, SETTINGS & MEMBERS ---
 // ==========================================
 document.getElementById('create-server-btn').addEventListener('click', () => {
     openInputModal("Create Server", "Server Name", "Give your server a name:", (serverName) => {
         if (serverName) {
-            const serverId = generateCode(); // ALPHANUMERIC
+            const serverId = generateCode();
             set(ref(db, `servers/${serverId}`), { name: serverName, owner: auth.currentUser.email });
             set(ref(db, `server_members/${serverId}/${currentUserSafeEmail}`), { role: 'owner' });
             set(ref(db, `users/${currentUserSafeEmail}/servers/${serverId}`), true);
             
-            // Create default category & channels
             const catId = push(ref(db, `categories/${serverId}`)).key;
             set(ref(db, `categories/${serverId}/${catId}`), { name: "Information", order: 0 });
             push(ref(db, `channels/${serverId}`), { name: "general", type: "text", categoryId: catId, order: 0 });
@@ -432,6 +437,7 @@ function loadMyServers() {
                         document.getElementById('server-name-display').innerText = sData.name;
                         document.getElementById('server-dropdown-arrow').style.display = 'inline';
                         document.getElementById('add-friend-btn').style.display = 'none';
+                        document.getElementById('toggle-members-btn').style.display = 'inline-block';
                         
                         // Check perms
                         const myRoleSnap = await get(ref(db, `server_members/${serverId}/${currentUserSafeEmail}/role`));
@@ -445,13 +451,13 @@ function loadMyServers() {
                             myServerPerms = { admin: false, manageChannels: false, deleteMessages: false }; 
                         }
 
-                        // Setup Dropdown UI based on perms
                         document.getElementById('menu-server-settings').style.display = myServerPerms.admin ? 'block' : 'none';
                         document.getElementById('menu-add-category').style.display = myServerPerms.manageChannels || myServerPerms.admin ? 'block' : 'none';
                         document.getElementById('menu-add-text').style.display = myServerPerms.manageChannels || myServerPerms.admin ? 'block' : 'none';
                         document.getElementById('menu-add-voice').style.display = myServerPerms.manageChannels || myServerPerms.admin ? 'block' : 'none';
 
                         loadChannels(serverId);
+                        loadMemberList(serverId); // Load the member list right away
                     });
                     
                     serverList.appendChild(div);
@@ -560,7 +566,7 @@ document.getElementById('ss-save-overview-btn').addEventListener('click', () => 
     }
 });
 
-// Roles UI Logic
+// Roles UI Logic & Drag/Drop
 document.getElementById('tab-overview').addEventListener('click', (e) => { 
     e.target.style.color='white'; 
     document.getElementById('tab-roles').style.color='gray'; 
@@ -575,18 +581,31 @@ document.getElementById('tab-roles').addEventListener('click', (e) => {
     document.getElementById('ss-overview').style.display='none'; 
 });
 
+let dragRoleEl = null;
+
 function loadRoles() {
     const list = document.getElementById('ss-roles-list');
     onValue(ref(db, `servers/${currentServerId}/roles`), (snap) => {
         list.innerHTML = '';
+        
+        // Convert to array and sort by order
+        let rolesArray = [];
         snap.forEach(childSnapshot => {
-            const roleId = childSnapshot.key; 
-            const rData = childSnapshot.val();
+            let data = childSnapshot.val();
+            data.id = childSnapshot.key;
+            rolesArray.push(data);
+        });
+        rolesArray.sort((a,b) => (a.order || 0) - (b.order || 0));
+
+        rolesArray.forEach(rData => {
+            const roleId = rData.id;
             const div = document.createElement('div'); 
             div.className = 'role-setting-item';
+            div.id = `role-set-${roleId}`;
+            div.draggable = true;
             
             div.innerHTML = `
-                <div style="color: ${rData.color}; font-weight: bold;">${rData.name}</div>
+                <div style="color: ${rData.color}; font-weight: bold; pointer-events: none;">☰ ${rData.name}</div>
                 <div>
                     <label style="font-size:11px; margin-right:5px;">
                         <input type="checkbox" ${rData.perms.admin?'checked':''} class="r-perm" data-role="${roleId}" data-perm="admin"> Admin
@@ -599,6 +618,36 @@ function loadRoles() {
                     </label>
                 </div>
             `;
+            
+            // Drag and Drop for Roles
+            div.addEventListener('dragstart', (e) => { 
+                dragRoleEl = div; 
+                e.dataTransfer.effectAllowed = 'move'; 
+                e.dataTransfer.setData('text/html', div.innerHTML); 
+            });
+            
+            div.addEventListener('dragover', (e) => { 
+                e.preventDefault(); 
+                e.dataTransfer.dropEffect = 'move'; 
+                div.classList.add('drag-over'); 
+                return false; 
+            });
+            
+            div.addEventListener('dragleave', (e) => { 
+                div.classList.remove('drag-over'); 
+            });
+            
+            div.addEventListener('drop', (e) => {
+                e.stopPropagation(); 
+                div.classList.remove('drag-over');
+                if (dragRoleEl !== div) {
+                    const srcId = dragRoleEl.id.replace('role-set-', ''); 
+                    const tgtId = div.id.replace('role-set-', '');
+                    update(ref(db, `servers/${currentServerId}/roles/${srcId}`), { order: (rData.order || 0) - 0.5 });
+                }
+                return false;
+            });
+
             list.appendChild(div);
         });
         
@@ -620,13 +669,146 @@ document.getElementById('ss-create-role-btn').addEventListener('click', () => {
         push(ref(db, `servers/${currentServerId}/roles`), { 
             name, 
             color, 
+            order: Date.now(), // Easy default ordering
             perms: {admin:false, manageChannels:false, deleteMessages:false} 
         });
         document.getElementById('ss-new-role-name').value = '';
     }
 });
 
-// Drag and Drop State
+// Member List Loading & UI
+let userToManageEmail = null;
+
+document.getElementById('toggle-members-btn').addEventListener('click', () => {
+    const sidebar = document.getElementById('member-sidebar');
+    if (sidebar.style.display === 'none') {
+        sidebar.style.display = 'flex';
+    } else {
+        sidebar.style.display = 'none';
+    }
+});
+
+document.getElementById('close-role-modal-btn').addEventListener('click', () => {
+    document.getElementById('assign-role-modal').style.display = 'none';
+});
+
+document.getElementById('save-role-btn').addEventListener('click', () => {
+    const roleId = document.getElementById('assign-role-select').value;
+    if (userToManageEmail && currentServerId) {
+        update(ref(db, `server_members/${currentServerId}/${userToManageEmail}`), { role: roleId });
+        document.getElementById('assign-role-modal').style.display = 'none';
+    }
+});
+
+function loadMemberList(serverId) {
+    if(unsubscribeMembers) unsubscribeMembers();
+
+    const listContent = document.getElementById('member-list-content');
+    
+    unsubscribeMembers = onValue(ref(db, `server_members/${serverId}`), async (membersSnap) => {
+        const rolesSnap = await get(ref(db, `servers/${serverId}/roles`));
+        let rolesData = {};
+        if (rolesSnap.exists()) {
+            rolesData = rolesSnap.val();
+        }
+
+        // Default Groups
+        let groups = {
+            owner: { name: "Server Owner", order: -2, members: [] },
+            online: { name: "Online", order: 9998, members: [] },
+            offline: { name: "Offline", order: 9999, members: [] }
+        };
+
+        // Add Custom Role Groups
+        Object.keys(rolesData).forEach(rId => {
+            groups[rId] = { 
+                name: rolesData[rId].name, 
+                order: rolesData[rId].order || 0, 
+                color: rolesData[rId].color,
+                members: [] 
+            };
+        });
+
+        // Loop through members, fetch data, and categorize
+        const memberPromises = [];
+        membersSnap.forEach(mSnap => {
+            const memberEmail = mSnap.key;
+            const memberInfo = mSnap.val();
+            
+            const p = get(child(ref(db), `users/${memberEmail}`)).then(uSnap => {
+                if (uSnap.exists()) {
+                    const uData = uSnap.val();
+                    const status = uData.status || 'offline';
+                    let targetGroup = 'offline';
+
+                    if (memberInfo.role === 'owner') {
+                        targetGroup = 'owner';
+                    } else if (memberInfo.role && memberInfo.role !== 'member' && groups[memberInfo.role]) {
+                        targetGroup = memberInfo.role;
+                    } else if (status !== 'offline' && status !== 'invisible') {
+                        targetGroup = 'online';
+                    }
+
+                    groups[targetGroup].members.push({ email: memberEmail, data: uData, status: status });
+                }
+            });
+            memberPromises.push(p);
+        });
+
+        await Promise.all(memberPromises);
+
+        // Render List
+        listContent.innerHTML = '';
+        const sortedGroupKeys = Object.keys(groups).sort((a,b) => groups[a].order - groups[b].order);
+
+        sortedGroupKeys.forEach(gKey => {
+            const group = groups[gKey];
+            if (group.members.length === 0) return;
+
+            const catDiv = document.createElement('div');
+            catDiv.className = 'member-category';
+            catDiv.innerText = `${group.name} — ${group.members.length}`;
+            listContent.appendChild(catDiv);
+
+            group.members.forEach(m => {
+                const mDiv = document.createElement('div');
+                mDiv.className = 'member-item';
+                
+                let nameColor = group.color || "white";
+                if(gKey === 'owner' || gKey === 'online' || gKey === 'offline') nameColor = "white"; // Only colorize custom roles
+
+                mDiv.innerHTML = `
+                    <div class="avatar-container">
+                        <img src="${m.data.avatar}" class="avatar-small">
+                        <div class="status-indicator status-${m.status}"></div>
+                    </div>
+                    <div class="member-username" style="color: ${nameColor};">${m.data.username}</div>
+                `;
+
+                // Admin functionality to assign roles
+                mDiv.addEventListener('click', () => {
+                    if (!myServerPerms.admin || m.email === auth.currentUser.email) return; // Cant edit self or without perms
+                    userToManageEmail = m.email;
+                    
+                    const select = document.getElementById('assign-role-select');
+                    select.innerHTML = `<option value="member">Member (Default)</option>`;
+                    Object.keys(rolesData).forEach(rId => {
+                        select.innerHTML += `<option value="${rId}">${rolesData[rId].name}</option>`;
+                    });
+                    
+                    // Select current role
+                    select.value = membersSnap.val()[m.email].role || 'member';
+                    
+                    document.getElementById('assign-role-modal').style.display = 'flex';
+                });
+
+                listContent.appendChild(mDiv);
+            });
+        });
+    });
+}
+
+// Drag and Drop Channels
 let dragSrcEl = null;
 
 function loadChannels(serverId) {

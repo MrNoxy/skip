@@ -78,6 +78,8 @@
                 <button id="mobile-back-btn" class="small-btn">⬅</button>
                 <span id="chat-title">Select a chat to start messaging</span>
                 <span id="invite-code-display" style="display: none;"></span>
+                <div style="flex-grow: 1;"></div>
+                <button id="toggle-members-btn" class="small-btn" style="display: none; font-size: 16px; padding: 4px 8px;" title="Toggle Member List">👥</button>
             </div>
             <div id="messages"></div>
             <div id="message-input-area">
@@ -86,6 +88,10 @@
                 <input type="text" id="msg-input" placeholder="Message..." disabled>
                 <button id="send-btn" disabled>Send</button>
             </div>
+        </div>
+
+        <div id="member-sidebar" style="display: none;">
+            <div id="member-list-content"></div>
         </div>
     </div>
 
@@ -138,6 +144,18 @@
         </div>
     </div>
 
+    <div id="assign-role-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h3 id="assign-role-title">Manage User</h3>
+            <label>Assign Role:</label>
+            <select id="assign-role-select" style="width: 100%; padding: 10px; margin-top: 5px; margin-bottom: 15px; background: #202225; color: white; border: none; border-radius: 4px; outline: none;"></select>
+            <div style="display: flex; gap: 10px;">
+                <button id="save-role-btn" style="flex: 1;">Save</button>
+                <button id="close-role-modal-btn" style="background-color: #4f545c; flex: 1;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <div id="image-modal" style="display: none;">
         <div id="close-image-modal">&times;</div>
         <img id="enlarged-image" src="" alt="Enlarged">
@@ -176,6 +194,7 @@
                     <input type="color" id="ss-new-role-color" value="#99aab5" style="width: 40px; height: 36px; padding: 0; border: none; background: transparent; cursor: pointer;">
                     <button id="ss-create-role-btn">Create</button>
                 </div>
+                <p style="font-size: 11px; color: gray; margin-bottom: 10px;">Drag and drop roles below to reorder them.</p>
                 <div id="ss-roles-list" style="max-height: 200px; overflow-y: auto; background: #2f3136; border-radius: 4px; padding: 10px;"></div>
             </div>
         </div>

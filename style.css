@@ -39,6 +39,7 @@ input {
     display: flex; 
     width: 100vw; 
     height: 100vh; 
+    overflow: hidden;
 }
 
 /* --- Far Left: Server Sidebar --- */
@@ -50,6 +51,7 @@ input {
     align-items: center; 
     padding-top: 10px; 
     overflow-y: auto; 
+    flex-shrink: 0;
 }
 
 .server-icon { 
@@ -85,6 +87,7 @@ input {
     background-color: #2f3136; 
     display: flex; 
     flex-direction: column; 
+    flex-shrink: 0;
 }
 
 #sidebar-header { 
@@ -207,7 +210,7 @@ input {
 }
 
 .channel-item.drag-over { 
-    border-top: 2px solid #5865F2; /* Drag and drop indicator */
+    border-top: 2px solid #5865F2; 
 }
 
 /* User Controls at bottom of Channel Sidebar */
@@ -281,6 +284,58 @@ input {
 
 #upload-img-btn:hover:not(:disabled) { 
     background-color: #5865F2; 
+}
+
+/* --- Far Right: Member Sidebar --- */
+#member-sidebar {
+    width: 240px;
+    background-color: #2f3136;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    border-left: 1px solid #202225;
+}
+
+#member-list-content {
+    flex-grow: 1;
+    padding: 15px 10px;
+    overflow-y: auto;
+}
+
+.member-category {
+    text-transform: uppercase;
+    font-size: 11px;
+    font-weight: bold;
+    color: #8e9297;
+    margin-top: 15px;
+    margin-bottom: 5px;
+    padding-left: 5px;
+}
+
+.member-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.member-item:hover {
+    background-color: #393c43;
+}
+
+.member-item .avatar-container {
+    flex-shrink: 0;
+}
+
+.member-username {
+    font-weight: bold;
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* --- Buttons --- */
@@ -614,6 +669,13 @@ button:disabled {
     padding: 10px; 
     border-radius: 4px; 
     margin-bottom: 5px; 
+    cursor: grab;
+}
+.role-setting-item:active {
+    cursor: grabbing;
+}
+.role-setting-item.drag-over {
+    border-top: 2px solid #5865F2;
 }
 
 /* --- Voice Chat UI --- */
@@ -695,7 +757,6 @@ button:disabled {
 @media (max-width: 768px) {
     #channel-sidebar { 
         width: calc(100vw - 72px); 
-        flex-shrink: 0; 
     }
     #chat-area { 
         width: 100vw; 
@@ -719,5 +780,16 @@ button:disabled {
     .message-image { 
         max-width: 200px; 
         max-height: 200px; 
+    }
+    /* Member list takes full screen on mobile when active */
+    #member-sidebar {
+        position: absolute;
+        top: 0;
+        right: 0;
+        height: 100vh;
+        width: 80vw;
+        max-width: 300px;
+        z-index: 50;
+        box-shadow: -5px 0 15px rgba(0,0,0,0.5);
     }
 }
