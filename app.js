@@ -25,7 +25,7 @@ let currentUserSafeEmail = null;
 let myProfile = {}; 
 let myServerPerms = { admin: false, manageChannels: false, deleteMessages: false };
 
-// Listener Cleanups
+// Listeners
 let unsubscribeMessages = null; 
 let unsubscribeMessagesRemoved = null; 
 let unsubscribeMembers = null; 
@@ -33,8 +33,10 @@ let unsubscribeChannels = null;
 let unsubscribeCategories = null;
 
 let messageToDeletePath = null; 
-let replyingToMessage = null; // New tracking for Replies
+let replyingToMessage = null; 
+let pendingAttachmentBase64 = null; // New logic for Image Previews
 
+let notificationsActive = false; // Prevent unread spam on load
 const appStartTime = Date.now(); 
 let unreadState = { dms: new Set(), channels: new Set(), servers: new Set() };
 
@@ -223,7 +225,7 @@ document.querySelectorAll('.status-option').forEach(opt => { opt.addEventListene
 document.addEventListener('click', (e) => { if (!e.target.closest('#user-controls')) document.getElementById('status-selector').style.display = 'none'; if (!e.target.closest('#sidebar-header') && !e.target.closest('#server-settings-modal')) document.getElementById('server-dropdown').style.display = 'none'; });
 
 // ==========================================
-// --- NAVIGATION & FRIENDS ---
+// --- NAVIGATION & FRIENDS (LIVE SYNC) ---
 // ==========================================
 document.getElementById('home-btn').addEventListener('click', () => {
     document.body.classList.remove('mobile-chat-active'); currentServerId = null;
@@ -249,8 +251,8 @@ document.getElementById('add-friend-btn').addEventListener('click', () => {
             if(friendSafeEmail === currentUserSafeEmail) return customAlert("You can't add yourself!", "Wait a minute...");
             const fProf = (await get(child(ref(db), `users/${friendSafeEmail}`))).val();
             const dmId = [currentUserSafeEmail, friendSafeEmail].sort().join('_');
-            await set(ref(db, `users/${currentUserSafeEmail}/friends/${friendSafeEmail}`), { username: fProf.username, tag: fProf.tag, avatar: fProf.avatar, dmId: dmId });
-            await set(ref(db, `users/${friendSafeEmail}/friends/${currentUserSafeEmail}`), { username: myProfile.username, tag: myProfile.tag, avatar: myProfile.avatar, dmId: dmId });
+            await set(ref(db, `users/${currentUserSafeEmail}/friends/${friendSafeEmail}`), { dmId: dmId });
+            await set(ref(db, `users/${friendSafeEmail}/friends/${currentUserSafeEmail}`), { dmId: dmId });
             customAlert(`Added ${inputTag} to friends!`, "Success");
         } else { customAlert("User not found.", "Error"); }
     });
@@ -261,19 +263,39 @@ function loadFriendsList() {
     onValue(ref(db, `users/${currentUserSafeEmail}/friends`), (snapshot) => {
         channelList.innerHTML = '';
         snapshot.forEach((childSnapshot) => {
-            const fEmail = childSnapshot.key; const fData = childSnapshot.val();
-            const div = document.createElement('div'); div.classList.add('channel-item', 'friend-item'); div.id = `dm-${fData.dmId}`;
-            div.innerHTML = `<div class="avatar-container"><img src="${fData.avatar}" class="avatar-small"><div class="status-indicator status-offline" id="status-${fEmail}"></div></div><span>${fData.username}</span>`;
-            div.addEventListener('click', () => {
-                chatType = 'dm'; currentChatId = fData.dmId;
-                document.getElementById('chat-title').innerText = `@${fData.username}#${fData.tag}`;
-                document.getElementById('toggle-members-btn').style.display = 'none';
-                document.getElementById('member-sidebar').style.display = 'none';
-                enableChat(); loadMessages(`dms/${currentChatId}`, `@${fData.username}`);
+            const fEmail = childSnapshot.key; const fDataStatic = childSnapshot.val();
+            const div = document.createElement('div'); div.classList.add('channel-item', 'friend-item'); div.id = `dm-${fDataStatic.dmId}`;
+            
+            // Build placeholder structure
+            div.innerHTML = `
+                <div class="avatar-container">
+                    <img src="" class="avatar-small" id="f-avatar-${fEmail}">
+                    <div class="status-indicator status-offline" id="status-${fEmail}"></div>
+                </div>
+                <span id="f-name-${fEmail}">Loading...</span>
+            `;
+            
+            // Live sync data
+            onValue(ref(db, `users/${fEmail}`), (userSnap) => {
+                if(userSnap.exists()) {
+                    const uData = userSnap.val();
+                    const img = document.getElementById(`f-avatar-${fEmail}`); if(img) img.src = uData.avatar;
+                    const name = document.getElementById(`f-name-${fEmail}`); if(name) name.innerText = uData.username;
+                    const stat = document.getElementById(`status-${fEmail}`); if(stat) stat.className = `status-indicator status-${uData.status || 'offline'}`;
+                    
+                    // Attach click logic (now that we know the name for the header)
+                    div.onclick = () => {
+                        chatType = 'dm'; currentChatId = fDataStatic.dmId;
+                        document.getElementById('chat-title').innerText = `@${uData.username}#${uData.tag}`;
+                        document.getElementById('toggle-members-btn').style.display = 'none';
+                        document.getElementById('member-sidebar').style.display = 'none';
+                        enableChat(); loadMessages(`dms/${currentChatId}`, `@${uData.username}`);
+                    };
+                }
             });
+
             channelList.appendChild(div);
-            onValue(ref(db, `users/${fEmail}/status`), (snap) => { const el = document.getElementById(`status-${fEmail}`); if(el) el.className = `status-indicator status-${snap.val() || 'offline'}`; });
-            if (unreadState.dms.has(fData.dmId)) updateBadge(`dm-${fData.dmId}`, true, false);
+            if (unreadState.dms.has(fDataStatic.dmId)) updateBadge(`dm-${fDataStatic.dmId}`, true, false);
         });
     });
 }
@@ -376,7 +398,6 @@ document.getElementById('delete-server-btn').addEventListener('click', async () 
             await remove(ref(db, `server_members/${currentServerId}`));
             await remove(ref(db, `channels/${currentServerId}`));
             await remove(ref(db, `categories/${currentServerId}`));
-            // Remove from user's server list
             await remove(ref(db, `users/${currentUserSafeEmail}/servers/${currentServerId}`));
             
             document.getElementById('server-settings-modal').style.display = 'none';
@@ -399,7 +420,7 @@ function loadRoles() {
         snap.forEach(childSnapshot => { let data = childSnapshot.val(); data.id = childSnapshot.key; rolesArray.push(data); });
         rolesArray.sort((a,b) => (a.order || 0) - (b.order || 0));
 
-        rolesArray.forEach(rData => {
+        rolesArray.forEach((rData, index, arr) => {
             const roleId = rData.id;
             const div = document.createElement('div'); div.className = 'role-setting-item'; div.id = `role-set-${roleId}`; div.draggable = true;
             div.innerHTML = `
@@ -412,7 +433,20 @@ function loadRoles() {
             div.addEventListener('dragstart', (e) => { dragRoleEl = div; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/html', div.innerHTML); });
             div.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; div.classList.add('drag-over'); return false; });
             div.addEventListener('dragleave', (e) => { div.classList.remove('drag-over'); });
-            div.addEventListener('drop', (e) => { e.stopPropagation(); div.classList.remove('drag-over'); if (dragRoleEl !== div) { const srcId = dragRoleEl.id.replace('role-set-', ''); const tgtId = div.id.replace('role-set-', ''); update(ref(db, `servers/${currentServerId}/roles/${srcId}`), { order: (rData.order || 0) - 0.5 }); } return false; });
+            div.addEventListener('drop', (e) => { 
+                e.stopPropagation(); div.classList.remove('drag-over'); 
+                if (dragRoleEl !== div) { 
+                    const srcId = dragRoleEl.id.replace('role-set-', ''); 
+                    const targetOrder = rData.order || 0;
+                    const prevRole = arr[index - 1];
+                    const nextRole = arr[index + 1];
+                    
+                    const srcData = rolesArray.find(r => r.id === srcId);
+                    if ((srcData.order||0) < targetOrder) { update(ref(db, `servers/${currentServerId}/roles/${srcId}`), { order: nextRole ? (targetOrder + nextRole.order)/2 : targetOrder + 10 }); } 
+                    else { update(ref(db, `servers/${currentServerId}/roles/${srcId}`), { order: prevRole ? (targetOrder + prevRole.order)/2 : targetOrder - 10 }); }
+                } 
+                return false; 
+            });
             list.appendChild(div);
         });
         document.querySelectorAll('.r-perm').forEach(chk => { chk.addEventListener('change', (e) => { const rId = e.target.getAttribute('data-role'); const p = e.target.getAttribute('data-perm'); update(ref(db, `servers/${currentServerId}/roles/${rId}/perms`), { [p]: e.target.checked }); }); });
@@ -430,9 +464,11 @@ document.getElementById('save-role-btn').addEventListener('click', () => { const
 function loadMemberList(serverId) {
     if(unsubscribeMembers) unsubscribeMembers();
     const listContent = document.getElementById('member-list-content');
+    
     unsubscribeMembers = onValue(ref(db, `server_members/${serverId}`), async (membersSnap) => {
         const rolesSnap = await get(ref(db, `servers/${serverId}/roles`));
         let rolesData = {}; if (rolesSnap.exists()) { rolesData = rolesSnap.val(); }
+        
         let groups = { owner: { name: "Server Owner", order: -2, members: [] }, online: { name: "Online", order: 9998, members: [] }, offline: { name: "Offline", order: 9999, members: [] } };
         Object.keys(rolesData).forEach(rId => { groups[rId] = { name: rolesData[rId].name, order: rolesData[rId].order || 0, color: rolesData[rId].color, members: [] }; });
         
@@ -526,14 +562,12 @@ function renderChannels(serverId) {
             catDiv.innerText = `⌄ ${categories[catId].name}`;
             catDiv.id = `category-${catId}`;
 
-            // Context Menu for Categories
             catDiv.addEventListener('contextmenu', (e) => showContextMenu(e, 'category', catId));
             let touchTimerCat;
             catDiv.addEventListener('touchstart', (e) => { touchTimerCat = setTimeout(() => showContextMenu(e, 'category', catId), 500); });
             catDiv.addEventListener('touchend', () => clearTimeout(touchTimerCat));
             catDiv.addEventListener('touchmove', () => clearTimeout(touchTimerCat));
 
-            // Allow dropping ONTO category to move channel to it
             catDiv.addEventListener('dragover', (e) => { e.preventDefault(); catDiv.classList.add('drag-over'); return false; });
             catDiv.addEventListener('dragleave', () => catDiv.classList.remove('drag-over'));
             catDiv.addEventListener('drop', (e) => {
@@ -548,7 +582,6 @@ function renderChannels(serverId) {
             channelList.appendChild(catDiv);
         }
 
-        // Fix Advanced Drag and drop Ordering
         grouped[catId].sort((a,b) => (a.order||0) - (b.order||0)).forEach((channelData, index, arr) => {
             const div = document.createElement('div'); 
             div.classList.add('channel-item'); 
@@ -580,23 +613,17 @@ function renderChannels(serverId) {
                 e.stopPropagation(); div.classList.remove('drag-over');
                 if (dragSrcEl !== div) {
                     const srcId = dragSrcEl.id.replace('channel-', ''); 
-                    // To handle both up and down cleanly: find adjacent order and place it there
                     const targetOrder = channelData.order || 0;
                     const prevChannel = arr[index - 1];
                     const nextChannel = arr[index + 1];
 
-                    // Determine if dragging from above or below
                     const srcData = currentChannelsData[srcId];
                     if(srcData.categoryId !== channelData.categoryId) {
-                        // Different category, just slap it underneath the target
                         update(ref(db, `channels/${serverId}/${srcId}`), { categoryId: catId, order: targetOrder + 0.5 });
                     } else {
-                        // Same category
                         if((srcData.order || 0) < targetOrder) {
-                            // Dragging down. Place after target
                             update(ref(db, `channels/${serverId}/${srcId}`), { order: nextChannel ? (targetOrder + nextChannel.order)/2 : targetOrder + 10 });
                         } else {
-                            // Dragging up. Place before target
                             update(ref(db, `channels/${serverId}/${srcId}`), { order: prevChannel ? (targetOrder + prevChannel.order)/2 : targetOrder - 10 });
                         }
                     }
@@ -667,7 +694,6 @@ async function buildMessageHtml(data) {
 
 let lastMsgSender = null;
 let lastMsgTime = 0;
-let lastMsgEl = null;
 
 function loadMessages(dbPath, chatNameLabel) {
     const messagesDiv = document.getElementById('messages');
@@ -675,79 +701,58 @@ function loadMessages(dbPath, chatNameLabel) {
     
     lastMsgSender = null;
     lastMsgTime = 0;
-    lastMsgEl = null;
     
     if (unsubscribeMessages) unsubscribeMessages();
     if (unsubscribeMessagesRemoved) unsubscribeMessagesRemoved();
 
-    unsubscribeMessages = onChildAdded(ref(db, dbPath), async (snapshot) => {
+    unsubscribeMessages = onChildAdded(ref(db, dbPath), (snapshot) => {
         const data = snapshot.val();
         const msgId = snapshot.key;
-        const msgElement = document.createElement('div');
-        msgElement.classList.add('message');
-        msgElement.id = `msg-${msgId}`;
         
-        let canDelete = (data.sender === auth.currentUser.email || (chatType === 'server' && (myServerPerms.admin || myServerPerms.deleteMessages)));
-
-        let nameColor = "white";
-        if(chatType === 'server' && data.roleId && data.roleId !== 'member' && data.roleId !== 'owner') {
-            const rSnap = await get(ref(db, `servers/${currentServerId}/roles/${data.roleId}`));
-            if(rSnap.exists()) nameColor = rSnap.val().color;
-        }
-
-        const contentHtml = await buildMessageHtml(data);
-        
-        // Setup Action Bar (Reply / Delete)
-        let actionsHtml = `<div class="msg-actions">
-            <button class="msg-action-btn reply" title="Reply">↩ Reply</button>
-            ${canDelete ? `<button class="msg-action-btn del" title="Delete">🗑️ Delete</button>` : ''}
-        </div>`;
-
-        // Check if consecutive message
         const isConsecutive = (lastMsgSender === data.sender) && (data.timestamp - lastMsgTime < 300000) && (!data.replyTo);
         
-        let headerHtml = "";
-        if (!isConsecutive) {
-            let replyHtml = "";
-            if(data.replyTo) {
-                replyHtml = `<div class="reply-context"><strong>@${data.replyTo.username}</strong> ${data.replyTo.text}</div>`;
+        const msgElement = document.createElement('div');
+        msgElement.classList.add('message');
+        if(isConsecutive) msgElement.classList.add('consecutive');
+        msgElement.id = `msg-${msgId}`;
+        
+        // Append synchronously to preserve chronological order exactly!
+        messagesDiv.appendChild(msgElement);
+        lastMsgTime = data.timestamp;
+        if(!isConsecutive) lastMsgSender = data.sender;
+
+        // Build HTML asynchronously inside the safely preserved DOM element
+        (async () => {
+            const contentHtml = await buildMessageHtml(data);
+            let canDelete = (data.sender === auth.currentUser.email || (chatType === 'server' && (myServerPerms.admin || myServerPerms.deleteMessages)));
+
+            let nameColor = "white";
+            if(chatType === 'server' && data.roleId && data.roleId !== 'member' && data.roleId !== 'owner') {
+                const rSnap = await get(ref(db, `servers/${currentServerId}/roles/${data.roleId}`));
+                if(rSnap.exists()) nameColor = rSnap.val().color;
             }
 
-            headerHtml = `
-                ${replyHtml}
-                <div class="message-header">
-                    <img src="${data.avatar}" class="avatar-small">
-                    <span class="message-sender" style="color: ${nameColor};">${data.username}</span>
-                    <span style="font-size: 0.8em; color: gray;">${new Date(data.timestamp).toLocaleTimeString()}</span>
-                </div>
-            `;
-            msgElement.innerHTML = `${actionsHtml}${headerHtml}<div class="msg-content-wrapper">${contentHtml}</div>`;
-            messagesDiv.appendChild(msgElement);
-            
-            lastMsgSender = data.sender;
-            lastMsgTime = data.timestamp;
-            lastMsgEl = msgElement;
-        } else {
-            // Group Consecutive
-            msgElement.classList.add('consecutive');
-            msgElement.innerHTML = `${actionsHtml}<div class="msg-content-wrapper">${contentHtml}</div>`;
-            messagesDiv.appendChild(msgElement);
-            lastMsgTime = data.timestamp;
-            lastMsgEl = msgElement; // Update last el so next items append properly
-        }
+            let actionsHtml = `<div class="msg-actions"><button class="msg-action-btn reply">↩ Reply</button>${canDelete ? `<button class="msg-action-btn del">🗑️ Delete</button>` : ''}</div>`;
 
-        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            if (!isConsecutive) {
+                let replyHtml = data.replyTo ? `<div class="reply-context"><strong>@${data.replyTo.username}</strong> ${data.replyTo.text}</div>` : "";
+                let headerHtml = `${replyHtml}<div class="message-header"><img src="${data.avatar}" class="avatar-small"><span class="message-sender" style="color: ${nameColor};">${data.username}</span><span style="font-size: 0.8em; color: gray;">${new Date(data.timestamp).toLocaleTimeString()}</span></div>`;
+                msgElement.innerHTML = `${actionsHtml}${headerHtml}<div class="msg-content-wrapper">${contentHtml}</div>`;
+            } else {
+                msgElement.innerHTML = `${actionsHtml}<div class="msg-content-wrapper">${contentHtml}</div>`;
+            }
 
-        // Button Listeners
-        const delBtn = msgElement.querySelector('.msg-action-btn.del');
-        if (delBtn) { delBtn.addEventListener('click', () => { messageToDeletePath = `${dbPath}/${msgId}`; document.getElementById('delete-modal').style.display = 'flex'; }); }
-        
-        const replyBtn = msgElement.querySelector('.msg-action-btn.reply');
-        if (replyBtn) { replyBtn.addEventListener('click', () => triggerReply(msgId, data.username, data.text || "Attachment...")); }
-        msgElement.addEventListener('dblclick', () => triggerReply(msgId, data.username, data.text || "Attachment..."));
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
 
-        const imgEl = msgElement.querySelector('.message-image');
-        if (imgEl) { imgEl.addEventListener('click', () => { document.getElementById('enlarged-image').src = data.imageUrl; document.getElementById('download-image-btn').href = data.imageUrl; document.getElementById('image-modal').style.display = 'flex'; }); }
+            const delBtn = msgElement.querySelector('.msg-action-btn.del');
+            if (delBtn) delBtn.addEventListener('click', () => { messageToDeletePath = `${dbPath}/${msgId}`; document.getElementById('delete-modal').style.display = 'flex'; });
+            const replyBtn = msgElement.querySelector('.msg-action-btn.reply');
+            if (replyBtn) replyBtn.addEventListener('click', () => triggerReply(msgId, data.username, data.text || "Attachment..."));
+            msgElement.addEventListener('dblclick', () => triggerReply(msgId, data.username, data.text || "Attachment..."));
+
+            const imgEl = msgElement.querySelector('.message-image');
+            if (imgEl) imgEl.addEventListener('click', () => { document.getElementById('enlarged-image').src = data.imageUrl; document.getElementById('download-image-btn').href = data.imageUrl; document.getElementById('image-modal').style.display = 'flex'; });
+        })();
     });
 
     unsubscribeMessagesRemoved = onChildRemoved(ref(db, dbPath), (snapshot) => { const msgEl = document.getElementById(`msg-${snapshot.key}`); if(msgEl) msgEl.remove(); });
@@ -757,7 +762,7 @@ function loadMessages(dbPath, chatNameLabel) {
 document.getElementById('confirm-delete-btn').addEventListener('click', async () => { if (messageToDeletePath) { await remove(ref(db, messageToDeletePath)); messageToDeletePath = null; document.getElementById('delete-modal').style.display = 'none'; } });
 document.getElementById('cancel-delete-btn').addEventListener('click', () => { messageToDeletePath = null; document.getElementById('delete-modal').style.display = 'none'; });
 
-// Replier logic
+// Replier Logic
 function triggerReply(msgId, username, text) {
     replyingToMessage = { id: msgId, username: username, text: text.length > 50 ? text.substring(0, 50) + '...' : text };
     document.getElementById('reply-banner-text').innerHTML = `Replying to <strong>@${username}</strong>`;
@@ -770,11 +775,52 @@ document.getElementById('cancel-reply-btn').addEventListener('click', () => {
     document.getElementById('reply-banner').style.display = 'none';
 });
 
+// Image / Paste Preview Logic
+document.getElementById('upload-img-btn').addEventListener('click', () => document.getElementById('image-upload').click());
+
+document.getElementById('image-upload').addEventListener('change', (e) => {
+    const file = e.target.files[0]; if (!file || !currentChatId) return;
+    if (file.size > 2 * 1024 * 1024) return customAlert("File too large. Please select an image under 2MB.", "Error");
+    
+    const reader = new FileReader();
+    reader.onloadend = () => {
+        pendingAttachmentBase64 = reader.result;
+        document.getElementById('attachment-preview-img').src = pendingAttachmentBase64;
+        document.getElementById('attachment-preview-area').style.display = 'flex';
+        document.getElementById('image-upload').value = ""; // reset
+    };
+    reader.readAsDataURL(file);
+});
+
+document.getElementById('remove-attachment-btn').addEventListener('click', () => {
+    pendingAttachmentBase64 = null;
+    document.getElementById('attachment-preview-area').style.display = 'none';
+});
+
+// Paste Support for images
+document.getElementById('msg-input').addEventListener('paste', (e) => {
+    const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+    for (let index in items) {
+        const item = items[index];
+        if (item.kind === 'file' && item.type.startsWith('image/')) {
+            const blob = item.getAsFile();
+            if (blob.size > 2 * 1024 * 1024) return customAlert("Pasted image is too large (max 2MB).");
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                pendingAttachmentBase64 = reader.result;
+                document.getElementById('attachment-preview-img').src = pendingAttachmentBase64;
+                document.getElementById('attachment-preview-area').style.display = 'flex';
+            };
+            reader.readAsDataURL(blob);
+        }
+    }
+});
+
 async function sendMessage() {
     const input = document.getElementById('msg-input');
     const text = input.value.trim();
     
-    if (text !== "" && currentChatId) {
+    if ((text !== "" || pendingAttachmentBase64) && currentChatId) {
         const path = chatType === 'server' ? `messages/${currentChatId}` : `dms/${currentChatId}`;
         let roleId = 'member';
         
@@ -783,12 +829,25 @@ async function sendMessage() {
             roleId = mSnap.val() || 'member'; 
         }
         
-        let msgPayload = { sender: auth.currentUser.email, username: myProfile.username, avatar: myProfile.avatar, text: text, timestamp: Date.now(), roleId: roleId };
+        let msgPayload = { 
+            sender: auth.currentUser.email, 
+            username: myProfile.username, 
+            avatar: myProfile.avatar, 
+            text: text, 
+            timestamp: Date.now(), 
+            roleId: roleId 
+        };
         
         if (replyingToMessage) {
             msgPayload.replyTo = replyingToMessage;
             replyingToMessage = null;
             document.getElementById('reply-banner').style.display = 'none';
+        }
+        
+        if (pendingAttachmentBase64) {
+            msgPayload.imageUrl = pendingAttachmentBase64;
+            pendingAttachmentBase64 = null;
+            document.getElementById('attachment-preview-area').style.display = 'none';
         }
 
         push(ref(db, path), msgPayload);
@@ -799,34 +858,37 @@ async function sendMessage() {
 document.getElementById('send-btn').addEventListener('click', sendMessage);
 document.getElementById('msg-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
 
-document.getElementById('upload-img-btn').addEventListener('click', () => document.getElementById('image-upload').click());
-document.getElementById('image-upload').addEventListener('change', async (e) => {
-    const file = e.target.files[0]; if (!file || !currentChatId) return;
-    if (file.size > 2 * 1024 * 1024) return customAlert("File too large. Please select an image under 2MB.", "Error");
-    
-    let roleId = 'member';
-    if(chatType === 'server') { const mSnap = await get(ref(db, `server_members/${currentServerId}/${currentUserSafeEmail}/role`)); roleId = mSnap.val() || 'member'; }
-
-    const reader = new FileReader();
-    reader.onloadend = () => {
-        let msgPayload = { sender: auth.currentUser.email, username: myProfile.username, avatar: myProfile.avatar, text: "", imageUrl: reader.result, timestamp: Date.now(), roleId: roleId };
-        if (replyingToMessage) {
-            msgPayload.replyTo = replyingToMessage;
-            replyingToMessage = null;
-            document.getElementById('reply-banner').style.display = 'none';
-        }
-        push(ref(db, chatType === 'server' ? `messages/${currentChatId}` : `dms/${currentChatId}`), msgPayload);
-        document.getElementById('image-upload').value = "";
-    };
-    reader.readAsDataURL(file);
-});
 document.getElementById('close-image-modal').addEventListener('click', () => document.getElementById('image-modal').style.display = 'none');
 
 // Notifications
+setTimeout(() => { notificationsActive = true; }, 2000);
+
 function startNotificationListeners() {
-    onValue(ref(db, `users/${currentUserSafeEmail}/friends`), (snap) => { snap.forEach(childSnapshot => { const dmId = childSnapshot.val().dmId; onChildAdded(query(ref(db, `dms/${dmId}`), limitToLast(1)), (msg) => { if (currentChatId !== dmId && msg.val().timestamp > appStartTime) { markUnread('dm', dmId); } }); }); });
-    onValue(ref(db, `users/${currentUserSafeEmail}/servers`), (snap) => { snap.forEach(childSnapshot => { const serverId = childSnapshot.key; onValue(ref(db, `channels/${serverId}`), (cSnap) => { cSnap.forEach(c => { if (c.val().type === 'text') { onChildAdded(query(ref(db, `messages/${c.key}`), limitToLast(1)), (msg) => { if (currentChatId !== c.key && msg.val().timestamp > appStartTime) { markUnread('channel', c.key, serverId); } }); } }); }); }); });
+    onValue(ref(db, `users/${currentUserSafeEmail}/friends`), (snap) => { 
+        snap.forEach(childSnapshot => { 
+            const dmId = childSnapshot.val().dmId; 
+            onChildAdded(query(ref(db, `dms/${dmId}`), limitToLast(1)), (msg) => { 
+                if (notificationsActive && currentChatId !== dmId && msg.val().timestamp > appStartTime) { markUnread('dm', dmId); } 
+            }); 
+        }); 
+    });
+    
+    onValue(ref(db, `users/${currentUserSafeEmail}/servers`), (snap) => { 
+        snap.forEach(childSnapshot => { 
+            const serverId = childSnapshot.key; 
+            onValue(ref(db, `channels/${serverId}`), (cSnap) => { 
+                cSnap.forEach(c => { 
+                    if (c.val().type === 'text') { 
+                        onChildAdded(query(ref(db, `messages/${c.key}`), limitToLast(1)), (msg) => { 
+                            if (notificationsActive && currentChatId !== c.key && msg.val().timestamp > appStartTime) { markUnread('channel', c.key, serverId); } 
+                        }); 
+                    } 
+                }); 
+            }); 
+        }); 
+    });
 }
+
 function markUnread(type, id, serverId = null) { if (type === 'dm') { unreadState.dms.add(id); updateBadge(`dm-${id}`, true, false); updateBadge('home-btn', true, true); } else if (type === 'channel') { unreadState.channels.add(id); unreadState.servers.add(serverId); updateBadge(`channel-${id}`, true, false); updateBadge(`server-${serverId}`, true, true); } }
 function clearUnread(type, id, serverId = null) { if (type === 'dm') { unreadState.dms.delete(id); updateBadge(`dm-${id}`, false); if (unreadState.dms.size === 0) updateBadge('home-btn', false); } else if (type === 'channel') { unreadState.channels.delete(id); updateBadge(`channel-${id}`, false); updateBadge(`server-${serverId}`, false); } }
 function updateBadge(id, show, isDot = false) { const el = document.getElementById(id); if (!el) return; let badge = el.querySelector('.unread-indicator'); if (show) { if (!badge) { badge = document.createElement('div'); badge.className = `unread-indicator ${isDot ? 'dot' : 'pill'}`; el.appendChild(badge); } } else { if (badge) badge.remove(); } }
