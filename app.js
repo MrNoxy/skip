@@ -20,7 +20,8 @@ const db = getDatabase(app);
 // State Tracking
 let currentServerId = null;
 let currentChatId = null; 
-let chatType = null; 
+let chatType = 'home'; // Default to home view
+let currentHomeTab = 'friends'; 
 let currentUserSafeEmail = null;
 let myProfile = {}; 
 let myServerPerms = { admin: false, manageChannels: false, deleteMessages: false };
@@ -31,6 +32,7 @@ let currentServerMembersList = [];
 let currentDMOtherUser = null;
 let serverRolesCache = {}; 
 let globalUsersCache = {}; 
+let activeFriendsData = []; // Cache for friends tab
 
 // Listeners
 let unsubscribeMessages = null; 
@@ -38,7 +40,6 @@ let unsubscribeMessagesRemoved = null;
 let unsubscribeMembers = null; 
 let unsubscribeChannels = null;
 let unsubscribeCategories = null;
-
 let dmsNotifListener = null;
 let serversNotifListener = null;
 
@@ -110,8 +111,8 @@ function showContextMenu(e, type, id) {
     if (type === 'channel' || type === 'category') {
         if (!myServerPerms.admin && !myServerPerms.manageChannels) return; 
         document.getElementById('ctx-delete').innerText = `🗑️ Delete ${type}`;
-    } else if (type === 'dm') {
-        document.getElementById('ctx-delete').innerText = `🗑️ Close DM`;
+    } else if (type === 'dm' || type === 'friend') {
+        document.getElementById('ctx-delete').innerText = type === 'dm' ? `🗑️ Close DM` : `🗑️ Remove Friend`;
     }
     
     contextTarget = { type, id };
@@ -129,6 +130,13 @@ document.getElementById('ctx-delete')?.addEventListener('click', () => {
     if (contextTarget) {
         if(contextTarget.type === 'dm') {
             update(ref(db, `users/${currentUserSafeEmail}/friends/${contextTarget.id}`), { hidden: true });
+        } else if(contextTarget.type === 'friend') {
+            customConfirm("Are you sure you want to remove this friend?", "Remove Friend", (yes) => {
+                if(yes) {
+                    remove(ref(db, `users/${currentUserSafeEmail}/friends/${contextTarget.id}`));
+                    remove(ref(db, `users/${contextTarget.id}/friends/${currentUserSafeEmail}`));
+                }
+            });
         } else if (currentServerId) {
             customConfirm(`Delete this ${contextTarget.type}?`, "Confirm Action", (yes) => {
                 if(yes) {
@@ -189,6 +197,7 @@ onAuthStateChanged(auth, async (user) => {
         });
 
         initVoiceChat(); loadMyServers(); loadFriendsList(); startNotificationListeners(); listenForFriendRequests();
+        document.getElementById('home-btn').click(); // Force home view on load
         
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('invite')) { await joinServerByCode(urlParams.get('invite')); window.history.replaceState({}, document.title, appBaseUrl); }
@@ -222,59 +231,134 @@ document.querySelectorAll('.status-option').forEach(opt => { opt.addEventListene
 document.addEventListener('click', (e) => { if (!e.target.closest('#user-controls')) { const s = document.getElementById('status-selector'); if(s) s.style.display = 'none'; } if (!e.target.closest('#sidebar-header') && !e.target.closest('#server-settings-modal')) { const sd = document.getElementById('server-dropdown'); if(sd) sd.style.display = 'none'; } });
 
 // ==========================================
-// --- NAVIGATION & FRIENDS (LIVE SYNC) ---
+// --- NAVIGATION, HOME & FRIENDS VIEW ---
 // ==========================================
-document.getElementById('home-btn')?.addEventListener('click', () => {
-    document.body.classList.remove('mobile-chat-active'); currentServerId = null;
+function switchToHomeView() {
+    document.body.classList.remove('mobile-chat-active');
+    document.body.classList.add('mobile-home-active');
+    
+    chatType = 'home'; currentChatId = null; currentServerId = null;
     document.getElementById('server-name-display').innerText = "Friends & DMs";
     document.getElementById('server-dropdown-arrow').style.display = 'none';
-    document.getElementById('add-friend-btn').style.display = 'block';
-    document.getElementById('friend-requests-btn').style.display = 'block';
+    
+    // UI toggles
+    document.getElementById('home-sidebar-content').style.display = 'block';
+    document.getElementById('channel-list').style.display = 'none';
+    document.getElementById('chat-area').style.display = 'none';
+    document.getElementById('home-area').style.display = 'flex';
     document.getElementById('server-dropdown').style.display = 'none';
-    document.getElementById('toggle-members-btn').style.display = 'none';
-    document.getElementById('member-sidebar').style.display = 'none';
+    
     if(unsubscribeMembers) { unsubscribeMembers(); unsubscribeMembers = null; }
     if(unsubscribeChannels) { unsubscribeChannels(); unsubscribeChannels = null; }
     if(unsubscribeCategories) { unsubscribeCategories(); unsubscribeCategories = null; }
-    loadFriendsList();
-});
-document.getElementById('mobile-back-btn')?.addEventListener('click', () => document.body.classList.remove('mobile-chat-active'));
+    
+    renderHomeContent();
+}
 
-// Friend Requests
+document.getElementById('home-btn')?.addEventListener('click', switchToHomeView);
+
+document.getElementById('mobile-back-btn')?.addEventListener('click', () => { document.body.classList.remove('mobile-chat-active'); });
+document.getElementById('mobile-back-btn-home')?.addEventListener('click', () => { document.body.classList.remove('mobile-home-active'); });
+
+// Home Tabs
+document.getElementById('nav-friends-btn')?.addEventListener('click', () => { currentHomeTab = 'friends'; renderHomeContent(); });
+document.getElementById('nav-requests-btn')?.addEventListener('click', () => { currentHomeTab = 'requests'; renderHomeContent(); });
+
+function renderHomeContent() {
+    const navF = document.getElementById('nav-friends-btn');
+    const navR = document.getElementById('nav-requests-btn');
+    const hF = document.getElementById('home-header-friends');
+    const hR = document.getElementById('home-header-requests');
+    const content = document.getElementById('home-content');
+    
+    if(currentHomeTab === 'friends') {
+        navF.classList.add('active'); navR.classList.remove('active');
+        hF.style.display = 'flex'; hR.style.display = 'none';
+        
+        content.innerHTML = '';
+        if(activeFriendsData.length === 0) { content.innerHTML = '<div style="color: gray; text-align: center; margin-top: 50px;">You have no friends. Add some!</div>'; return; }
+        
+        activeFriendsData.forEach(fData => {
+            const cachedUser = globalUsersCache[fData.email] || {};
+            const displayAvatar = cachedUser.avatar || "";
+            const displayName = cachedUser.username || "Loading...";
+            const displayStatus = cachedUser.status || "offline";
+            
+            const div = document.createElement('div'); div.className = 'friend-card';
+            div.innerHTML = `
+                <div class="friend-card-left">
+                    <div class="avatar-container"><img src="${displayAvatar}" class="avatar-small"><div class="status-indicator status-${displayStatus}"></div></div>
+                    <div style="display:flex; flex-direction:column;">
+                        <span style="font-weight:bold; color:white; font-size:15px;">${displayName}</span>
+                        <span style="font-size:12px; color:gray;">${displayStatus}</span>
+                    </div>
+                </div>
+                <div class="friend-card-right">
+                    <div class="action-circle message-btn" title="Message">💬</div>
+                    <div class="action-circle red remove-btn" title="Remove Friend">✖</div>
+                </div>
+            `;
+            
+            div.querySelector('.message-btn').addEventListener('click', () => openDM(fData.dmId, fData.email));
+            div.querySelector('.remove-btn').addEventListener('click', () => {
+                customConfirm(`Remove ${displayName} from your friends list?`, "Remove Friend", (yes) => {
+                    if(yes) {
+                        remove(ref(db, `users/${currentUserSafeEmail}/friends/${fData.email}`));
+                        remove(ref(db, `users/${fData.email}/friends/${currentUserSafeEmail}`));
+                    }
+                });
+            });
+            content.appendChild(div);
+        });
+
+    } else if (currentHomeTab === 'requests') {
+        navF.classList.remove('active'); navR.classList.add('active');
+        hF.style.display = 'none'; hR.style.display = 'flex';
+        
+        content.innerHTML = '<div style="color: gray; text-align: center; margin-top: 50px;">Loading requests...</div>';
+        get(ref(db, `friend_requests/${currentUserSafeEmail}`)).then(snap => {
+            content.innerHTML = '';
+            if(!snap.exists() || Object.keys(snap.val()).length === 0) { content.innerHTML = '<div style="color: gray; text-align: center; margin-top: 50px;">No pending requests.</div>'; return; }
+            
+            snap.forEach(child => {
+                const senderEmail = child.key; const sData = child.val();
+                const div = document.createElement('div'); div.className = 'friend-card';
+                div.innerHTML = `
+                    <div class="friend-card-left">
+                        <img src="${sData.avatar}" class="avatar-small">
+                        <span style="font-weight:bold; color:white; font-size:15px;">${sData.username}</span>
+                    </div>
+                    <div class="friend-card-right">
+                        <div class="action-circle green accept-fr" title="Accept">✔</div>
+                        <div class="action-circle red decline-fr" title="Decline">✖</div>
+                    </div>
+                `;
+                div.querySelector('.accept-fr').addEventListener('click', async () => {
+                    const dmId = [currentUserSafeEmail, senderEmail].sort().join('_');
+                    await set(ref(db, `users/${currentUserSafeEmail}/friends/${senderEmail}`), { dmId: dmId, lastActivity: Date.now(), hidden: false });
+                    await set(ref(db, `users/${senderEmail}/friends/${currentUserSafeEmail}`), { dmId: dmId, lastActivity: Date.now(), hidden: false });
+                    await remove(ref(db, `friend_requests/${currentUserSafeEmail}/${senderEmail}`));
+                    renderHomeContent();
+                });
+                div.querySelector('.decline-fr').addEventListener('click', async () => {
+                    await remove(ref(db, `friend_requests/${currentUserSafeEmail}/${senderEmail}`));
+                    renderHomeContent();
+                });
+                content.appendChild(div);
+            });
+        });
+    }
+}
+
 function listenForFriendRequests() {
     onValue(ref(db, `friend_requests/${currentUserSafeEmail}`), (snap) => {
         const badge = document.getElementById('fr-badge');
         if(badge) { if(snap.exists() && Object.keys(snap.val()).length > 0) { badge.style.display = 'block'; } else { badge.style.display = 'none'; } }
+        if(currentHomeTab === 'requests' && chatType === 'home') renderHomeContent();
     });
 }
-document.getElementById('friend-requests-btn')?.addEventListener('click', async () => {
-    const list = document.getElementById('fr-list'); list.innerHTML = '';
-    const snap = await get(ref(db, `friend_requests/${currentUserSafeEmail}`));
-    if(!snap.exists()) { list.innerHTML = `<p style="color: gray; font-size: 13px;">No pending requests.</p>`; } 
-    else {
-        snap.forEach(child => {
-            const senderEmail = child.key; const sData = child.val();
-            const div = document.createElement('div'); div.className = 'member-item'; div.style.justifyContent = 'space-between';
-            div.innerHTML = `<div style="display:flex; align-items:center; gap:10px;"><img src="${sData.avatar}" class="avatar-small"><span style="font-weight:bold;">${sData.username}</span></div><div><button class="small-btn accept-fr" style="background:#3ba55c;">✔</button><button class="small-btn decline-fr" style="background:#ed4245;">✖</button></div>`;
-            div.querySelector('.accept-fr').addEventListener('click', async () => {
-                const dmId = [currentUserSafeEmail, senderEmail].sort().join('_');
-                await set(ref(db, `users/${currentUserSafeEmail}/friends/${senderEmail}`), { dmId: dmId, lastActivity: Date.now() });
-                await set(ref(db, `users/${senderEmail}/friends/${currentUserSafeEmail}`), { dmId: dmId, lastActivity: Date.now() });
-                await remove(ref(db, `friend_requests/${currentUserSafeEmail}/${senderEmail}`));
-                document.getElementById('friend-requests-btn').click();
-            });
-            div.querySelector('.decline-fr').addEventListener('click', async () => {
-                await remove(ref(db, `friend_requests/${currentUserSafeEmail}/${senderEmail}`));
-                document.getElementById('friend-requests-btn').click();
-            });
-            list.appendChild(div);
-        });
-    }
-    document.getElementById('friend-requests-modal').style.display = 'flex';
-});
-document.getElementById('close-fr-modal-btn')?.addEventListener('click', () => document.getElementById('friend-requests-modal').style.display='none');
 
-document.getElementById('add-friend-btn')?.addEventListener('click', () => {
+document.getElementById('add-friend-btn-green')?.addEventListener('click', () => {
     openInputModal("Add Friend", "e.g. noxy#6996", "Send a friend request to:", async (inputTag) => {
         if (!inputTag) return; if(inputTag.startsWith('@')) inputTag = inputTag.substring(1);
         const tagSnap = await get(child(ref(db), `user_tags/${inputTag.replace('#', '_')}`));
@@ -290,19 +374,20 @@ document.getElementById('add-friend-btn')?.addEventListener('click', () => {
 });
 
 function loadFriendsList() {
-    const channelList = document.getElementById('channel-list');
+    const channelList = document.getElementById('dm-list');
     onValue(ref(db, `users/${currentUserSafeEmail}/friends`), (snapshot) => {
-        channelList.innerHTML = ''; let friendsArray = [];
+        channelList.innerHTML = ''; activeFriendsData = [];
+        let dmsArray = [];
         snapshot.forEach((childSnapshot) => {
-            const data = childSnapshot.val();
-            if(!data.hidden) { data.email = childSnapshot.key; friendsArray.push(data); }
+            const data = childSnapshot.val(); data.email = childSnapshot.key;
+            activeFriendsData.push(data);
+            if(!data.hidden) dmsArray.push(data);
         });
 
-        friendsArray.sort((a,b) => (b.lastActivity || 0) - (a.lastActivity || 0));
+        dmsArray.sort((a,b) => (b.lastActivity || 0) - (a.lastActivity || 0));
 
-        friendsArray.forEach((fDataStatic) => {
+        dmsArray.forEach((fDataStatic) => {
             const fEmail = fDataStatic.email;
-            
             const cachedUser = globalUsersCache[fEmail] || {};
             const displayAvatar = cachedUser.avatar || "";
             const displayName = cachedUser.username || "Loading...";
@@ -323,18 +408,32 @@ function loadFriendsList() {
                     const name = document.getElementById(`f-name-${fEmail}`); if(name) name.innerText = uData.username;
                     const stat = document.getElementById(`status-${fEmail}`); if(stat) stat.className = `status-indicator status-${uData.status || 'offline'}`;
                     
-                    div.onclick = () => {
-                        chatType = 'dm'; currentChatId = fDataStatic.dmId; currentDMOtherUser = uData;
-                        document.getElementById('chat-title').innerText = `@${uData.username}#${uData.tag}`;
-                        document.getElementById('toggle-members-btn').style.display = 'none'; document.getElementById('member-sidebar').style.display = 'none';
-                        enableChat(); loadMessages(`dms/${currentChatId}`, `@${uData.username}`);
-                    };
+                    div.onclick = () => openDM(fDataStatic.dmId, fEmail);
+                    if(chatType === 'home' && currentHomeTab === 'friends') renderHomeContent();
                 }
             });
             channelList.appendChild(div);
             if (unreadState.dms.has(fDataStatic.dmId)) updateBadge(`dm-${fDataStatic.dmId}`, true, false, false);
         });
+        
+        if(chatType === 'home' && currentHomeTab === 'friends') renderHomeContent();
     });
+}
+
+function openDM(dmId, friendEmail) {
+    chatType = 'dm'; currentChatId = dmId; 
+    const uData = globalUsersCache[friendEmail];
+    currentDMOtherUser = uData;
+    
+    // Ensure it shows in sidebar
+    update(ref(db, `users/${currentUserSafeEmail}/friends/${friendEmail}`), { hidden: false });
+    
+    document.getElementById('home-area').style.display = 'none';
+    document.getElementById('chat-area').style.display = 'flex';
+    document.getElementById('chat-title').innerText = `@${uData.username}#${uData.tag}`;
+    document.body.classList.add('mobile-chat-active');
+    
+    enableChat(); loadMessages(`dms/${currentChatId}`, `@${uData.username}`);
 }
 
 // ==========================================
@@ -385,8 +484,13 @@ function loadMyServers() {
                     document.body.classList.remove('mobile-chat-active'); currentServerId = serverId;
                     document.getElementById('server-name-display').innerText = sData.name;
                     document.getElementById('server-dropdown-arrow').style.display = 'inline';
-                    document.getElementById('add-friend-btn').style.display = 'none';
-                    document.getElementById('friend-requests-btn').style.display = 'none';
+                    
+                    document.getElementById('home-sidebar-content').style.display = 'none';
+                    document.getElementById('channel-list').style.display = 'block';
+                    document.getElementById('home-area').style.display = 'none';
+                    document.getElementById('chat-area').style.display = 'flex';
+                    document.getElementById('messages').innerHTML = ''; // Clear chat area visually
+                    
                     document.getElementById('toggle-members-btn').style.display = 'inline-block';
                     
                     const myRoleSnap = await get(ref(db, `server_members/${serverId}/${currentUserSafeEmail}/role`));
@@ -407,7 +511,16 @@ function loadMyServers() {
                 div.addEventListener('dragstart', (e) => { dragServerEl = div; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/html', div.innerHTML); });
                 div.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; div.classList.add('drag-over'); return false; });
                 div.addEventListener('dragleave', () => div.classList.remove('drag-over'));
-                div.addEventListener('drop', (e) => { e.stopPropagation(); div.classList.remove('drag-over'); if (dragServerEl !== div) { const srcId = dragServerEl.id.replace('server-', ''); const targetOrder = myServers[i].order || 0; const prevS = myServers[i-1]; const nextS = myServers[i+1]; const srcData = myServers.find(s=>s.id === srcId); if((srcData.order||0) < targetOrder) update(ref(db, `users/${currentUserSafeEmail}/servers/${srcId}`), { order: nextS ? (targetOrder + nextS.order)/2 : targetOrder + 10 }); else update(ref(db, `users/${currentUserSafeEmail}/servers/${srcId}`), { order: prevS ? (targetOrder + prevS.order)/2 : targetOrder - 10 }); } return false; });
+                div.addEventListener('drop', (e) => {
+                    e.stopPropagation(); div.classList.remove('drag-over');
+                    if (dragServerEl !== div) {
+                        const srcId = dragServerEl.id.replace('server-', ''); const targetOrder = myServers[i].order || 0; const prevS = myServers[i-1]; const nextS = myServers[i+1]; const srcData = myServers.find(s=>s.id === srcId);
+                        if((srcData.order||0) < targetOrder) update(ref(db, `users/${currentUserSafeEmail}/servers/${srcId}`), { order: nextS ? (targetOrder + nextS.order)/2 : targetOrder + 10 });
+                        else update(ref(db, `users/${currentUserSafeEmail}/servers/${srcId}`), { order: prevS ? (targetOrder + prevS.order)/2 : targetOrder - 10 });
+                    }
+                    return false;
+                });
+
                 serverList.appendChild(div); if (unreadState.servers.has(serverId)) updateBadge(`server-${serverId}`, true, true, false);
             }
         }
@@ -493,7 +606,7 @@ function loadMemberList(serverId) {
             const p = get(child(ref(db), `users/${memberEmail}`)).then(uSnap => {
                 if (uSnap.exists()) {
                     const uData = uSnap.val(); const status = uData.status || 'offline'; let targetGroup = 'offline';
-                    currentServerMembersList.push(uData);
+                    currentServerMembersList.push(uData); globalUsersCache[memberEmail] = uData;
                     if (memberInfo.role === 'owner') targetGroup = 'owner';
                     else if (memberInfo.role && memberInfo.role !== 'member' && groups[memberInfo.role]) targetGroup = memberInfo.role;
                     else if (status !== 'offline' && status !== 'invisible') targetGroup = 'online';
