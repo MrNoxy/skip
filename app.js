@@ -30,7 +30,7 @@ let myServerRoles = [];
 let currentServerMembersList = [];
 let currentDMOtherUser = null;
 let serverRolesCache = {}; 
-let globalUsersCache = {}; // Caches exact profiles so they NEVER flash old data
+let globalUsersCache = {}; 
 
 // Listeners
 let unsubscribeMessages = null; 
@@ -222,7 +222,7 @@ document.querySelectorAll('.status-option').forEach(opt => { opt.addEventListene
 document.addEventListener('click', (e) => { if (!e.target.closest('#user-controls')) { const s = document.getElementById('status-selector'); if(s) s.style.display = 'none'; } if (!e.target.closest('#sidebar-header') && !e.target.closest('#server-settings-modal')) { const sd = document.getElementById('server-dropdown'); if(sd) sd.style.display = 'none'; } });
 
 // ==========================================
-// --- NAVIGATION & FRIENDS ---
+// --- NAVIGATION & FRIENDS (LIVE SYNC) ---
 // ==========================================
 document.getElementById('home-btn')?.addEventListener('click', () => {
     document.body.classList.remove('mobile-chat-active'); currentServerId = null;
@@ -303,7 +303,6 @@ function loadFriendsList() {
         friendsArray.forEach((fDataStatic) => {
             const fEmail = fDataStatic.email;
             
-            // Render instantly from Global Cache to prevent "Loading..." flash
             const cachedUser = globalUsersCache[fEmail] || {};
             const displayAvatar = cachedUser.avatar || "";
             const displayName = cachedUser.username || "Loading...";
@@ -318,7 +317,7 @@ function loadFriendsList() {
             onValue(ref(db, `users/${fEmail}`), (userSnap) => {
                 if(userSnap.exists()) {
                     const uData = userSnap.val();
-                    globalUsersCache[fEmail] = uData; // Update global cache instantly
+                    globalUsersCache[fEmail] = uData; 
                     
                     const img = document.getElementById(`f-avatar-${fEmail}`); if(img) img.src = uData.avatar;
                     const name = document.getElementById(`f-name-${fEmail}`); if(name) name.innerText = uData.username;
@@ -332,7 +331,6 @@ function loadFriendsList() {
                     };
                 }
             });
-
             channelList.appendChild(div);
             if (unreadState.dms.has(fDataStatic.dmId)) updateBadge(`dm-${fDataStatic.dmId}`, true, false, false);
         });
@@ -682,11 +680,13 @@ async function loadMessages(dbPath, chatNameLabel) {
                 if(sSnap.exists()) {
                     const sData = sSnap.val();
                     const iHtml = sData.icon ? `<div class="invite-embed-icon" style="background-image:url(${sData.icon})"></div>` : `<div class="invite-embed-icon">${sData.name.charAt(0)}</div>`;
-                    document.getElementById(eObj.id).innerHTML = `<div class="invite-embed"><h4>You've been invited to join a server</h4><div class="invite-embed-content">${iHtml}<div class="invite-embed-info"><div class="invite-embed-name">${sData.name}</div><button onclick="window.location.href='${appBaseUrl}?invite=${eObj.code}'" style="margin:0; padding:5px 15px; background:#3ba55c;">Join</button></div></div></div>`;
+                    const embedContainer = document.getElementById(eObj.id);
+                    if(embedContainer) {
+                        embedContainer.innerHTML = `<div class="invite-embed"><h4>You've been invited to join a server</h4><div class="invite-embed-content">${iHtml}<div class="invite-embed-info"><div class="invite-embed-name">${sData.name}</div><button onclick="window.location.href='${appBaseUrl}?invite=${eObj.code}'" style="margin:0; padding:5px 15px; background:#3ba55c;">Join</button></div></div></div>`;
+                    }
                 }
             });
 
-            // FIX: Using robust Custom Confirm for Deletions perfectly
             const delBtn = msgElement.querySelector('.msg-action-btn.del'); 
             if (delBtn) {
                 delBtn.addEventListener('click', () => { 
@@ -702,7 +702,6 @@ async function loadMessages(dbPath, chatNameLabel) {
         })();
     };
 
-    // Load initial 50
     const msgRef = query(ref(db, dbPath), orderByChild('timestamp'), limitToLast(50));
     const initialSnap = await get(msgRef);
     
@@ -713,13 +712,11 @@ async function loadMessages(dbPath, chatNameLabel) {
         highestTimestamp = Math.max(highestTimestamp, data.timestamp);
     });
 
-    // If no new messages, scroll bottom instantly
     if(!insertedDivider) {
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
         setTimeout(() => { if(!insertedDivider) messagesDiv.scrollTop = messagesDiv.scrollHeight; }, 100);
     }
 
-    // Listen for incoming NEW messages only
     const liveRef = query(ref(db, dbPath), orderByChild('timestamp'), startAt(highestTimestamp + 1));
     unsubscribeMessages = onChildAdded(liveRef, (childSnap) => {
         const data = childSnap.val();
