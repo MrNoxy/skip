@@ -30,6 +30,7 @@ let myServerRoles = [];
 let currentServerMembersList = [];
 let currentDMOtherUser = null;
 let serverRolesCache = {}; 
+let globalUsersCache = {}; // FIX: Prevents stale loading data on DMs!
 
 // Listeners
 let unsubscribeMessages = null; 
@@ -38,7 +39,6 @@ let unsubscribeMembers = null;
 let unsubscribeChannels = null;
 let unsubscribeCategories = null;
 
-let messageToDeletePath = null; 
 let replyingToMessage = null; 
 let pendingAttachmentBase64 = null; 
 
@@ -219,7 +219,7 @@ document.querySelectorAll('.status-option').forEach(opt => { opt.addEventListene
 document.addEventListener('click', (e) => { if (!e.target.closest('#user-controls')) { const s = document.getElementById('status-selector'); if(s) s.style.display = 'none'; } if (!e.target.closest('#sidebar-header') && !e.target.closest('#server-settings-modal')) { const sd = document.getElementById('server-dropdown'); if(sd) sd.style.display = 'none'; } });
 
 // ==========================================
-// --- NAVIGATION & FRIENDS (LIVE SYNC) ---
+// --- NAVIGATION & FRIENDS ---
 // ==========================================
 document.getElementById('home-btn')?.addEventListener('click', () => {
     document.body.classList.remove('mobile-chat-active'); currentServerId = null;
@@ -237,13 +237,10 @@ document.getElementById('home-btn')?.addEventListener('click', () => {
 });
 document.getElementById('mobile-back-btn')?.addEventListener('click', () => document.body.classList.remove('mobile-chat-active'));
 
-// Friend Requests
 function listenForFriendRequests() {
     onValue(ref(db, `friend_requests/${currentUserSafeEmail}`), (snap) => {
         const badge = document.getElementById('fr-badge');
-        if(badge) {
-            if(snap.exists() && Object.keys(snap.val()).length > 0) { badge.style.display = 'block'; } else { badge.style.display = 'none'; }
-        }
+        if(badge) { if(snap.exists() && Object.keys(snap.val()).length > 0) { badge.style.display = 'block'; } else { badge.style.display = 'none'; } }
     });
 }
 
@@ -255,22 +252,13 @@ document.getElementById('friend-requests-btn')?.addEventListener('click', async 
         snap.forEach(child => {
             const senderEmail = child.key; const sData = child.val();
             const div = document.createElement('div'); div.className = 'member-item'; div.style.justifyContent = 'space-between';
-            div.innerHTML = `
-                <div style="display:flex; align-items:center; gap:10px;">
-                    <img src="${sData.avatar}" class="avatar-small">
-                    <span style="font-weight:bold;">${sData.username}</span>
-                </div>
-                <div>
-                    <button class="small-btn accept-fr" style="background:#3ba55c;">✔</button>
-                    <button class="small-btn decline-fr" style="background:#ed4245;">✖</button>
-                </div>
-            `;
+            div.innerHTML = `<div style="display:flex; align-items:center; gap:10px;"><img src="${sData.avatar}" class="avatar-small"><span style="font-weight:bold;">${sData.username}</span></div><div><button class="small-btn accept-fr" style="background:#3ba55c;">✔</button><button class="small-btn decline-fr" style="background:#ed4245;">✖</button></div>`;
             div.querySelector('.accept-fr').addEventListener('click', async () => {
                 const dmId = [currentUserSafeEmail, senderEmail].sort().join('_');
-                await set(ref(db, `users/${currentUserSafeEmail}/friends/${senderEmail}`), { username: sData.username, avatar: sData.avatar, dmId: dmId, lastActivity: Date.now() });
-                await set(ref(db, `users/${senderEmail}/friends/${currentUserSafeEmail}`), { username: myProfile.username, avatar: myProfile.avatar, dmId: dmId, lastActivity: Date.now() });
+                await set(ref(db, `users/${currentUserSafeEmail}/friends/${senderEmail}`), { dmId: dmId, lastActivity: Date.now() });
+                await set(ref(db, `users/${senderEmail}/friends/${currentUserSafeEmail}`), { dmId: dmId, lastActivity: Date.now() });
                 await remove(ref(db, `friend_requests/${currentUserSafeEmail}/${senderEmail}`));
-                document.getElementById('friend-requests-btn').click(); // refresh
+                document.getElementById('friend-requests-btn').click();
             });
             div.querySelector('.decline-fr').addEventListener('click', async () => {
                 await remove(ref(db, `friend_requests/${currentUserSafeEmail}/${senderEmail}`));
@@ -293,7 +281,6 @@ document.getElementById('add-friend-btn')?.addEventListener('click', () => {
             if(friendSafeEmail === currentUserSafeEmail) return customAlert("You can't add yourself!", "Wait a minute...");
             const fSnap = await get(ref(db, `users/${currentUserSafeEmail}/friends/${friendSafeEmail}`));
             if(fSnap.exists()) return customAlert("You are already friends!", "Notice");
-
             await set(ref(db, `friend_requests/${friendSafeEmail}/${currentUserSafeEmail}`), { username: myProfile.username, avatar: myProfile.avatar, timestamp: Date.now() });
             customAlert(`Friend request sent to ${inputTag}!`, "Success");
         } else { customAlert("User not found.", "Error"); }
@@ -303,8 +290,7 @@ document.getElementById('add-friend-btn')?.addEventListener('click', () => {
 function loadFriendsList() {
     const channelList = document.getElementById('channel-list');
     onValue(ref(db, `users/${currentUserSafeEmail}/friends`), (snapshot) => {
-        channelList.innerHTML = '';
-        let friendsArray = [];
+        channelList.innerHTML = ''; let friendsArray = [];
         snapshot.forEach((childSnapshot) => {
             const data = childSnapshot.val();
             if(!data.hidden) { data.email = childSnapshot.key; friendsArray.push(data); }
@@ -314,20 +300,24 @@ function loadFriendsList() {
 
         friendsArray.forEach((fDataStatic) => {
             const fEmail = fDataStatic.email;
-            const div = document.createElement('div'); div.classList.add('channel-item', 'friend-item'); div.id = `dm-${fDataStatic.dmId}`;
             
-            // Render immediately from cache to prevent "Loading..." bug
-            div.innerHTML = `<div class="avatar-container"><img src="${fDataStatic.avatar || ''}" class="avatar-small" id="f-avatar-${fEmail}"><div class="status-indicator status-offline" id="status-${fEmail}"></div></div><span id="f-name-${fEmail}">${fDataStatic.username || 'User'}</span>`;
+            // FIX 1: Use Global Cache to prevent "Loading..." flash
+            const cachedUser = globalUsersCache[fEmail] || {};
+            const displayAvatar = cachedUser.avatar || "";
+            const displayName = cachedUser.username || "Loading...";
+            const displayStatus = cachedUser.status || "offline";
+
+            const div = document.createElement('div'); div.classList.add('channel-item', 'friend-item'); div.id = `dm-${fDataStatic.dmId}`;
+            div.innerHTML = `<div class="avatar-container"><img src="${displayAvatar}" class="avatar-small" id="f-avatar-${fEmail}"><div class="status-indicator status-${displayStatus}" id="status-${fEmail}"></div></div><span id="f-name-${fEmail}">${displayName}</span>`;
             
             div.addEventListener('contextmenu', (e) => showContextMenu(e, 'dm', fEmail));
-            let touchTimer;
-            div.addEventListener('touchstart', (e) => { touchTimer = setTimeout(() => showContextMenu(e, 'dm', fEmail), 500); });
-            div.addEventListener('touchend', () => clearTimeout(touchTimer));
-            div.addEventListener('touchmove', () => clearTimeout(touchTimer));
+            let touchTimer; div.addEventListener('touchstart', (e) => { touchTimer = setTimeout(() => showContextMenu(e, 'dm', fEmail), 500); }); div.addEventListener('touchend', () => clearTimeout(touchTimer)); div.addEventListener('touchmove', () => clearTimeout(touchTimer));
 
             onValue(ref(db, `users/${fEmail}`), (userSnap) => {
                 if(userSnap.exists()) {
                     const uData = userSnap.val();
+                    globalUsersCache[fEmail] = uData; // Store in cache immediately
+                    
                     const img = document.getElementById(`f-avatar-${fEmail}`); if(img) img.src = uData.avatar;
                     const name = document.getElementById(`f-name-${fEmail}`); if(name) name.innerText = uData.username;
                     const stat = document.getElementById(`status-${fEmail}`); if(stat) stat.className = `status-indicator status-${uData.status || 'offline'}`;
@@ -335,13 +325,11 @@ function loadFriendsList() {
                     div.onclick = () => {
                         chatType = 'dm'; currentChatId = fDataStatic.dmId; currentDMOtherUser = uData;
                         document.getElementById('chat-title').innerText = `@${uData.username}#${uData.tag}`;
-                        document.getElementById('toggle-members-btn').style.display = 'none';
-                        document.getElementById('member-sidebar').style.display = 'none';
+                        document.getElementById('toggle-members-btn').style.display = 'none'; document.getElementById('member-sidebar').style.display = 'none';
                         enableChat(); loadMessages(`dms/${currentChatId}`, `@${uData.username}`);
                     };
                 }
             });
-
             channelList.appendChild(div);
             if (unreadState.dms.has(fDataStatic.dmId)) updateBadge(`dm-${fDataStatic.dmId}`, true, false, false);
         });
@@ -381,17 +369,12 @@ let dragServerEl = null;
 function loadMyServers() {
     const serverList = document.getElementById('server-list');
     onValue(ref(db, `users/${currentUserSafeEmail}/servers`), async (snap) => {
-        serverList.innerHTML = '';
-        let myServers = [];
-        snap.forEach(child => { 
-            let d = typeof child.val() === 'object' ? child.val() : { order: 0 };
-            d.id = child.key; myServers.push(d); 
-        });
+        serverList.innerHTML = ''; let myServers = [];
+        snap.forEach(child => { let d = typeof child.val() === 'object' ? child.val() : { order: 0 }; d.id = child.key; myServers.push(d); });
         myServers.sort((a,b) => (a.order || 0) - (b.order || 0));
 
         for(let i=0; i<myServers.length; i++) {
-            const serverId = myServers[i].id;
-            const sSnap = await get(child(ref(db), `servers/${serverId}`));
+            const serverId = myServers[i].id; const sSnap = await get(child(ref(db), `servers/${serverId}`));
             if (sSnap.exists()) {
                 const sData = sSnap.val();
                 const div = document.createElement('div'); div.classList.add('server-icon'); div.id = `server-${serverId}`; div.draggable = true;
@@ -417,28 +400,14 @@ function loadMyServers() {
                     document.getElementById('menu-add-text').style.display = myServerPerms.manageChannels || myServerPerms.admin ? 'block' : 'none';
                     document.getElementById('menu-add-voice').style.display = myServerPerms.manageChannels || myServerPerms.admin ? 'block' : 'none';
 
-                    initChannelSync(serverId);
-                    loadMemberList(serverId); 
+                    initChannelSync(serverId); loadMemberList(serverId); 
                 });
 
                 div.addEventListener('dragstart', (e) => { dragServerEl = div; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/html', div.innerHTML); });
                 div.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; div.classList.add('drag-over'); return false; });
                 div.addEventListener('dragleave', () => div.classList.remove('drag-over'));
-                div.addEventListener('drop', (e) => {
-                    e.stopPropagation(); div.classList.remove('drag-over');
-                    if (dragServerEl !== div) {
-                        const srcId = dragServerEl.id.replace('server-', '');
-                        const targetOrder = myServers[i].order || 0;
-                        const prevS = myServers[i-1]; const nextS = myServers[i+1];
-                        const srcData = myServers.find(s=>s.id === srcId);
-                        if((srcData.order||0) < targetOrder) update(ref(db, `users/${currentUserSafeEmail}/servers/${srcId}`), { order: nextS ? (targetOrder + nextS.order)/2 : targetOrder + 10 });
-                        else update(ref(db, `users/${currentUserSafeEmail}/servers/${srcId}`), { order: prevS ? (targetOrder + prevS.order)/2 : targetOrder - 10 });
-                    }
-                    return false;
-                });
-
-                serverList.appendChild(div);
-                if (unreadState.servers.has(serverId)) updateBadge(`server-${serverId}`, true, true, false);
+                div.addEventListener('drop', (e) => { e.stopPropagation(); div.classList.remove('drag-over'); if (dragServerEl !== div) { const srcId = dragServerEl.id.replace('server-', ''); const targetOrder = myServers[i].order || 0; const prevS = myServers[i-1]; const nextS = myServers[i+1]; const srcData = myServers.find(s=>s.id === srcId); if((srcData.order||0) < targetOrder) update(ref(db, `users/${currentUserSafeEmail}/servers/${srcId}`), { order: nextS ? (targetOrder + nextS.order)/2 : targetOrder + 10 }); else update(ref(db, `users/${currentUserSafeEmail}/servers/${srcId}`), { order: prevS ? (targetOrder + prevS.order)/2 : targetOrder - 10 }); } return false; });
+                serverList.appendChild(div); if (unreadState.servers.has(serverId)) updateBadge(`server-${serverId}`, true, true, false);
             }
         }
     });
@@ -625,7 +594,7 @@ function enableChat() { document.getElementById('msg-input').disabled = false; d
 
 function processMentionsAndText(text) {
     if (!text) return { html: "", isMentioned: false };
-    let processed = text.replace(/</g, "&lt;").replace(/>/g, "&gt;"); // Basic sanitize
+    let processed = text.replace(/</g, "&lt;").replace(/>/g, "&gt;"); 
     let isMentioned = false;
     
     if(myProfile.username && text.includes('@' + myProfile.username)) isMentioned = true;
@@ -673,6 +642,9 @@ async function loadMessages(dbPath, chatNameLabel) {
     let lastReadTime = lastReadSnap.val() || 0;
     let insertedDivider = false;
 
+    // FIX 2: Ensure we instantly scroll to bottom if there's NO divider.
+    setTimeout(() => { if (!insertedDivider) messagesDiv.scrollTop = messagesDiv.scrollHeight; }, 100);
+
     unsubscribeMessages = onChildAdded(msgRef, (snapshot) => {
         const data = snapshot.val(); const msgId = snapshot.key;
         const isConsecutive = (lastMsgSender === data.sender) && (data.timestamp - lastMsgTime < 300000) && (!data.replyTo);
@@ -719,7 +691,16 @@ async function loadMessages(dbPath, chatNameLabel) {
                 }
             });
 
-            const delBtn = msgElement.querySelector('.msg-action-btn.del'); if (delBtn) delBtn.addEventListener('click', () => { messageToDeletePath = `${dbPath}/${msgId}`; document.getElementById('delete-modal').style.display = 'flex'; });
+            // FIX 3: Re-routed Message Delete logic through customConfirm
+            const delBtn = msgElement.querySelector('.msg-action-btn.del'); 
+            if (delBtn) {
+                delBtn.addEventListener('click', () => { 
+                    customConfirm("Are you sure you want to delete this message? This action cannot be undone.", "Delete Message", async (yes) => {
+                        if(yes) await remove(ref(db, `${dbPath}/${msgId}`));
+                    });
+                }); 
+            }
+            
             const replyBtn = msgElement.querySelector('.msg-action-btn.reply'); if (replyBtn) replyBtn.addEventListener('click', () => triggerReply(msgId, data.username, data.text || "Attachment..."));
             msgElement.addEventListener('dblclick', () => triggerReply(msgId, data.username, data.text || "Attachment..."));
             const imgEl = msgElement.querySelector('.message-image'); if (imgEl) imgEl.addEventListener('click', () => { document.getElementById('enlarged-image').src = data.imageUrl; document.getElementById('download-image-btn').href = data.imageUrl; document.getElementById('image-modal').style.display = 'flex'; });
@@ -729,9 +710,6 @@ async function loadMessages(dbPath, chatNameLabel) {
     unsubscribeMessagesRemoved = onChildRemoved(ref(db, dbPath), (snapshot) => { const msgEl = document.getElementById(`msg-${snapshot.key}`); if(msgEl) msgEl.remove(); });
     if (chatType === 'dm') clearUnread('dm', currentChatId); else if (chatType === 'server') clearUnread('channel', currentChatId, currentServerId);
 }
-
-document.getElementById('confirm-delete-btn')?.addEventListener('click', async () => { if (messageToDeletePath) { await remove(ref(db, messageToDeletePath)); messageToDeletePath = null; document.getElementById('delete-modal').style.display = 'none'; } });
-document.getElementById('cancel-delete-btn')?.addEventListener('click', () => { messageToDeletePath = null; document.getElementById('delete-modal').style.display = 'none'; });
 
 // Replier Logic
 function triggerReply(msgId, username, text) {
