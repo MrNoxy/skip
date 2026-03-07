@@ -93,23 +93,31 @@
                 <div class="arrow-down"></div>
             </div>
             
-            <div id="reply-banner" style="display: none;">
-                <span id="reply-banner-text">Replying to User</span>
-                <button id="cancel-reply-btn" title="Cancel Reply">✖</button>
-            </div>
-
-            <div id="attachment-preview-area" style="display: none;">
-                <div class="attachment-preview-wrapper">
-                    <img id="attachment-preview-img" src="">
-                    <button id="remove-attachment-btn" title="Remove Attachment">✖</button>
-                </div>
-            </div>
-
             <div id="message-input-area">
-                <button id="upload-img-btn" disabled title="Send Image">📷</button>
-                <input type="file" id="image-upload" accept="image/*" style="display: none;">
-                <input type="text" id="msg-input" placeholder="Message..." disabled>
-                <button id="send-btn" disabled>Send</button>
+                <div id="reply-banner" style="display: none;">
+                    <span id="reply-banner-text">Replying to User</span>
+                    <button id="cancel-reply-btn" title="Cancel Reply">✖</button>
+                </div>
+
+                <div id="attachment-preview-area" style="display: none;">
+                    <div class="attachment-preview-wrapper">
+                        <img id="attachment-preview-img" src="">
+                        <button id="remove-attachment-btn" title="Remove Attachment">✖</button>
+                    </div>
+                </div>
+                
+                <div id="mention-menu" style="display: none;"></div>
+
+                <div id="message-input-wrapper">
+                    <button id="upload-img-btn" disabled title="Add Attachment">
+                        <svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg>
+                    </button>
+                    <input type="file" id="image-upload" accept="image/*" style="display: none;">
+                    <input type="text" id="msg-input" placeholder="Message..." disabled autocomplete="off">
+                    <button id="send-btn" disabled title="Send">
+                        <svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -149,7 +157,7 @@
         <div class="modal-content">
             <h3 id="input-modal-title">Title</h3>
             <p id="input-modal-desc" style="color: #dcddde; margin-bottom: 15px; font-size: 14px; display: none;"></p>
-            <input type="text" id="input-modal-field" placeholder="...">
+            <input type="text" id="input-modal-field" placeholder="..." autocomplete="off">
             <div style="margin-top: 15px; display: flex; gap: 10px;">
                 <button id="input-modal-submit" style="flex: 1;">Submit</button>
                 <button id="input-modal-cancel" style="background-color: #4f545c; flex: 1;">Cancel</button>
@@ -173,9 +181,9 @@
                 <input type="file" id="avatar-upload" accept="image/*">
             </div>
             <label>Username</label>
-            <input type="text" id="edit-username" placeholder="Username">
+            <input type="text" id="edit-username" placeholder="Username" autocomplete="off">
             <label>Tag (4 digits)</label>
-            <input type="number" id="edit-tag" placeholder="6996">
+            <input type="number" id="edit-tag" placeholder="6996" autocomplete="off">
             <div style="margin-top: 15px; display: flex; gap: 10px;">
                 <button id="save-profile-btn" style="flex: 1;">Save Changes</button>
                 <button id="close-profile-btn" style="background-color: #4f545c; flex: 1;">Cancel</button>
@@ -223,7 +231,7 @@
                     <input type="file" id="ss-icon-upload" accept="image/*">
                 </div>
                 <label>Server Name</label>
-                <input type="text" id="ss-server-name" placeholder="Server Name">
+                <input type="text" id="ss-server-name" placeholder="Server Name" autocomplete="off">
                 <button id="ss-save-overview-btn" style="width: 100%; margin-top: 10px;">Save Changes</button>
                 <div style="margin-top: 30px; border-top: 1px solid #ed4245; padding-top: 15px;">
                     <button id="delete-server-btn" style="background-color: #ed4245; width: 100%;">Delete Server</button>
@@ -232,7 +240,7 @@
 
             <div id="ss-roles" style="display: none;">
                 <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                    <input type="text" id="ss-new-role-name" placeholder="New Role Name" style="flex: 1; margin: 0;">
+                    <input type="text" id="ss-new-role-name" placeholder="New Role Name" style="flex: 1; margin: 0;" autocomplete="off">
                     <input type="color" id="ss-new-role-color" value="#99aab5" style="width: 40px; height: 36px; padding: 0; border: none; background: transparent; cursor: pointer;">
                     <button id="ss-create-role-btn">Create</button>
                 </div>

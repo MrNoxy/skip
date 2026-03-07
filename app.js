@@ -26,6 +26,11 @@ let myProfile = {};
 let myServerPerms = { admin: false, manageChannels: false, deleteMessages: false };
 let myServerRoles = []; 
 
+// Mention Caching
+let currentServerMembersList = [];
+let currentDMOtherUser = null;
+let serverRolesCache = {}; 
+
 // Listeners
 let unsubscribeMessages = null; 
 let unsubscribeMessagesRemoved = null; 
@@ -42,13 +47,8 @@ const appStartTime = Date.now();
 let unreadState = { dms: new Set(), channels: new Set(), servers: new Set() };
 
 // Voice State Tracking
-let myPeer = null; 
-let myCurrentPeerId = null; 
-let localAudioStream = null;
-let activeCalls = {}; 
-let currentVoiceChannel = null; 
-let isMuted = false; 
-let isDeafened = false;
+let myPeer = null; let myCurrentPeerId = null; let localAudioStream = null;
+let activeCalls = {}; let currentVoiceChannel = null; let isMuted = false; let isDeafened = false;
 
 const appContainer = document.getElementById('app-container');
 const authSection = document.getElementById('auth-section');
@@ -219,7 +219,7 @@ document.querySelectorAll('.status-option').forEach(opt => { opt.addEventListene
 document.addEventListener('click', (e) => { if (!e.target.closest('#user-controls')) { const s = document.getElementById('status-selector'); if(s) s.style.display = 'none'; } if (!e.target.closest('#sidebar-header') && !e.target.closest('#server-settings-modal')) { const sd = document.getElementById('server-dropdown'); if(sd) sd.style.display = 'none'; } });
 
 // ==========================================
-// --- NAVIGATION & FRIENDS (LIVE SYNC & REQUESTS) ---
+// --- NAVIGATION & FRIENDS (LIVE SYNC) ---
 // ==========================================
 document.getElementById('home-btn')?.addEventListener('click', () => {
     document.body.classList.remove('mobile-chat-active'); currentServerId = null;
@@ -267,8 +267,8 @@ document.getElementById('friend-requests-btn')?.addEventListener('click', async 
             `;
             div.querySelector('.accept-fr').addEventListener('click', async () => {
                 const dmId = [currentUserSafeEmail, senderEmail].sort().join('_');
-                await set(ref(db, `users/${currentUserSafeEmail}/friends/${senderEmail}`), { dmId: dmId, lastActivity: Date.now() });
-                await set(ref(db, `users/${senderEmail}/friends/${currentUserSafeEmail}`), { dmId: dmId, lastActivity: Date.now() });
+                await set(ref(db, `users/${currentUserSafeEmail}/friends/${senderEmail}`), { username: sData.username, avatar: sData.avatar, dmId: dmId, lastActivity: Date.now() });
+                await set(ref(db, `users/${senderEmail}/friends/${currentUserSafeEmail}`), { username: myProfile.username, avatar: myProfile.avatar, dmId: dmId, lastActivity: Date.now() });
                 await remove(ref(db, `friend_requests/${currentUserSafeEmail}/${senderEmail}`));
                 document.getElementById('friend-requests-btn').click(); // refresh
             });
@@ -291,7 +291,6 @@ document.getElementById('add-friend-btn')?.addEventListener('click', () => {
         if (tagSnap.exists()) {
             const friendSafeEmail = tagSnap.val();
             if(friendSafeEmail === currentUserSafeEmail) return customAlert("You can't add yourself!", "Wait a minute...");
-            
             const fSnap = await get(ref(db, `users/${currentUserSafeEmail}/friends/${friendSafeEmail}`));
             if(fSnap.exists()) return customAlert("You are already friends!", "Notice");
 
@@ -316,7 +315,9 @@ function loadFriendsList() {
         friendsArray.forEach((fDataStatic) => {
             const fEmail = fDataStatic.email;
             const div = document.createElement('div'); div.classList.add('channel-item', 'friend-item'); div.id = `dm-${fDataStatic.dmId}`;
-            div.innerHTML = `<div class="avatar-container"><img src="" class="avatar-small" id="f-avatar-${fEmail}"><div class="status-indicator status-offline" id="status-${fEmail}"></div></div><span id="f-name-${fEmail}">Loading...</span>`;
+            
+            // Render immediately from cache to prevent "Loading..." bug
+            div.innerHTML = `<div class="avatar-container"><img src="${fDataStatic.avatar || ''}" class="avatar-small" id="f-avatar-${fEmail}"><div class="status-indicator status-offline" id="status-${fEmail}"></div></div><span id="f-name-${fEmail}">${fDataStatic.username || 'User'}</span>`;
             
             div.addEventListener('contextmenu', (e) => showContextMenu(e, 'dm', fEmail));
             let touchTimer;
@@ -332,7 +333,7 @@ function loadFriendsList() {
                     const stat = document.getElementById(`status-${fEmail}`); if(stat) stat.className = `status-indicator status-${uData.status || 'offline'}`;
                     
                     div.onclick = () => {
-                        chatType = 'dm'; currentChatId = fDataStatic.dmId;
+                        chatType = 'dm'; currentChatId = fDataStatic.dmId; currentDMOtherUser = uData;
                         document.getElementById('chat-title').innerText = `@${uData.username}#${uData.tag}`;
                         document.getElementById('toggle-members-btn').style.display = 'none';
                         document.getElementById('member-sidebar').style.display = 'none';
@@ -500,7 +501,6 @@ document.getElementById('ss-create-role-btn')?.addEventListener('click', () => {
 
 // Members System
 let userToManageEmail = null;
-let serverRolesCache = {}; 
 document.getElementById('toggle-members-btn')?.addEventListener('click', () => { const sidebar = document.getElementById('member-sidebar'); if (sidebar.style.display === 'none') { sidebar.style.display = 'flex'; } else { sidebar.style.display = 'none'; } });
 document.getElementById('close-members-mobile-btn')?.addEventListener('click', () => { document.getElementById('member-sidebar').style.display = 'none'; });
 document.getElementById('close-role-modal-btn')?.addEventListener('click', () => { document.getElementById('assign-role-modal').style.display = 'none'; });
@@ -517,12 +517,13 @@ function loadMemberList(serverId) {
         let groups = { owner: { name: "Server Owner", order: -2, members: [] }, online: { name: "Online", order: 9998, members: [] }, offline: { name: "Offline", order: 9999, members: [] } };
         Object.keys(rolesData).forEach(rId => { groups[rId] = { name: rolesData[rId].name, order: rolesData[rId].order || 0, color: rolesData[rId].color, members: [] }; });
         
-        const memberPromises = [];
+        const memberPromises = []; currentServerMembersList = [];
         membersSnap.forEach(mSnap => {
             const memberEmail = mSnap.key; const memberInfo = mSnap.val();
             const p = get(child(ref(db), `users/${memberEmail}`)).then(uSnap => {
                 if (uSnap.exists()) {
                     const uData = uSnap.val(); const status = uData.status || 'offline'; let targetGroup = 'offline';
+                    currentServerMembersList.push(uData);
                     if (memberInfo.role === 'owner') targetGroup = 'owner';
                     else if (memberInfo.role && memberInfo.role !== 'member' && groups[memberInfo.role]) targetGroup = memberInfo.role;
                     else if (status !== 'offline' && status !== 'invisible') targetGroup = 'online';
@@ -560,12 +561,10 @@ function loadMemberList(serverId) {
 }
 
 // Global Sync for Channels AND Categories
-let currentChannelsData = {};
-let currentCategoriesData = {};
+let currentChannelsData = {}; let currentCategoriesData = {};
 
 function initChannelSync(serverId) {
-    if(unsubscribeChannels) unsubscribeChannels();
-    if(unsubscribeCategories) unsubscribeCategories();
+    if(unsubscribeChannels) unsubscribeChannels(); if(unsubscribeCategories) unsubscribeCategories();
     unsubscribeChannels = onValue(ref(db, `channels/${serverId}`), (snap) => { currentChannelsData = snap.val() || {}; renderChannels(serverId); });
     unsubscribeCategories = onValue(ref(db, `categories/${serverId}`), (snap) => { currentCategoriesData = snap.val() || {}; renderChannels(serverId); });
 }
@@ -626,12 +625,12 @@ function enableChat() { document.getElementById('msg-input').disabled = false; d
 
 function processMentionsAndText(text) {
     if (!text) return { html: "", isMentioned: false };
-    let processed = text;
+    let processed = text.replace(/</g, "&lt;").replace(/>/g, "&gt;"); // Basic sanitize
     let isMentioned = false;
     
     if(myProfile.username && text.includes('@' + myProfile.username)) isMentioned = true;
     myServerRoles.forEach(role => { if(serverRolesCache[role] && text.includes('@' + serverRolesCache[role].name)) isMentioned = true; });
-    processed = processed.replace(/@(\w+)/g, `<strong style="color: #faa61a;">@$1</strong>`);
+    processed = processed.replace(/@([a-zA-Z0-9_]+)/g, `<strong style="color: #faa61a; background: rgba(250, 166, 26, 0.1); padding: 0 3px; border-radius: 3px;">@$1</strong>`);
     return { html: processed, isMentioned };
 }
 
@@ -643,9 +642,8 @@ async function buildMessageHtml(data) {
     let match; let tempEmbeds = [];
     
     while ((match = inviteRegex.exec(data.text)) !== null) {
-        const iCode = match[1];
-        const placeholderId = 'embed-' + generateCode();
-        contentHtml += `<div id="${placeholderId}" style="margin-left: 42px;"></div>`;
+        const iCode = match[1]; const placeholderId = 'embed-' + generateCode();
+        contentHtml += `<div id="${placeholderId}" style="margin-left: 42px; margin-top: 5px;"></div>`;
         tempEmbeds.push({ code: iCode, id: placeholderId });
     }
 
@@ -653,7 +651,7 @@ async function buildMessageHtml(data) {
     return { html: contentHtml, isMentioned: mentionData.isMentioned, embeds: tempEmbeds };
 }
 
-let lastMsgSender = null; let lastMsgTime = 0;
+let lastMsgSender = null; let lastMsgTime = 0; let scrollTimeout = null;
 const scrollBtn = document.getElementById('scroll-bottom-btn');
 const messagesDiv = document.getElementById('messages');
 
@@ -691,9 +689,10 @@ async function loadMessages(dbPath, chatNameLabel) {
             insertedDivider = true;
             const div = document.createElement('div'); div.className = 'new-messages-divider'; div.innerHTML = `<span>New Messages</span>`;
             messagesDiv.insertBefore(div, msgElement);
-            setTimeout(() => { if (messagesDiv.scrollHeight - messagesDiv.scrollTop > messagesDiv.clientHeight + 100) div.scrollIntoView({behavior: "smooth", block: "center"}); }, 100);
-        } else if (!insertedDivider) {
-            messagesDiv.scrollTop = messagesDiv.scrollHeight; 
+            setTimeout(() => { div.scrollIntoView({behavior: "smooth", block: "center"}); }, 100);
+        } else {
+            clearTimeout(scrollTimeout);
+            scrollTimeout = setTimeout(() => { if (!insertedDivider) messagesDiv.scrollTop = messagesDiv.scrollHeight; }, 100);
         }
 
         (async () => {
@@ -702,13 +701,9 @@ async function loadMessages(dbPath, chatNameLabel) {
 
             let canDelete = (data.sender === auth.currentUser.email || (chatType === 'server' && (myServerPerms.admin || myServerPerms.deleteMessages)));
             let nameColor = "white";
-            if(chatType === 'server' && data.roleId && data.roleId !== 'member' && data.roleId !== 'owner') {
-                const rSnap = await get(ref(db, `servers/${currentServerId}/roles/${data.roleId}`));
-                if(rSnap.exists()) nameColor = rSnap.val().color;
-            }
+            if(chatType === 'server' && data.roleId && data.roleId !== 'member' && data.roleId !== 'owner') { const rSnap = await get(ref(db, `servers/${currentServerId}/roles/${data.roleId}`)); if(rSnap.exists()) nameColor = rSnap.val().color; }
 
             let actionsHtml = `<div class="msg-actions"><button class="msg-action-btn reply">↩ Reply</button>${canDelete ? `<button class="msg-action-btn del">🗑️ Delete</button>` : ''}</div>`;
-
             if (!isConsecutive) {
                 let replyHtml = data.replyTo ? `<div class="reply-context"><strong>@${data.replyTo.username}</strong> ${data.replyTo.text}</div>` : "";
                 let headerHtml = `${replyHtml}<div class="message-header"><img src="${data.avatar}" class="avatar-small"><span class="message-sender" style="color: ${nameColor};">${data.username}</span><span style="font-size: 0.8em; color: gray;">${new Date(data.timestamp).toLocaleTimeString()}</span></div>`;
@@ -724,13 +719,10 @@ async function loadMessages(dbPath, chatNameLabel) {
                 }
             });
 
-            const delBtn = msgElement.querySelector('.msg-action-btn.del');
-            if (delBtn) delBtn.addEventListener('click', () => { messageToDeletePath = `${dbPath}/${msgId}`; document.getElementById('delete-modal').style.display = 'flex'; });
-            const replyBtn = msgElement.querySelector('.msg-action-btn.reply');
-            if (replyBtn) replyBtn.addEventListener('click', () => triggerReply(msgId, data.username, data.text || "Attachment..."));
+            const delBtn = msgElement.querySelector('.msg-action-btn.del'); if (delBtn) delBtn.addEventListener('click', () => { messageToDeletePath = `${dbPath}/${msgId}`; document.getElementById('delete-modal').style.display = 'flex'; });
+            const replyBtn = msgElement.querySelector('.msg-action-btn.reply'); if (replyBtn) replyBtn.addEventListener('click', () => triggerReply(msgId, data.username, data.text || "Attachment..."));
             msgElement.addEventListener('dblclick', () => triggerReply(msgId, data.username, data.text || "Attachment..."));
-            const imgEl = msgElement.querySelector('.message-image');
-            if (imgEl) imgEl.addEventListener('click', () => { document.getElementById('enlarged-image').src = data.imageUrl; document.getElementById('download-image-btn').href = data.imageUrl; document.getElementById('image-modal').style.display = 'flex'; });
+            const imgEl = msgElement.querySelector('.message-image'); if (imgEl) imgEl.addEventListener('click', () => { document.getElementById('enlarged-image').src = data.imageUrl; document.getElementById('download-image-btn').href = data.imageUrl; document.getElementById('image-modal').style.display = 'flex'; });
         })();
     });
 
@@ -748,6 +740,45 @@ function triggerReply(msgId, username, text) {
     document.getElementById('reply-banner').style.display = 'flex'; document.getElementById('msg-input').focus();
 }
 document.getElementById('cancel-reply-btn')?.addEventListener('click', () => { replyingToMessage = null; document.getElementById('reply-banner').style.display = 'none'; });
+
+// Mention Autocomplete
+const msgInput = document.getElementById('msg-input');
+const mentionMenu = document.getElementById('mention-menu');
+let mentionStartIndex = -1; let mentionSearchTerm = null;
+
+msgInput?.addEventListener('input', () => {
+    const val = msgInput.value; const cursorPos = msgInput.selectionStart;
+    const textBeforeCursor = val.substring(0, cursorPos);
+    const match = textBeforeCursor.match(/@(\w*)$/);
+    if (match) { mentionStartIndex = match.index; mentionSearchTerm = match[1].toLowerCase(); showMentionMenu(mentionSearchTerm); } 
+    else { mentionMenu.style.display = 'none'; }
+});
+
+function showMentionMenu(term) {
+    mentionMenu.innerHTML = ''; let matches = [];
+    if (chatType === 'server') {
+        Object.values(serverRolesCache).forEach(role => { if (role.name.toLowerCase().includes(term)) matches.push({ type: 'role', name: role.name, color: role.color }); });
+        currentServerMembersList.forEach(m => { if (m.username.toLowerCase().includes(term)) matches.push({ type: 'user', name: m.username, avatar: m.avatar }); });
+    } else if (chatType === 'dm') {
+        if(currentDMOtherUser) matches.push({ type: 'user', name: currentDMOtherUser.username, avatar: currentDMOtherUser.avatar });
+        matches.push({ type: 'user', name: myProfile.username, avatar: myProfile.avatar });
+        matches = matches.filter(m => m.name.toLowerCase().includes(term));
+    }
+    
+    if (matches.length === 0) { mentionMenu.style.display = 'none'; return; }
+    
+    matches.forEach(m => {
+        const div = document.createElement('div'); div.className = 'mention-item';
+        if (m.type === 'role') { div.innerHTML = `<div style="width:24px; height:24px; border-radius:50%; background:${m.color}; display:flex; align-items:center; justify-content:center; font-size:12px; color:white;">@</div><span>${m.name}</span>`; } 
+        else { div.innerHTML = `<img src="${m.avatar}" class="mention-avatar"><span>${m.name}</span>`; }
+        div.addEventListener('click', () => {
+            const val = msgInput.value; const before = val.substring(0, mentionStartIndex); const after = val.substring(msgInput.selectionStart);
+            msgInput.value = before + '@' + m.name + ' ' + after; mentionMenu.style.display = 'none'; msgInput.focus();
+        });
+        mentionMenu.appendChild(div);
+    });
+    mentionMenu.style.display = 'flex';
+}
 
 // Image / Paste Preview Logic
 document.getElementById('upload-img-btn')?.addEventListener('click', () => document.getElementById('image-upload').click());
@@ -782,6 +813,7 @@ async function sendMessage() {
 
         push(ref(db, path), msgPayload);
         input.value = "";
+        mentionMenu.style.display = 'none';
         
         if(chatType === 'dm') {
             const friendEmail = currentChatId.replace(currentUserSafeEmail, '').replace('_', '');
