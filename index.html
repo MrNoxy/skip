@@ -30,12 +30,6 @@
                     <h3 id="server-name-display">Friends & DMs</h3>
                     <span id="server-dropdown-arrow" style="display: none;">▼</span>
                 </div>
-                <div style="display: flex; gap: 5px;">
-                    <button id="friend-requests-btn" class="small-btn" style="position: relative;" title="Friend Requests">
-                        🔔<div id="fr-badge" class="unread-indicator dot" style="display: none;"></div>
-                    </button>
-                    <button id="add-friend-btn" class="small-btn">+ Friend</button>
-                </div>
                 
                 <div id="server-dropdown" style="display: none;">
                     <div class="dropdown-item" id="menu-server-settings" style="display: none;">⚙️ Server Settings</div>
@@ -161,18 +155,6 @@
                     <button id="close-members-mobile-btn" class="small-btn" style="background: transparent;">✖</button>
                 </div>
                 <div id="member-list-content"></div>
-            </div>
-        </div>
-    </div>
-
-    <div id="friend-requests-modal" class="modal-overlay" style="display: none;">
-        <div class="modal-content">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3 style="margin: 0;">Friend Requests</h3>
-                <button id="close-fr-modal-btn" class="small-btn" style="background: #4f545c;">✖</button>
-            </div>
-            <div id="fr-list" style="max-height: 300px; overflow-y: auto;">
-                <p style="color: gray; font-size: 13px;">No pending requests.</p>
             </div>
         </div>
     </div>

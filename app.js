@@ -197,7 +197,7 @@ onAuthStateChanged(auth, async (user) => {
         });
 
         initVoiceChat(); loadMyServers(); loadFriendsList(); startNotificationListeners(); listenForFriendRequests();
-        document.getElementById('home-btn').click(); 
+        document.getElementById('home-btn').click(); // Force home view on load
         
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('invite')) { await joinServerByCode(urlParams.get('invite')); window.history.replaceState({}, document.title, appBaseUrl); }
@@ -268,6 +268,9 @@ document.getElementById('nav-requests-btn')?.addEventListener('click', () => { c
 
 function renderHomeContent() {
     if (chatType !== 'home') return;
+    
+    document.querySelectorAll('.home-nav-item').forEach(el => el.classList.remove('active'));
+    
     const navF = document.getElementById('nav-friends-btn');
     const navR = document.getElementById('nav-requests-btn');
     const hF = document.getElementById('home-header-friends');
@@ -275,7 +278,7 @@ function renderHomeContent() {
     const content = document.getElementById('home-content');
     
     if(currentHomeTab === 'friends') {
-        navF.classList.add('active'); navR.classList.remove('active');
+        navF.classList.add('active'); 
         hF.style.display = 'flex'; hR.style.display = 'none';
         
         content.innerHTML = '';
@@ -315,7 +318,7 @@ function renderHomeContent() {
         });
 
     } else if (currentHomeTab === 'requests') {
-        navF.classList.remove('active'); navR.classList.add('active');
+        navR.classList.add('active');
         hF.style.display = 'none'; hR.style.display = 'flex';
         
         content.innerHTML = '<div style="color: gray; text-align: center; margin-top: 50px;">Loading requests...</div>';
@@ -370,6 +373,7 @@ document.getElementById('add-friend-btn-green')?.addEventListener('click', () =>
             if(friendSafeEmail === currentUserSafeEmail) return customAlert("You can't add yourself!", "Wait a minute...");
             const fSnap = await get(ref(db, `users/${currentUserSafeEmail}/friends/${friendSafeEmail}`));
             if(fSnap.exists()) return customAlert("You are already friends!", "Notice");
+
             await set(ref(db, `friend_requests/${friendSafeEmail}/${currentUserSafeEmail}`), { username: myProfile.username, avatar: myProfile.avatar, timestamp: Date.now() });
             customAlert(`Friend request sent to ${inputTag}!`, "Success");
         } else { customAlert("User not found.", "Error"); }
