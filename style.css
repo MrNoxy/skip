@@ -3,9 +3,8 @@ html, body {
     background-color: #36393f; color: #dcddde; 
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
     margin: 0; padding: 0;
-    width: 100vw; height: 100vh; 
+    width: 100%; height: 100%; 
     overflow: hidden; /* Prevents full page bouncing on mobile */
-    position: fixed; /* Locks viewport on iOS Safari */
     display: flex; justify-content: center; align-items: center; 
 }
 input { font-size: 16px !important; }

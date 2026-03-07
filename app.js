@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-import { getDatabase, ref, push, onChildAdded, onChildRemoved, onValue, set, get, child, remove, onDisconnect, query, limitToLast, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { getDatabase, ref, push, onChildAdded, onChildRemoved, onValue, set, get, child, remove, onDisconnect, query, limitToLast, update, orderByChild, startAt } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 
 // !!! PASTE YOUR FIREBASE CONFIG HERE !!!
 const firebaseConfig = {
@@ -26,11 +26,11 @@ let myProfile = {};
 let myServerPerms = { admin: false, manageChannels: false, deleteMessages: false };
 let myServerRoles = []; 
 
-// Mention Caching
+// Mention & Global Caching
 let currentServerMembersList = [];
 let currentDMOtherUser = null;
 let serverRolesCache = {}; 
-let globalUsersCache = {}; // FIX: Prevents stale loading data on DMs!
+let globalUsersCache = {}; // Caches exact profiles so they NEVER flash old data
 
 // Listeners
 let unsubscribeMessages = null; 
@@ -38,6 +38,9 @@ let unsubscribeMessagesRemoved = null;
 let unsubscribeMembers = null; 
 let unsubscribeChannels = null;
 let unsubscribeCategories = null;
+
+let dmsNotifListener = null;
+let serversNotifListener = null;
 
 let replyingToMessage = null; 
 let pendingAttachmentBase64 = null; 
@@ -237,13 +240,13 @@ document.getElementById('home-btn')?.addEventListener('click', () => {
 });
 document.getElementById('mobile-back-btn')?.addEventListener('click', () => document.body.classList.remove('mobile-chat-active'));
 
+// Friend Requests
 function listenForFriendRequests() {
     onValue(ref(db, `friend_requests/${currentUserSafeEmail}`), (snap) => {
         const badge = document.getElementById('fr-badge');
         if(badge) { if(snap.exists() && Object.keys(snap.val()).length > 0) { badge.style.display = 'block'; } else { badge.style.display = 'none'; } }
     });
 }
-
 document.getElementById('friend-requests-btn')?.addEventListener('click', async () => {
     const list = document.getElementById('fr-list'); list.innerHTML = '';
     const snap = await get(ref(db, `friend_requests/${currentUserSafeEmail}`));
@@ -269,7 +272,6 @@ document.getElementById('friend-requests-btn')?.addEventListener('click', async 
     }
     document.getElementById('friend-requests-modal').style.display = 'flex';
 });
-
 document.getElementById('close-fr-modal-btn')?.addEventListener('click', () => document.getElementById('friend-requests-modal').style.display='none');
 
 document.getElementById('add-friend-btn')?.addEventListener('click', () => {
@@ -301,7 +303,7 @@ function loadFriendsList() {
         friendsArray.forEach((fDataStatic) => {
             const fEmail = fDataStatic.email;
             
-            // FIX 1: Use Global Cache to prevent "Loading..." flash
+            // Render instantly from Global Cache to prevent "Loading..." flash
             const cachedUser = globalUsersCache[fEmail] || {};
             const displayAvatar = cachedUser.avatar || "";
             const displayName = cachedUser.username || "Loading...";
@@ -316,7 +318,7 @@ function loadFriendsList() {
             onValue(ref(db, `users/${fEmail}`), (userSnap) => {
                 if(userSnap.exists()) {
                     const uData = userSnap.val();
-                    globalUsersCache[fEmail] = uData; // Store in cache immediately
+                    globalUsersCache[fEmail] = uData; // Update global cache instantly
                     
                     const img = document.getElementById(`f-avatar-${fEmail}`); if(img) img.src = uData.avatar;
                     const name = document.getElementById(`f-name-${fEmail}`); if(name) name.innerText = uData.username;
@@ -330,6 +332,7 @@ function loadFriendsList() {
                     };
                 }
             });
+
             channelList.appendChild(div);
             if (unreadState.dms.has(fDataStatic.dmId)) updateBadge(`dm-${fDataStatic.dmId}`, true, false, false);
         });
@@ -637,16 +640,11 @@ async function loadMessages(dbPath, chatNameLabel) {
     if (unsubscribeMessages) unsubscribeMessages();
     if (unsubscribeMessagesRemoved) unsubscribeMessagesRemoved();
 
-    const msgRef = query(ref(db, dbPath), limitToLast(50));
     const lastReadSnap = await get(ref(db, `users/${currentUserSafeEmail}/lastRead/${currentChatId}`));
     let lastReadTime = lastReadSnap.val() || 0;
     let insertedDivider = false;
 
-    // FIX 2: Ensure we instantly scroll to bottom if there's NO divider.
-    setTimeout(() => { if (!insertedDivider) messagesDiv.scrollTop = messagesDiv.scrollHeight; }, 100);
-
-    unsubscribeMessages = onChildAdded(msgRef, (snapshot) => {
-        const data = snapshot.val(); const msgId = snapshot.key;
+    const processMessage = (msgId, data, isLive) => {
         const isConsecutive = (lastMsgSender === data.sender) && (data.timestamp - lastMsgTime < 300000) && (!data.replyTo);
         
         const msgElement = document.createElement('div');
@@ -661,10 +659,7 @@ async function loadMessages(dbPath, chatNameLabel) {
             insertedDivider = true;
             const div = document.createElement('div'); div.className = 'new-messages-divider'; div.innerHTML = `<span>New Messages</span>`;
             messagesDiv.insertBefore(div, msgElement);
-            setTimeout(() => { div.scrollIntoView({behavior: "smooth", block: "center"}); }, 100);
-        } else {
-            clearTimeout(scrollTimeout);
-            scrollTimeout = setTimeout(() => { if (!insertedDivider) messagesDiv.scrollTop = messagesDiv.scrollHeight; }, 100);
+            if(!isLive) setTimeout(() => { div.scrollIntoView({behavior: "smooth", block: "center"}); }, 100);
         }
 
         (async () => {
@@ -691,7 +686,7 @@ async function loadMessages(dbPath, chatNameLabel) {
                 }
             });
 
-            // FIX 3: Re-routed Message Delete logic through customConfirm
+            // FIX: Using robust Custom Confirm for Deletions perfectly
             const delBtn = msgElement.querySelector('.msg-action-btn.del'); 
             if (delBtn) {
                 delBtn.addEventListener('click', () => { 
@@ -700,11 +695,40 @@ async function loadMessages(dbPath, chatNameLabel) {
                     });
                 }); 
             }
-            
+
             const replyBtn = msgElement.querySelector('.msg-action-btn.reply'); if (replyBtn) replyBtn.addEventListener('click', () => triggerReply(msgId, data.username, data.text || "Attachment..."));
             msgElement.addEventListener('dblclick', () => triggerReply(msgId, data.username, data.text || "Attachment..."));
             const imgEl = msgElement.querySelector('.message-image'); if (imgEl) imgEl.addEventListener('click', () => { document.getElementById('enlarged-image').src = data.imageUrl; document.getElementById('download-image-btn').href = data.imageUrl; document.getElementById('image-modal').style.display = 'flex'; });
         })();
+    };
+
+    // Load initial 50
+    const msgRef = query(ref(db, dbPath), orderByChild('timestamp'), limitToLast(50));
+    const initialSnap = await get(msgRef);
+    
+    let highestTimestamp = 0;
+    initialSnap.forEach(childSnap => {
+        const data = childSnap.val();
+        processMessage(childSnap.key, data, false);
+        highestTimestamp = Math.max(highestTimestamp, data.timestamp);
+    });
+
+    // If no new messages, scroll bottom instantly
+    if(!insertedDivider) {
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        setTimeout(() => { if(!insertedDivider) messagesDiv.scrollTop = messagesDiv.scrollHeight; }, 100);
+    }
+
+    // Listen for incoming NEW messages only
+    const liveRef = query(ref(db, dbPath), orderByChild('timestamp'), startAt(highestTimestamp + 1));
+    unsubscribeMessages = onChildAdded(liveRef, (childSnap) => {
+        const data = childSnap.val();
+        if(data.timestamp > highestTimestamp) {
+            processMessage(childSnap.key, data, true);
+            if (!insertedDivider || (messagesDiv.scrollHeight - messagesDiv.scrollTop < messagesDiv.clientHeight + 150)) {
+                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            }
+        }
     });
 
     unsubscribeMessagesRemoved = onChildRemoved(ref(db, dbPath), (snapshot) => { const msgEl = document.getElementById(`msg-${snapshot.key}`); if(msgEl) msgEl.remove(); });
@@ -798,7 +822,6 @@ async function sendMessage() {
             update(ref(db, `users/${currentUserSafeEmail}/friends/${friendEmail}`), { lastActivity: Date.now(), hidden: false });
             update(ref(db, `users/${friendEmail}/friends/${currentUserSafeEmail}`), { lastActivity: Date.now(), hidden: false });
         }
-        
         update(ref(db, `users/${currentUserSafeEmail}/lastRead`), { [currentChatId]: Date.now() });
     }
 }
@@ -811,29 +834,31 @@ document.getElementById('close-image-modal')?.addEventListener('click', () => do
 setTimeout(() => { notificationsActive = true; }, 2000);
 
 function startNotificationListeners() {
-    onValue(ref(db, `users/${currentUserSafeEmail}/friends`), (snap) => { 
-        snap.forEach(childSnapshot => { 
-            const dmId = childSnapshot.val().dmId; 
-            onChildAdded(query(ref(db, `dms/${dmId}`), limitToLast(1)), (msg) => { 
-                if (notificationsActive && currentChatId !== dmId && msg.val().timestamp > appStartTime) { markUnread('dm', dmId, null, false); } 
-            }); 
+    if(dmsNotifListener) dmsNotifListener();
+    if(serversNotifListener) serversNotifListener();
+
+    dmsNotifListener = onChildAdded(ref(db, `users/${currentUserSafeEmail}/friends`), (childSnapshot) => { 
+        const dmId = childSnapshot.val().dmId; 
+        onChildAdded(query(ref(db, `dms/${dmId}`), limitToLast(1)), (msg) => { 
+            const mData = msg.val();
+            if (notificationsActive && currentChatId !== dmId && mData.timestamp > appStartTime && mData.sender !== auth.currentUser.email) { 
+                markUnread('dm', dmId, null, false); 
+            } 
         }); 
-    });
-    onValue(ref(db, `users/${currentUserSafeEmail}/servers`), (snap) => { 
-        snap.forEach(childSnapshot => { 
-            const serverId = childSnapshot.key; 
-            onValue(ref(db, `channels/${serverId}`), (cSnap) => { 
-                cSnap.forEach(c => { 
-                    if (c.val().type === 'text') { 
-                        onChildAdded(query(ref(db, `messages/${c.key}`), limitToLast(1)), (msg) => { 
-                            if (notificationsActive && currentChatId !== c.key && msg.val().timestamp > appStartTime) { 
-                                const isMention = processMentionsAndText(msg.val().text).isMentioned;
-                                markUnread('channel', c.key, serverId, isMention); 
-                            } 
-                        }); 
+    }); 
+
+    serversNotifListener = onChildAdded(ref(db, `users/${currentUserSafeEmail}/servers`), (childSnapshot) => { 
+        const serverId = childSnapshot.key; 
+        onChildAdded(ref(db, `channels/${serverId}`), (cSnap) => { 
+            if (cSnap.val().type === 'text') { 
+                onChildAdded(query(ref(db, `messages/${cSnap.key}`), limitToLast(1)), (msg) => { 
+                    const mData = msg.val();
+                    if (notificationsActive && currentChatId !== cSnap.key && mData.timestamp > appStartTime && mData.sender !== auth.currentUser.email) { 
+                        const isMention = processMentionsAndText(mData.text).isMentioned;
+                        markUnread('channel', cSnap.key, serverId, isMention); 
                     } 
                 }); 
-            }); 
+            } 
         }); 
     });
 }
