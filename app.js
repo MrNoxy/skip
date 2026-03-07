@@ -20,7 +20,7 @@ const db = getDatabase(app);
 // State Tracking
 let currentServerId = null;
 let currentChatId = null; 
-let chatType = 'home'; // Default to home view
+let chatType = 'home'; 
 let currentHomeTab = 'friends'; 
 let currentUserSafeEmail = null;
 let myProfile = {}; 
@@ -32,7 +32,7 @@ let currentServerMembersList = [];
 let currentDMOtherUser = null;
 let serverRolesCache = {}; 
 let globalUsersCache = {}; 
-let activeFriendsData = []; // Cache for friends tab
+let activeFriendsData = []; 
 
 // Listeners
 let unsubscribeMessages = null; 
@@ -197,7 +197,7 @@ onAuthStateChanged(auth, async (user) => {
         });
 
         initVoiceChat(); loadMyServers(); loadFriendsList(); startNotificationListeners(); listenForFriendRequests();
-        document.getElementById('home-btn').click(); // Force home view on load
+        document.getElementById('home-btn').click(); 
         
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('invite')) { await joinServerByCode(urlParams.get('invite')); window.history.replaceState({}, document.title, appBaseUrl); }
@@ -241,7 +241,6 @@ function switchToHomeView() {
     document.getElementById('server-name-display').innerText = "Friends & DMs";
     document.getElementById('server-dropdown-arrow').style.display = 'none';
     
-    // UI toggles
     document.getElementById('home-sidebar-content').style.display = 'block';
     document.getElementById('channel-list').style.display = 'none';
     document.getElementById('chat-area').style.display = 'none';
@@ -252,6 +251,10 @@ function switchToHomeView() {
     if(unsubscribeChannels) { unsubscribeChannels(); unsubscribeChannels = null; }
     if(unsubscribeCategories) { unsubscribeCategories(); unsubscribeCategories = null; }
     
+    document.querySelectorAll('.channel-item').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.server-icon').forEach(el => el.classList.remove('active'));
+    document.getElementById('home-btn').classList.add('active');
+
     renderHomeContent();
 }
 
@@ -260,11 +263,11 @@ document.getElementById('home-btn')?.addEventListener('click', switchToHomeView)
 document.getElementById('mobile-back-btn')?.addEventListener('click', () => { document.body.classList.remove('mobile-chat-active'); });
 document.getElementById('mobile-back-btn-home')?.addEventListener('click', () => { document.body.classList.remove('mobile-home-active'); });
 
-// Home Tabs
-document.getElementById('nav-friends-btn')?.addEventListener('click', () => { currentHomeTab = 'friends'; renderHomeContent(); });
-document.getElementById('nav-requests-btn')?.addEventListener('click', () => { currentHomeTab = 'requests'; renderHomeContent(); });
+document.getElementById('nav-friends-btn')?.addEventListener('click', () => { currentHomeTab = 'friends'; if(chatType !== 'home') switchToHomeView(); else renderHomeContent(); });
+document.getElementById('nav-requests-btn')?.addEventListener('click', () => { currentHomeTab = 'requests'; if(chatType !== 'home') switchToHomeView(); else renderHomeContent(); });
 
 function renderHomeContent() {
+    if (chatType !== 'home') return;
     const navF = document.getElementById('nav-friends-btn');
     const navR = document.getElementById('nav-requests-btn');
     const hF = document.getElementById('home-header-friends');
@@ -399,6 +402,8 @@ function loadFriendsList() {
             div.addEventListener('contextmenu', (e) => showContextMenu(e, 'dm', fEmail));
             let touchTimer; div.addEventListener('touchstart', (e) => { touchTimer = setTimeout(() => showContextMenu(e, 'dm', fEmail), 500); }); div.addEventListener('touchend', () => clearTimeout(touchTimer)); div.addEventListener('touchmove', () => clearTimeout(touchTimer));
 
+            if (chatType === 'dm' && currentChatId === fDataStatic.dmId) div.classList.add('active');
+
             onValue(ref(db, `users/${fEmail}`), (userSnap) => {
                 if(userSnap.exists()) {
                     const uData = userSnap.val();
@@ -425,7 +430,6 @@ function openDM(dmId, friendEmail) {
     const uData = globalUsersCache[friendEmail];
     currentDMOtherUser = uData;
     
-    // Ensure it shows in sidebar
     update(ref(db, `users/${currentUserSafeEmail}/friends/${friendEmail}`), { hidden: false });
     
     document.getElementById('home-area').style.display = 'none';
@@ -433,6 +437,11 @@ function openDM(dmId, friendEmail) {
     document.getElementById('chat-title').innerText = `@${uData.username}#${uData.tag}`;
     document.body.classList.add('mobile-chat-active');
     
+    document.querySelectorAll('.home-nav-item').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.channel-item').forEach(el => el.classList.remove('active'));
+    const activeDmEl = document.getElementById(`dm-${dmId}`);
+    if(activeDmEl) activeDmEl.classList.add('active');
+
     enableChat(); loadMessages(`dms/${currentChatId}`, `@${uData.username}`);
 }
 
@@ -489,10 +498,14 @@ function loadMyServers() {
                     document.getElementById('channel-list').style.display = 'block';
                     document.getElementById('home-area').style.display = 'none';
                     document.getElementById('chat-area').style.display = 'flex';
-                    document.getElementById('messages').innerHTML = ''; // Clear chat area visually
+                    document.getElementById('messages').innerHTML = ''; 
                     
                     document.getElementById('toggle-members-btn').style.display = 'inline-block';
                     
+                    document.querySelectorAll('.server-icon').forEach(el => el.classList.remove('active'));
+                    div.classList.add('active');
+                    document.getElementById('home-btn').classList.remove('active');
+
                     const myRoleSnap = await get(ref(db, `server_members/${serverId}/${currentUserSafeEmail}/role`));
                     const roleId = myRoleSnap.val();
                     myServerRoles = roleId && roleId !== 'member' ? [roleId] : [];
@@ -676,7 +689,22 @@ function renderChannels(serverId) {
         grouped[catId].sort((a,b) => (a.order||0) - (b.order||0)).forEach((channelData, index, arr) => {
             const div = document.createElement('div'); div.classList.add('channel-item'); div.id = `channel-${channelData.id}`; div.draggable = myServerPerms.admin || myServerPerms.manageChannels;
             div.innerHTML = channelData.type === "voice" ? `🔊 ${channelData.name}` : `# ${channelData.name}`;
-            div.addEventListener('click', () => { if(channelData.type === "voice") { joinVoiceChannel(serverId, channelData.id); } else { chatType = 'server'; currentChatId = channelData.id; document.getElementById('chat-title').innerText = `# ${channelData.name}`; enableChat(); loadMessages(`messages/${channelData.id}`, `# ${channelData.name}`); } });
+            
+            div.addEventListener('click', () => { 
+                if(channelData.type === "voice") { joinVoiceChannel(serverId, channelData.id); } 
+                else { 
+                    chatType = 'server'; currentChatId = channelData.id; 
+                    document.getElementById('chat-title').innerText = `# ${channelData.name}`; 
+                    
+                    document.querySelectorAll('.channel-item').forEach(el => el.classList.remove('active'));
+                    div.classList.add('active');
+
+                    enableChat(); loadMessages(`messages/${channelData.id}`, `# ${channelData.name}`); 
+                } 
+            });
+
+            if (chatType === 'server' && currentChatId === channelData.id) div.classList.add('active');
+
             div.addEventListener('contextmenu', (e) => showContextMenu(e, 'channel', channelData.id));
             let touchTimer; div.addEventListener('touchstart', (e) => { touchTimer = setTimeout(() => showContextMenu(e, 'channel', channelData.id), 500); }); div.addEventListener('touchend', () => clearTimeout(touchTimer)); div.addEventListener('touchmove', () => clearTimeout(touchTimer));
             div.addEventListener('dragstart', (e) => { dragSrcEl = div; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/html', div.innerHTML); });

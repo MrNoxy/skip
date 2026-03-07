@@ -25,6 +25,7 @@ input { font-size: 16px !important; }
 #server-sidebar { width: 72px; background-color: #202225; display: flex; flex-direction: column; align-items: center; padding-top: 10px; overflow-y: auto; flex-shrink: 0; }
 .server-icon { width: 48px; height: 48px; background-color: #36393f; border-radius: 50%; display: flex; justify-content: center; align-items: center; margin-bottom: 10px; cursor: pointer; font-weight: bold; font-size: 20px; transition: 0.2s ease; position: relative; background-size: cover; background-position: center; }
 .server-icon:hover { border-radius: 16px; }
+.server-icon.active { border-radius: 16px; background-color: #5865F2; color: white; }
 .server-icon:not([style*="background-image"]):hover { background-color: #5865F2; color: white; }
 .server-icon.drag-over { border: 2px dashed #5865F2; opacity: 0.5; }
 
@@ -50,7 +51,7 @@ input { font-size: 16px !important; }
 .dropdown-item:hover, .context-item:hover { background-color: #5865F2; color: white; }
 .invite-item { color: #5865F2; } .invite-item:hover { background-color: #5865F2; color: white; }
 
-/* Channels & Categories */
+/* --- Channels & Categories --- */
 #channel-list { flex-grow: 1; padding: 10px; overflow-y: auto; }
 .channel-category { text-transform: uppercase; font-size: 11px; font-weight: bold; color: #8e9297; margin-bottom: 5px; cursor: pointer; display: flex; justify-content: space-between; padding: 5px; border-radius: 4px; transition: 0.2s; }
 .channel-category:hover { color: #dcddde; background-color: rgba(79, 84, 92, 0.16); }
@@ -58,6 +59,7 @@ input { font-size: 16px !important; }
 
 .channel-item { padding: 8px; margin-bottom: 2px; border-radius: 4px; cursor: pointer; color: #8e9297; position: relative; display: flex; align-items: center; gap: 5px; }
 .channel-item:hover { background-color: #393c43; color: white; }
+.channel-item.active { background-color: #393c43; color: white; }
 .channel-item.drag-over { border-top: 2px solid #5865F2; }
 
 /* User Controls */
@@ -105,6 +107,7 @@ input { font-size: 16px !important; }
 #reply-banner, #attachment-preview-area { background-color: #2f3136; padding: 8px 15px; margin: 0; z-index: 10; border-radius: 8px 8px 0 0; border: 1px solid #202225; border-bottom: none; display: flex; align-items: center; width: 100%; box-sizing: border-box;}
 #reply-banner { justify-content: space-between; font-size: 13px; color: #b9bbbe; }
 #attachment-preview-area { padding-top: 15px; padding-bottom: 15px; }
+
 #cancel-reply-btn { background: transparent; color: #b9bbbe; padding: 0; margin: 0; font-size: 14px; }
 #cancel-reply-btn:hover { color: white; }
 
