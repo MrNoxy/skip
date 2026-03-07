@@ -63,10 +63,7 @@ input { font-size: 16px !important; }
     box-shadow: 0 4px 6px rgba(0,0,0,0.3); z-index: 20; border: 1px solid #202225; transition: 0.2s;
 }
 #scroll-bottom-btn:hover { background: #393c43; }
-.arrow-down {
-    width: 10px; height: 10px; border-bottom: 2px solid #dcddde; border-right: 2px solid #dcddde;
-    transform: rotate(45deg); margin-top: -5px;
-}
+.arrow-down { width: 10px; height: 10px; border-bottom: 2px solid #dcddde; border-right: 2px solid #dcddde; transform: rotate(45deg); margin-top: -5px; }
 
 /* Replying & Attachments */
 #reply-banner, #attachment-preview-area {
@@ -81,11 +78,7 @@ input { font-size: 16px !important; }
 
 .attachment-preview-wrapper { position: relative; display: inline-block; }
 #attachment-preview-img { max-height: 120px; max-width: 120px; border-radius: 8px; display: block; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
-#remove-attachment-btn {
-    position: absolute; top: -8px; right: -8px; background: #ed4245; color: white; border: none;
-    border-radius: 50%; width: 24px; height: 24px; cursor: pointer; display: flex;
-    justify-content: center; align-items: center; font-size: 12px; padding: 0; margin: 0;
-}
+#remove-attachment-btn { position: absolute; top: -8px; right: -8px; background: #ed4245; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 12px; padding: 0; margin: 0; }
 #remove-attachment-btn:hover { background: #c9383b; }
 
 .reply-context { font-size: 12px; color: #b9bbbe; margin-bottom: 4px; display: flex; align-items: center; position: relative; padding-left: 42px; }
@@ -118,10 +111,7 @@ button:disabled { background-color: #40444b; cursor: not-allowed; color: gray; }
 .unread-indicator.dot { width: 12px; height: 12px; top: 0; right: 0; border: 2px solid #202225; }
 .unread-indicator.pill { width: 8px; height: 8px; top: 50%; right: 10px; transform: translateY(-50%); }
 
-.unread-indicator.mention { 
-    width: 16px; height: 16px; border-radius: 50%; top: -2px; right: -2px; 
-    display: flex; justify-content: center; align-items: center; z-index: 5;
-}
+.unread-indicator.mention { width: 16px; height: 16px; border-radius: 50%; top: -2px; right: -2px; display: flex; justify-content: center; align-items: center; z-index: 5; }
 .unread-indicator.mention::after { content: "!"; color: white; font-size: 12px; font-weight: bold; }
 
 .avatar-container { position: relative; display: inline-block; }
