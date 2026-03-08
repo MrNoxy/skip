@@ -68,9 +68,11 @@ const icons = {
     textChannel: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="9" x2="20" y2="9"></line><line x1="4" y1="15" x2="20" y2="15"></line><line x1="10" y1="3" x2="8" y2="21"></line><line x1="16" y1="3" x2="14" y2="21"></line></svg>`,
     voiceChannel: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>`,
     trash: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`,
+    addFriend: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>`,
     removeFriend: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="18" y1="8" x2="23" y2="13"></line><line x1="23" y1="8" x2="18" y2="13"></line></svg>`,
     closeDM: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`,
-    message: `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-2.67 0-8 1.34-8 4v3h16v-3c0-2.66-5.33-4-8-4z"/></svg>`
+    message: `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-2.67 0-8 1.34-8 4v3h16v-3c0-2.66-5.33-4-8-4z"/></svg>`,
+    reply: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>`
 };
 
 // ==========================================
@@ -115,57 +117,90 @@ document.getElementById('input-modal-field')?.addEventListener('keypress', (e) =
 // ==========================================
 // --- USER PROFILES ---
 // ==========================================
-window.showGlobalUserProfile = async function(email) {
+window.showGlobalUserProfile = async function(email, event) {
+    if (event) event.stopPropagation();
+    
+    const safeEmail = sanitizeEmail(email); // FIX: Sanitize email to prevent path errors
     const modal = document.getElementById('global-user-profile-modal');
+    const content = modal.querySelector('.modal-content');
+    
     const nameEl = document.getElementById('gup-username');
     const tagEl = document.getElementById('gup-tag');
     const avatarEl = document.getElementById('gup-avatar');
     const bannerEl = document.getElementById('gup-banner');
+    
     const addFriendBtn = document.getElementById('gup-add-friend');
+    const removeFriendBtn = document.getElementById('gup-remove-friend');
     const sendMsgBtn = document.getElementById('gup-send-message');
     
     nameEl.innerText = "Loading..."; tagEl.innerText = "";
     avatarEl.src = "https://cdn.pixabay.com/photo/2023/02/18/11/00/icon-7797704_640.png";
     bannerEl.style.backgroundColor = "#5865F2";
+    
     addFriendBtn.style.display = 'none';
+    removeFriendBtn.style.display = 'none';
+    sendMsgBtn.style.display = 'none';
     
-    modal.style.display = 'flex';
+    modal.style.display = 'block'; // Block instead of flex to allow absolute pos
     
-    const uSnap = await get(child(ref(db), `users/${email}`));
+    // Position popout where clicked
+    if(event) {
+        let x = event.clientX;
+        let y = event.clientY;
+        const rect = content.getBoundingClientRect();
+        if(x + rect.width > window.innerWidth) x = window.innerWidth - rect.width - 10;
+        if(y + rect.height > window.innerHeight) y = window.innerHeight - rect.height - 10;
+        content.style.left = `${x}px`;
+        content.style.top = `${y}px`;
+    }
+    
+    const uSnap = await get(child(ref(db), `users/${safeEmail}`));
     if(uSnap.exists()) {
         const uData = uSnap.val();
         nameEl.innerText = uData.username;
         tagEl.innerText = `#${uData.tag}`;
         avatarEl.src = uData.avatar;
         
-        // Hide "Add Friend" if it's myself or already friends
-        if(email !== currentUserSafeEmail) {
-            const friendSnap = await get(ref(db, `users/${currentUserSafeEmail}/friends/${email}`));
-            if(!friendSnap.exists()) {
-                addFriendBtn.style.display = 'flex';
-                addFriendBtn.onclick = async () => {
-                    await set(ref(db, `friend_requests/${email}/${currentUserSafeEmail}`), { username: myProfile.username, avatar: myProfile.avatar, timestamp: Date.now() });
-                    customAlert(`Friend request sent to ${uData.username}!`, "Success");
-                    addFriendBtn.style.display = 'none';
-                };
-            }
+        if(safeEmail !== currentUserSafeEmail) {
+            const friendSnap = await get(ref(db, `users/${currentUserSafeEmail}/friends/${safeEmail}`));
+            
             sendMsgBtn.style.display = 'flex';
             sendMsgBtn.onclick = async () => {
                 modal.style.display = 'none';
-                const dmId = [currentUserSafeEmail, email].sort().join('_');
-                // Ensure it's in the DM list (even if not friends)
-                await update(ref(db, `users/${currentUserSafeEmail}/friends/${email}`), { dmId: dmId, hidden: false, lastActivity: Date.now() });
-                if(!globalUsersCache[email]) globalUsersCache[email] = uData;
+                const dmId = [currentUserSafeEmail, safeEmail].sort().join('_');
+                await update(ref(db, `users/${currentUserSafeEmail}/friends/${safeEmail}`), { dmId: dmId, hidden: false, lastActivity: Date.now() });
+                if(!globalUsersCache[safeEmail]) globalUsersCache[safeEmail] = uData;
                 switchToHomeView();
-                openDM(dmId, email);
+                openDM(dmId, safeEmail);
             };
-        } else {
-            sendMsgBtn.style.display = 'none';
+
+            if(!friendSnap.exists()) {
+                addFriendBtn.style.display = 'flex';
+                addFriendBtn.onclick = async () => {
+                    await set(ref(db, `friend_requests/${safeEmail}/${currentUserSafeEmail}`), { username: myProfile.username, avatar: myProfile.avatar, timestamp: Date.now() });
+                    customAlert(`Friend request sent to ${uData.username}!`, "Success");
+                    modal.style.display = 'none';
+                };
+            } else {
+                removeFriendBtn.style.display = 'flex';
+                removeFriendBtn.onclick = async () => {
+                    customConfirm(`Remove ${uData.username} from your friends list?`, "Remove Friend", async (yes) => {
+                        if(yes) {
+                            await remove(ref(db, `users/${currentUserSafeEmail}/friends/${safeEmail}`));
+                            await remove(ref(db, `users/${safeEmail}/friends/${currentUserSafeEmail}`));
+                            modal.style.display = 'none';
+                        }
+                    });
+                };
+            }
         }
     }
 };
 
-document.getElementById('close-gup-btn')?.addEventListener('click', () => { document.getElementById('global-user-profile-modal').style.display = 'none'; });
+// Clicking the transparent overlay hides the popout
+document.getElementById('global-user-profile-modal')?.addEventListener('click', (e) => { 
+    if(e.target.id === 'global-user-profile-modal') e.target.style.display = 'none'; 
+});
 
 // ==========================================
 // --- CONTEXT MENU ---
@@ -364,7 +399,7 @@ function renderHomeContent() {
             
             const div = document.createElement('div'); div.className = 'friend-card';
             div.innerHTML = `
-                <div class="friend-card-left" onclick="showGlobalUserProfile('${fData.email}')" style="cursor:pointer;">
+                <div class="friend-card-left" onclick="showGlobalUserProfile('${fData.email}', event)" style="cursor:pointer;">
                     <div class="avatar-container"><img src="${displayAvatar}" class="avatar-small"><div class="status-indicator status-${displayStatus}"></div></div>
                     <div style="display:flex; flex-direction:column;">
                         <span style="font-weight:bold; color:white; font-size:15px;">${displayName}</span>
@@ -402,7 +437,7 @@ function renderHomeContent() {
                 const senderEmail = child.key; const sData = child.val();
                 const div = document.createElement('div'); div.className = 'friend-card';
                 div.innerHTML = `
-                    <div class="friend-card-left" onclick="showGlobalUserProfile('${senderEmail}')" style="cursor:pointer;">
+                    <div class="friend-card-left" onclick="showGlobalUserProfile('${senderEmail}', event)" style="cursor:pointer;">
                         <img src="${sData.avatar}" class="avatar-small">
                         <span style="font-weight:bold; color:white; font-size:15px;">${sData.username}</span>
                     </div>
@@ -512,7 +547,7 @@ function openDM(dmId, friendEmail) {
     document.getElementById('chat-area').style.display = 'flex';
     document.getElementById('chat-title').innerText = `@${uData.username}#${uData.tag}`;
     document.getElementById('chat-title').style.cursor = "pointer";
-    document.getElementById('chat-title').onclick = () => showGlobalUserProfile(friendEmail);
+    document.getElementById('chat-title').onclick = (e) => showGlobalUserProfile(friendEmail, e);
     document.body.classList.add('mobile-chat-active');
     
     document.querySelectorAll('.home-nav-item').forEach(el => el.classList.remove('active'));
@@ -720,8 +755,8 @@ function loadMemberList(serverId) {
                 const mDiv = document.createElement('div'); mDiv.className = 'member-item';
                 let nameColor = group.color || "white"; if(gKey === 'owner' || gKey === 'online' || gKey === 'offline') nameColor = "white";
                 mDiv.innerHTML = `<div class="avatar-container"><img src="${m.data.avatar}" class="avatar-small"><div class="status-indicator status-${m.status}"></div></div><div class="member-username" style="color: ${nameColor}; pointer-events:none;">${m.data.username}</div>`;
-                mDiv.addEventListener('click', () => {
-                    showGlobalUserProfile(m.email);
+                mDiv.addEventListener('click', (e) => {
+                    showGlobalUserProfile(m.email, e);
                 });
                 mDiv.addEventListener('contextmenu', (e) => {
                     e.preventDefault();
@@ -817,7 +852,7 @@ function renderChannels(serverId) {
                     const vcUserDiv = document.createElement('div');
                     vcUserDiv.className = 'vc-sidebar-user';
                     vcUserDiv.innerHTML = `<img src="${uData.avatar}" class="avatar-small"><span>${uData.username}</span>`;
-                    vcUserDiv.onclick = (e) => { e.stopPropagation(); showGlobalUserProfile(peerEmail); };
+                    vcUserDiv.onclick = (e) => { e.stopPropagation(); showGlobalUserProfile(peerEmail, e); };
                     channelList.appendChild(vcUserDiv);
                     
                     if(!globalUsersCache[peerEmail]) {
@@ -946,6 +981,7 @@ const scrollBtn = document.getElementById('scroll-bottom-btn');
 const messagesDiv = document.getElementById('messages');
 let oldestMsgTimestamp = null;
 let isFetchingMore = false;
+let currentChatLabelText = "";
 
 messagesDiv?.addEventListener('scroll', () => {
     if (messagesDiv.scrollHeight - messagesDiv.scrollTop > messagesDiv.clientHeight + 100) { scrollBtn.style.display = 'flex'; } 
@@ -957,9 +993,20 @@ messagesDiv?.addEventListener('scroll', () => {
 });
 scrollBtn?.addEventListener('click', () => { messagesDiv.scrollTop = messagesDiv.scrollHeight; update(ref(db, `users/${currentUserSafeEmail}/lastRead`), { [currentChatId]: Date.now() }); });
 
+function insertWelcomeMessage() {
+    if(!document.getElementById('chat-welcome-msg')) {
+        const w = document.createElement('div');
+        w.id = 'chat-welcome-msg';
+        w.className = 'welcome-message';
+        w.innerHTML = `<h1>Welcome to ${currentChatLabelText}!</h1><p>This is the start of the ${currentChatLabelText} channel.</p>`;
+        messagesDiv.insertBefore(w, messagesDiv.firstChild);
+    }
+}
+
 async function fetchOlderMessages() {
     isFetchingMore = true;
     const oldScrollHeight = messagesDiv.scrollHeight;
+    document.getElementById('chat-loading-spinner').style.display = 'block';
     
     const msgRef = query(ref(db, chatType === 'server' ? `messages/${currentChatId}` : `dms/${currentChatId}`), orderByChild('timestamp'), endAt(oldestMsgTimestamp - 1), limitToLast(50));
     const snap = await get(msgRef);
@@ -967,6 +1014,7 @@ async function fetchOlderMessages() {
     if(snap.exists()) {
         const msgs = [];
         snap.forEach(c => { msgs.push({id: c.key, data: c.val()}); });
+        
         if(msgs.length > 0) oldestMsgTimestamp = msgs[0].data.timestamp;
         else oldestMsgTimestamp = null;
 
@@ -981,9 +1029,17 @@ async function fetchOlderMessages() {
         
         messagesDiv.insertBefore(fragment, messagesDiv.firstChild);
         messagesDiv.scrollTop = messagesDiv.scrollHeight - oldScrollHeight;
+        
+        if (msgs.length < 50) {
+            oldestMsgTimestamp = null;
+            insertWelcomeMessage();
+        }
     } else {
         oldestMsgTimestamp = null;
+        insertWelcomeMessage();
     }
+    
+    document.getElementById('chat-loading-spinner').style.display = 'none';
     isFetchingMore = false;
 }
 
@@ -1001,11 +1057,11 @@ async function createMessageDOM(msgId, data, prevSender, prevTime) {
     let nameColor = "white";
     if(chatType === 'server' && data.roleId && data.roleId !== 'member' && data.roleId !== 'owner') { const rSnap = await get(ref(db, `servers/${currentServerId}/roles/${data.roleId}`)); if(rSnap.exists()) nameColor = rSnap.val().color; }
 
-    let actionsHtml = `<div class="msg-actions"><button class="msg-action-btn reply"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg> Reply</button>${canDelete ? `<button class="msg-action-btn del">${icons.trash} Delete</button>` : ''}</div>`;
+    let actionsHtml = `<div class="msg-actions"><button class="msg-action-btn reply">${icons.reply} Reply</button>${canDelete ? `<button class="msg-action-btn del">${icons.trash} Delete</button>` : ''}</div>`;
     
     if (!isConsecutive) {
         let replyHtml = data.replyTo ? `<div class="reply-context"><strong>@${data.replyTo.username}</strong> ${data.replyTo.text}</div>` : "";
-        let headerHtml = `${replyHtml}<div class="message-header"><img src="${data.avatar}" class="avatar-small" style="cursor:pointer;" onclick="showGlobalUserProfile('${data.sender}')"><span class="message-sender" style="color: ${nameColor}; cursor:pointer;" onclick="showGlobalUserProfile('${data.sender}')">${data.username}</span><span style="font-size: 0.8em; color: gray;">${new Date(data.timestamp).toLocaleTimeString()}</span></div>`;
+        let headerHtml = `${replyHtml}<div class="message-header"><img src="${data.avatar}" class="avatar-small" style="cursor:pointer;" onclick="showGlobalUserProfile('${data.sender}', event)"><span class="message-sender" style="color: ${nameColor}; cursor:pointer;" onclick="showGlobalUserProfile('${data.sender}', event)">${data.username}</span><span style="font-size: 0.8em; color: gray;">${new Date(data.timestamp).toLocaleTimeString()}</span></div>`;
         msgElement.innerHTML = `${actionsHtml}${headerHtml}<div class="msg-content-wrapper">${buildRes.html}</div>`;
     } else { msgElement.innerHTML = `${actionsHtml}<div class="msg-content-wrapper">${buildRes.html}</div>`; }
 
@@ -1038,7 +1094,8 @@ async function createMessageDOM(msgId, data, prevSender, prevTime) {
 }
 
 async function loadMessages(dbPath, chatNameLabel) {
-    messagesDiv.innerHTML = `<div class="welcome-message"><h1>Welcome to ${chatNameLabel}!</h1><p>This is the start of the ${chatNameLabel} channel.</p></div>`;
+    messagesDiv.innerHTML = ''; // Start clean without appending welcome yet
+    currentChatLabelText = chatNameLabel;
     lastMsgSender = null; lastMsgTime = 0;
     oldestMsgTimestamp = null;
     isFetchingMore = false;
@@ -1051,13 +1108,16 @@ async function loadMessages(dbPath, chatNameLabel) {
     let insertedDivider = false;
 
     // Load initial 50 messages
+    document.getElementById('chat-loading-spinner').style.display = 'block';
     const msgRef = query(ref(db, dbPath), orderByChild('timestamp'), limitToLast(50));
     const initialSnap = await get(msgRef);
     
     let highestTimestamp = 0;
     let firstMsg = true;
+    
+    const initialMessages = Object.entries(initialSnap.val() || {});
 
-    for (const childSnap of Object.entries(initialSnap.val() || {})) {
+    for (const childSnap of initialMessages) {
         const msgId = childSnap[0]; const data = childSnap[1];
         if(firstMsg) { oldestMsgTimestamp = data.timestamp; firstMsg = false; }
         
@@ -1073,6 +1133,14 @@ async function loadMessages(dbPath, chatNameLabel) {
             setTimeout(() => { div.scrollIntoView({behavior: "smooth", block: "center"}); }, 100);
         }
     }
+
+    // Append Welcome to top if we loaded the very beginning of the chat
+    if (initialMessages.length < 50) {
+        insertWelcomeMessage();
+        oldestMsgTimestamp = null;
+    }
+
+    document.getElementById('chat-loading-spinner').style.display = 'none';
 
     if(!insertedDivider) {
         messagesDiv.scrollTop = messagesDiv.scrollHeight;

@@ -92,6 +92,10 @@ input { font-size: 16px !important; }
 #chat-header { padding: 15px; border-bottom: 1px solid #202225; font-weight: bold; display: flex; align-items: center; z-index: 10; flex-shrink: 0; height: 55px; box-sizing: border-box; }
 #messages { flex-grow: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; scroll-behavior: auto; }
 
+/* Loading Spinner */
+.loading-spinner { animation: spin 1s linear infinite; }
+@keyframes spin { 100% { transform: rotate(360deg); } }
+
 /* Friends / Home Tab specific */
 .header-divider { width: 1px; height: 24px; background-color: #4f545c; margin: 0 15px; }
 .green-btn { background-color: #3ba55c; padding: 5px 10px; margin: 0; font-weight: bold; }
@@ -244,6 +248,10 @@ button:disabled { background-color: #40444b; cursor: not-allowed; color: gray; }
     body.mobile-chat-active #server-sidebar { display: none; }
     body.mobile-chat-active #channel-sidebar { display: none; }
     body.mobile-chat-active #main-view-container { display: flex; }
+    
+    body.mobile-home-active #server-sidebar { display: none; }
+    body.mobile-home-active #channel-sidebar { display: none; }
+    body.mobile-home-active #main-view-container { display: flex; }
     
     #mobile-back-btn { display: inline-block; }
     #mobile-back-btn-home { display: inline-block; }
