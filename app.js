@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-import { getDatabase, ref, push, onChildAdded, onChildRemoved, onValue, set, get, child, remove, onDisconnect, query, limitToLast, update, orderByChild, startAt } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { getDatabase, ref, push, onChildAdded, onChildRemoved, onValue, set, get, child, remove, onDisconnect, query, limitToLast, update, orderByChild, startAt, endAt } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 
 // !!! PASTE YOUR FIREBASE CONFIG HERE !!!
 const firebaseConfig = {
@@ -40,6 +40,7 @@ let unsubscribeMessagesRemoved = null;
 let unsubscribeMembers = null; 
 let unsubscribeChannels = null;
 let unsubscribeCategories = null;
+let unsubscribeVoiceRosters = null;
 let dmsNotifListener = null;
 let serversNotifListener = null;
 
@@ -53,6 +54,7 @@ let unreadState = { dms: new Set(), channels: new Set(), servers: new Set() };
 // Voice State Tracking
 let myPeer = null; let myCurrentPeerId = null; let localAudioStream = null;
 let activeCalls = {}; let currentVoiceChannel = null; let isMuted = false; let isDeafened = false;
+let currentServerVoiceRosters = {};
 
 const appContainer = document.getElementById('app-container');
 const authSection = document.getElementById('auth-section');
@@ -60,6 +62,16 @@ const appBaseUrl = window.location.href.split('?')[0];
 
 function sanitizeEmail(email) { return email.replace(/\./g, ','); }
 function generateCode() { return Math.random().toString(36).substring(2, 10); }
+
+// SVG Icons
+const icons = {
+    textChannel: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="9" x2="20" y2="9"></line><line x1="4" y1="15" x2="20" y2="15"></line><line x1="10" y1="3" x2="8" y2="21"></line><line x1="16" y1="3" x2="14" y2="21"></line></svg>`,
+    voiceChannel: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>`,
+    trash: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`,
+    removeFriend: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="18" y1="8" x2="23" y2="13"></line><line x1="23" y1="8" x2="18" y2="13"></line></svg>`,
+    closeDM: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`,
+    message: `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-2.67 0-8 1.34-8 4v3h16v-3c0-2.66-5.33-4-8-4z"/></svg>`
+};
 
 // ==========================================
 // --- GLOBAL MODAL CONTROLLERS ---
@@ -101,6 +113,61 @@ document.getElementById('input-modal-cancel')?.addEventListener('click', () => {
 document.getElementById('input-modal-field')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('input-modal-submit').click(); });
 
 // ==========================================
+// --- USER PROFILES ---
+// ==========================================
+window.showGlobalUserProfile = async function(email) {
+    const modal = document.getElementById('global-user-profile-modal');
+    const nameEl = document.getElementById('gup-username');
+    const tagEl = document.getElementById('gup-tag');
+    const avatarEl = document.getElementById('gup-avatar');
+    const bannerEl = document.getElementById('gup-banner');
+    const addFriendBtn = document.getElementById('gup-add-friend');
+    const sendMsgBtn = document.getElementById('gup-send-message');
+    
+    nameEl.innerText = "Loading..."; tagEl.innerText = "";
+    avatarEl.src = "https://cdn.pixabay.com/photo/2023/02/18/11/00/icon-7797704_640.png";
+    bannerEl.style.backgroundColor = "#5865F2";
+    addFriendBtn.style.display = 'none';
+    
+    modal.style.display = 'flex';
+    
+    const uSnap = await get(child(ref(db), `users/${email}`));
+    if(uSnap.exists()) {
+        const uData = uSnap.val();
+        nameEl.innerText = uData.username;
+        tagEl.innerText = `#${uData.tag}`;
+        avatarEl.src = uData.avatar;
+        
+        // Hide "Add Friend" if it's myself or already friends
+        if(email !== currentUserSafeEmail) {
+            const friendSnap = await get(ref(db, `users/${currentUserSafeEmail}/friends/${email}`));
+            if(!friendSnap.exists()) {
+                addFriendBtn.style.display = 'flex';
+                addFriendBtn.onclick = async () => {
+                    await set(ref(db, `friend_requests/${email}/${currentUserSafeEmail}`), { username: myProfile.username, avatar: myProfile.avatar, timestamp: Date.now() });
+                    customAlert(`Friend request sent to ${uData.username}!`, "Success");
+                    addFriendBtn.style.display = 'none';
+                };
+            }
+            sendMsgBtn.style.display = 'flex';
+            sendMsgBtn.onclick = async () => {
+                modal.style.display = 'none';
+                const dmId = [currentUserSafeEmail, email].sort().join('_');
+                // Ensure it's in the DM list (even if not friends)
+                await update(ref(db, `users/${currentUserSafeEmail}/friends/${email}`), { dmId: dmId, hidden: false, lastActivity: Date.now() });
+                if(!globalUsersCache[email]) globalUsersCache[email] = uData;
+                switchToHomeView();
+                openDM(dmId, email);
+            };
+        } else {
+            sendMsgBtn.style.display = 'none';
+        }
+    }
+};
+
+document.getElementById('close-gup-btn')?.addEventListener('click', () => { document.getElementById('global-user-profile-modal').style.display = 'none'; });
+
+// ==========================================
 // --- CONTEXT MENU ---
 // ==========================================
 let contextTarget = null;
@@ -108,15 +175,18 @@ const ctxMenu = document.getElementById('context-menu');
 
 function showContextMenu(e, type, id) {
     e.preventDefault();
+    const ctxItem = document.getElementById('ctx-delete');
     if (type === 'channel' || type === 'category') {
         if (!myServerPerms.admin && !myServerPerms.manageChannels) return; 
-        document.getElementById('ctx-delete').innerText = `🗑️ Delete ${type}`;
-    } else if (type === 'dm' || type === 'friend') {
-        document.getElementById('ctx-delete').innerText = type === 'dm' ? `🗑️ Close DM` : `🗑️ Remove Friend`;
+        ctxItem.innerHTML = `${icons.trash} Delete ${type}`;
+    } else if (type === 'dm') {
+        ctxItem.innerHTML = `${icons.closeDM} Close DM`;
+    } else if (type === 'friend') {
+        ctxItem.innerHTML = `${icons.removeFriend} Remove Friend`;
     }
     
     contextTarget = { type, id };
-    ctxMenu.style.display = 'block';
+    ctxMenu.style.display = 'flex';
     
     const x = e.pageX || e.touches[0].pageX;
     const y = e.pageY || e.touches[0].pageY;
@@ -197,7 +267,7 @@ onAuthStateChanged(auth, async (user) => {
         });
 
         initVoiceChat(); loadMyServers(); loadFriendsList(); startNotificationListeners(); listenForFriendRequests();
-        document.getElementById('home-btn').click(); // Force home view on load
+        document.getElementById('home-btn').click(); 
         
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('invite')) { await joinServerByCode(urlParams.get('invite')); window.history.replaceState({}, document.title, appBaseUrl); }
@@ -250,6 +320,8 @@ function switchToHomeView() {
     if(unsubscribeMembers) { unsubscribeMembers(); unsubscribeMembers = null; }
     if(unsubscribeChannels) { unsubscribeChannels(); unsubscribeChannels = null; }
     if(unsubscribeCategories) { unsubscribeCategories(); unsubscribeCategories = null; }
+    if(unsubscribeVoiceRosters) { unsubscribeVoiceRosters(); unsubscribeVoiceRosters = null; }
+    document.getElementById('voice-controls-area').style.display = currentVoiceChannel ? 'flex' : 'none';
     
     document.querySelectorAll('.channel-item').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.server-icon').forEach(el => el.classList.remove('active'));
@@ -292,7 +364,7 @@ function renderHomeContent() {
             
             const div = document.createElement('div'); div.className = 'friend-card';
             div.innerHTML = `
-                <div class="friend-card-left">
+                <div class="friend-card-left" onclick="showGlobalUserProfile('${fData.email}')" style="cursor:pointer;">
                     <div class="avatar-container"><img src="${displayAvatar}" class="avatar-small"><div class="status-indicator status-${displayStatus}"></div></div>
                     <div style="display:flex; flex-direction:column;">
                         <span style="font-weight:bold; color:white; font-size:15px;">${displayName}</span>
@@ -300,8 +372,8 @@ function renderHomeContent() {
                     </div>
                 </div>
                 <div class="friend-card-right">
-                    <div class="action-circle message-btn" title="Message">💬</div>
-                    <div class="action-circle red remove-btn" title="Remove Friend">✖</div>
+                    <div class="action-circle message-btn" title="Message">${icons.message}</div>
+                    <div class="action-circle red remove-btn" title="Remove Friend">${icons.removeFriend}</div>
                 </div>
             `;
             
@@ -330,13 +402,13 @@ function renderHomeContent() {
                 const senderEmail = child.key; const sData = child.val();
                 const div = document.createElement('div'); div.className = 'friend-card';
                 div.innerHTML = `
-                    <div class="friend-card-left">
+                    <div class="friend-card-left" onclick="showGlobalUserProfile('${senderEmail}')" style="cursor:pointer;">
                         <img src="${sData.avatar}" class="avatar-small">
                         <span style="font-weight:bold; color:white; font-size:15px;">${sData.username}</span>
                     </div>
                     <div class="friend-card-right">
-                        <div class="action-circle green accept-fr" title="Accept">✔</div>
-                        <div class="action-circle red decline-fr" title="Decline">✖</div>
+                        <div class="action-circle green accept-fr" title="Accept"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
+                        <div class="action-circle red decline-fr" title="Decline"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></div>
                     </div>
                 `;
                 div.querySelector('.accept-fr').addEventListener('click', async () => {
@@ -439,6 +511,8 @@ function openDM(dmId, friendEmail) {
     document.getElementById('home-area').style.display = 'none';
     document.getElementById('chat-area').style.display = 'flex';
     document.getElementById('chat-title').innerText = `@${uData.username}#${uData.tag}`;
+    document.getElementById('chat-title').style.cursor = "pointer";
+    document.getElementById('chat-title').onclick = () => showGlobalUserProfile(friendEmail);
     document.body.classList.add('mobile-chat-active');
     
     document.querySelectorAll('.home-nav-item').forEach(el => el.classList.remove('active'));
@@ -503,6 +577,7 @@ function loadMyServers() {
                     document.getElementById('home-area').style.display = 'none';
                     document.getElementById('chat-area').style.display = 'flex';
                     document.getElementById('messages').innerHTML = ''; 
+                    document.getElementById('voice-controls-area').style.display = currentVoiceChannel ? 'flex' : 'none';
                     
                     document.getElementById('toggle-members-btn').style.display = 'inline-block';
                     
@@ -517,10 +592,10 @@ function loadMyServers() {
                     else if (roleId && roleId !== 'member') { const pSnap = await get(ref(db, `servers/${serverId}/roles/${roleId}`)); if(pSnap.exists()) myServerPerms = pSnap.val().perms || {}; } 
                     else { myServerPerms = { admin: false, manageChannels: false, deleteMessages: false }; }
 
-                    document.getElementById('menu-server-settings').style.display = myServerPerms.admin ? 'block' : 'none';
-                    document.getElementById('menu-add-category').style.display = myServerPerms.manageChannels || myServerPerms.admin ? 'block' : 'none';
-                    document.getElementById('menu-add-text').style.display = myServerPerms.manageChannels || myServerPerms.admin ? 'block' : 'none';
-                    document.getElementById('menu-add-voice').style.display = myServerPerms.manageChannels || myServerPerms.admin ? 'block' : 'none';
+                    document.getElementById('menu-server-settings').style.display = myServerPerms.admin ? 'flex' : 'none';
+                    document.getElementById('menu-add-category').style.display = myServerPerms.manageChannels || myServerPerms.admin ? 'flex' : 'none';
+                    document.getElementById('menu-add-text').style.display = myServerPerms.manageChannels || myServerPerms.admin ? 'flex' : 'none';
+                    document.getElementById('menu-add-voice').style.display = myServerPerms.manageChannels || myServerPerms.admin ? 'flex' : 'none';
 
                     initChannelSync(serverId); loadMemberList(serverId); 
                 });
@@ -644,8 +719,12 @@ function loadMemberList(serverId) {
             group.members.forEach(m => {
                 const mDiv = document.createElement('div'); mDiv.className = 'member-item';
                 let nameColor = group.color || "white"; if(gKey === 'owner' || gKey === 'online' || gKey === 'offline') nameColor = "white";
-                mDiv.innerHTML = `<div class="avatar-container"><img src="${m.data.avatar}" class="avatar-small"><div class="status-indicator status-${m.status}"></div></div><div class="member-username" style="color: ${nameColor};">${m.data.username}</div>`;
+                mDiv.innerHTML = `<div class="avatar-container"><img src="${m.data.avatar}" class="avatar-small"><div class="status-indicator status-${m.status}"></div></div><div class="member-username" style="color: ${nameColor}; pointer-events:none;">${m.data.username}</div>`;
                 mDiv.addEventListener('click', () => {
+                    showGlobalUserProfile(m.email);
+                });
+                mDiv.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
                     if (!myServerPerms.admin || m.email === auth.currentUser.email) return;
                     userToManageEmail = m.email;
                     const select = document.getElementById('assign-role-select');
@@ -662,10 +741,17 @@ function loadMemberList(serverId) {
 
 // Global Sync for Channels AND Categories
 let currentChannelsData = {}; let currentCategoriesData = {};
-let dragSrcEl = null; // Added to fix the Uncaught ReferenceError
+let dragSrcEl = null;
 
 function initChannelSync(serverId) {
-    if(unsubscribeChannels) unsubscribeChannels(); if(unsubscribeCategories) unsubscribeCategories();
+    if(unsubscribeChannels) unsubscribeChannels(); 
+    if(unsubscribeCategories) unsubscribeCategories();
+    if(unsubscribeVoiceRosters) unsubscribeVoiceRosters();
+    
+    unsubscribeVoiceRosters = onValue(ref(db, `voice_rosters/${serverId}`), (snap) => {
+        currentServerVoiceRosters = snap.val() || {};
+        renderChannels(serverId);
+    });
     unsubscribeChannels = onValue(ref(db, `channels/${serverId}`), (snap) => { currentChannelsData = snap.val() || {}; renderChannels(serverId); });
     unsubscribeCategories = onValue(ref(db, `categories/${serverId}`), (snap) => { currentCategoriesData = snap.val() || {}; renderChannels(serverId); });
 }
@@ -693,13 +779,16 @@ function renderChannels(serverId) {
 
         grouped[catId].sort((a,b) => (a.order||0) - (b.order||0)).forEach((channelData, index, arr) => {
             const div = document.createElement('div'); div.classList.add('channel-item'); div.id = `channel-${channelData.id}`; div.draggable = myServerPerms.admin || myServerPerms.manageChannels;
-            div.innerHTML = channelData.type === "voice" ? `🔊 ${channelData.name}` : `# ${channelData.name}`;
+            
+            div.innerHTML = channelData.type === "voice" ? `<span class="c-icon">${icons.voiceChannel}</span> <span class="c-name">${channelData.name}</span>` : `<span class="c-icon">${icons.textChannel}</span> <span class="c-name">${channelData.name}</span>`;
             
             div.addEventListener('click', () => { 
                 if(channelData.type === "voice") { joinVoiceChannel(serverId, channelData.id); } 
                 else { 
                     chatType = 'server'; currentChatId = channelData.id; 
-                    document.getElementById('chat-title').innerText = `# ${channelData.name}`; 
+                    document.getElementById('chat-title').innerText = channelData.name; 
+                    document.getElementById('chat-title').style.cursor = "default";
+                    document.getElementById('chat-title').onclick = null;
                     
                     document.querySelectorAll('.channel-item').forEach(el => el.classList.remove('active'));
                     div.classList.add('active');
@@ -716,8 +805,26 @@ function renderChannels(serverId) {
             div.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; div.classList.add('drag-over'); return false; });
             div.addEventListener('dragleave', () => div.classList.remove('drag-over'));
             div.addEventListener('drop', (e) => { e.stopPropagation(); div.classList.remove('drag-over'); if (dragSrcEl !== div) { const srcId = dragSrcEl.id.replace('channel-', ''); const targetOrder = channelData.order || 0; const prevChannel = arr[index - 1]; const nextChannel = arr[index + 1]; const srcData = currentChannelsData[srcId]; if(srcData.categoryId !== channelData.categoryId) { update(ref(db, `channels/${serverId}/${srcId}`), { categoryId: catId, order: targetOrder + 0.5 }); } else { if((srcData.order || 0) < targetOrder) { update(ref(db, `channels/${serverId}/${srcId}`), { order: nextChannel ? (targetOrder + nextChannel.order)/2 : targetOrder + 10 }); } else { update(ref(db, `channels/${serverId}/${srcId}`), { order: prevChannel ? (targetOrder + prevChannel.order)/2 : targetOrder - 10 }); } } } return false; });
+            
             channelList.appendChild(div);
             if (unreadState.channels.has(channelData.id)) updateBadge(`channel-${channelData.id}`, true, false, false);
+            
+            // Append Voice Users directly under the voice channel
+            if(channelData.type === "voice" && currentServerVoiceRosters[channelData.id]) {
+                const roster = currentServerVoiceRosters[channelData.id];
+                Object.keys(roster).forEach(peerEmail => {
+                    const uData = globalUsersCache[peerEmail] || { username: peerEmail, avatar: "https://cdn.pixabay.com/photo/2023/02/18/11/00/icon-7797704_640.png" };
+                    const vcUserDiv = document.createElement('div');
+                    vcUserDiv.className = 'vc-sidebar-user';
+                    vcUserDiv.innerHTML = `<img src="${uData.avatar}" class="avatar-small"><span>${uData.username}</span>`;
+                    vcUserDiv.onclick = (e) => { e.stopPropagation(); showGlobalUserProfile(peerEmail); };
+                    channelList.appendChild(vcUserDiv);
+                    
+                    if(!globalUsersCache[peerEmail]) {
+                        get(child(ref(db), `users/${peerEmail}`)).then(s => { if(s.exists()) { globalUsersCache[peerEmail] = s.val(); renderChannels(serverId); }});
+                    }
+                });
+            }
         });
     });
 }
@@ -725,14 +832,81 @@ function renderChannels(serverId) {
 // ==========================================
 // --- VOICE CHAT ENGINE ---
 // ==========================================
-function initVoiceChat() { myPeer = new Peer(); myPeer.on('open', id => myCurrentPeerId = id); myPeer.on('call', call => { call.answer(localAudioStream); const cEmail = call.metadata ? call.metadata.callerEmail : call.peer; call.on('stream', stream => addVoiceUserUI(cEmail, stream)); activeCalls[cEmail] = call; call.on('close', () => removeVoiceUserUI(cEmail)); }); }
-async function joinVoiceChannel(serverId, channelId) { if (currentVoiceChannel === channelId) return; if (!myCurrentPeerId) return customAlert("Voice server connecting..."); leaveVoiceChannel(); try { localAudioStream = await navigator.mediaDevices.getUserMedia({ audio: true }); currentVoiceChannel = channelId; document.getElementById('voice-area').style.display = 'flex'; const vcRef = ref(db, `voice_rosters/${serverId}/${channelId}/${currentUserSafeEmail}`); await set(vcRef, myCurrentPeerId); onDisconnect(vcRef).remove(); onValue(ref(db, `voice_rosters/${serverId}/${channelId}`), (snap) => { snap.forEach((childSnapshot) => { const pEmail = childSnapshot.key; const pId = childSnapshot.val(); if (pEmail !== currentUserSafeEmail && !activeCalls[pEmail]) { const call = myPeer.call(pId, localAudioStream, { metadata: { callerEmail: currentUserSafeEmail } }); call.on('stream', stream => addVoiceUserUI(pEmail, stream)); call.on('close', () => removeVoiceUserUI(pEmail)); activeCalls[pEmail] = call; } }); }); } catch (err) { customAlert("Mic access denied.", "Error"); } }
-function leaveVoiceChannel() { if (!currentVoiceChannel) return; Object.keys(activeCalls).forEach(pEmail => { activeCalls[pEmail].close(); removeVoiceUserUI(pEmail); }); activeCalls = {}; if (localAudioStream) { localAudioStream.getTracks().forEach(track => track.stop()); } remove(ref(db, `voice_rosters/${currentServerId}/${currentVoiceChannel}/${currentUserSafeEmail}`)); currentVoiceChannel = null; document.getElementById('voice-area').style.display = 'none'; document.getElementById('voice-users-list').innerHTML = ''; }
+function initVoiceChat() { 
+    myPeer = new Peer(); 
+    myPeer.on('open', id => myCurrentPeerId = id); 
+    myPeer.on('call', call => { 
+        call.answer(localAudioStream); 
+        const cEmail = call.metadata ? call.metadata.callerEmail : call.peer; 
+        call.on('stream', stream => setupHiddenAudio(cEmail, stream)); 
+        activeCalls[cEmail] = call; 
+    }); 
+}
+
+async function joinVoiceChannel(serverId, channelId) { 
+    if (currentVoiceChannel === channelId) return; 
+    if (!myCurrentPeerId) return customAlert("Voice server connecting..."); 
+    leaveVoiceChannel(); 
+    try { 
+        localAudioStream = await navigator.mediaDevices.getUserMedia({ audio: true }); 
+        currentVoiceChannel = channelId; 
+        document.getElementById('voice-controls-area').style.display = 'flex'; 
+        
+        const vcRef = ref(db, `voice_rosters/${serverId}/${channelId}/${currentUserSafeEmail}`); 
+        await set(vcRef, myCurrentPeerId); 
+        onDisconnect(vcRef).remove(); 
+        
+        onValue(ref(db, `voice_rosters/${serverId}/${channelId}`), (snap) => { 
+            snap.forEach((childSnapshot) => { 
+                const pEmail = childSnapshot.key; 
+                const pId = childSnapshot.val(); 
+                if (pEmail !== currentUserSafeEmail && !activeCalls[pEmail]) { 
+                    const call = myPeer.call(pId, localAudioStream, { metadata: { callerEmail: currentUserSafeEmail } }); 
+                    call.on('stream', stream => setupHiddenAudio(pEmail, stream)); 
+                    activeCalls[pEmail] = call; 
+                } 
+            }); 
+        }); 
+    } catch (err) { customAlert("Mic access denied.", "Error"); } 
+}
+
+function leaveVoiceChannel() { 
+    if (!currentVoiceChannel) return; 
+    Object.keys(activeCalls).forEach(pEmail => { activeCalls[pEmail].close(); removeHiddenAudio(pEmail); }); 
+    activeCalls = {}; 
+    if (localAudioStream) { localAudioStream.getTracks().forEach(track => track.stop()); } 
+    remove(ref(db, `voice_rosters/${currentServerId}/${currentVoiceChannel}/${currentUserSafeEmail}`)); 
+    currentVoiceChannel = null; 
+    document.getElementById('voice-controls-area').style.display = 'none'; 
+}
+
 document.getElementById('disconnect-vc-btn')?.addEventListener('click', leaveVoiceChannel);
-document.getElementById('mute-btn')?.addEventListener('click', (e) => { isMuted = !isMuted; if(localAudioStream) { localAudioStream.getAudioTracks()[0].enabled = !isMuted; } e.target.classList.toggle('muted-state'); });
-document.getElementById('deafen-btn')?.addEventListener('click', (e) => { isDeafened = !isDeafened; e.target.classList.toggle('muted-state'); document.querySelectorAll('.vc-audio-element').forEach(audio => audio.muted = isDeafened); });
-function addVoiceUserUI(peerEmail, stream) { if (document.getElementById(`vc-user-${peerEmail}`)) return; const list = document.getElementById('voice-users-list'); const div = document.createElement('div'); div.classList.add('vc-user'); div.id = `vc-user-${peerEmail}`; get(child(ref(db), `users/${peerEmail}`)).then(snap => { div.innerHTML = `<span>👤 ${snap.exists() ? snap.val().username : peerEmail}</span><input type="range" min="0" max="1" step="0.01" value="1" id="vol-${peerEmail}"><audio id="audio-${peerEmail}" class="vc-audio-element" autoplay></audio>`; list.appendChild(div); const audio = document.getElementById(`audio-${peerEmail}`); audio.srcObject = stream; if(isDeafened) { audio.muted = true; } document.getElementById(`vol-${peerEmail}`).addEventListener('input', (e) => { audio.volume = e.target.value; }); }); }
-function removeVoiceUserUI(peerEmail) { const el = document.getElementById(`vc-user-${peerEmail}`); if (el) el.remove(); }
+document.getElementById('mute-btn')?.addEventListener('click', (e) => { 
+    isMuted = !isMuted; 
+    if(localAudioStream) { localAudioStream.getAudioTracks()[0].enabled = !isMuted; } 
+    e.currentTarget.classList.toggle('muted-state'); 
+});
+document.getElementById('deafen-btn')?.addEventListener('click', (e) => { 
+    isDeafened = !isDeafened; 
+    e.currentTarget.classList.toggle('muted-state'); 
+    document.querySelectorAll('.vc-audio-element').forEach(audio => audio.muted = isDeafened); 
+});
+
+function setupHiddenAudio(peerEmail, stream) { 
+    if (document.getElementById(`audio-${peerEmail}`)) return; 
+    const container = document.getElementById('hidden-audio-container'); 
+    const audio = document.createElement('audio');
+    audio.id = `audio-${peerEmail}`;
+    audio.className = 'vc-audio-element';
+    audio.autoplay = true;
+    audio.srcObject = stream;
+    if(isDeafened) audio.muted = true;
+    container.appendChild(audio);
+}
+function removeHiddenAudio(peerEmail) { 
+    const el = document.getElementById(`audio-${peerEmail}`); 
+    if (el) el.remove(); 
+}
 
 // ==========================================
 // --- MESSAGES, EMBEDS & NOTIFICATIONS ---
@@ -770,16 +944,104 @@ async function buildMessageHtml(data) {
 let lastMsgSender = null; let lastMsgTime = 0; let scrollTimeout = null;
 const scrollBtn = document.getElementById('scroll-bottom-btn');
 const messagesDiv = document.getElementById('messages');
+let oldestMsgTimestamp = null;
+let isFetchingMore = false;
 
 messagesDiv?.addEventListener('scroll', () => {
     if (messagesDiv.scrollHeight - messagesDiv.scrollTop > messagesDiv.clientHeight + 100) { scrollBtn.style.display = 'flex'; } 
     else { scrollBtn.style.display = 'none'; update(ref(db, `users/${currentUserSafeEmail}/lastRead`), { [currentChatId]: Date.now() }); }
+    
+    if (messagesDiv.scrollTop < 50 && !isFetchingMore && oldestMsgTimestamp) {
+        fetchOlderMessages();
+    }
 });
 scrollBtn?.addEventListener('click', () => { messagesDiv.scrollTop = messagesDiv.scrollHeight; update(ref(db, `users/${currentUserSafeEmail}/lastRead`), { [currentChatId]: Date.now() }); });
+
+async function fetchOlderMessages() {
+    isFetchingMore = true;
+    const oldScrollHeight = messagesDiv.scrollHeight;
+    
+    const msgRef = query(ref(db, chatType === 'server' ? `messages/${currentChatId}` : `dms/${currentChatId}`), orderByChild('timestamp'), endAt(oldestMsgTimestamp - 1), limitToLast(50));
+    const snap = await get(msgRef);
+    
+    if(snap.exists()) {
+        const msgs = [];
+        snap.forEach(c => { msgs.push({id: c.key, data: c.val()}); });
+        if(msgs.length > 0) oldestMsgTimestamp = msgs[0].data.timestamp;
+        else oldestMsgTimestamp = null;
+
+        const fragment = document.createDocumentFragment();
+        let tempLastSender = null; let tempLastTime = 0;
+        
+        for (const m of msgs) {
+            const el = await createMessageDOM(m.id, m.data, tempLastSender, tempLastTime);
+            fragment.appendChild(el);
+            tempLastSender = m.data.sender; tempLastTime = m.data.timestamp;
+        }
+        
+        messagesDiv.insertBefore(fragment, messagesDiv.firstChild);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight - oldScrollHeight;
+    } else {
+        oldestMsgTimestamp = null;
+    }
+    isFetchingMore = false;
+}
+
+async function createMessageDOM(msgId, data, prevSender, prevTime) {
+    const isConsecutive = (prevSender === data.sender) && (data.timestamp - prevTime < 300000) && (!data.replyTo);
+    const msgElement = document.createElement('div');
+    msgElement.classList.add('message');
+    if(isConsecutive) msgElement.classList.add('consecutive');
+    msgElement.id = `msg-${msgId}`;
+    
+    const buildRes = await buildMessageHtml(data);
+    if(buildRes.isMentioned && data.sender !== auth.currentUser.email) msgElement.classList.add('mentioned');
+
+    let canDelete = (data.sender === auth.currentUser.email || (chatType === 'server' && (myServerPerms.admin || myServerPerms.deleteMessages)));
+    let nameColor = "white";
+    if(chatType === 'server' && data.roleId && data.roleId !== 'member' && data.roleId !== 'owner') { const rSnap = await get(ref(db, `servers/${currentServerId}/roles/${data.roleId}`)); if(rSnap.exists()) nameColor = rSnap.val().color; }
+
+    let actionsHtml = `<div class="msg-actions"><button class="msg-action-btn reply"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg> Reply</button>${canDelete ? `<button class="msg-action-btn del">${icons.trash} Delete</button>` : ''}</div>`;
+    
+    if (!isConsecutive) {
+        let replyHtml = data.replyTo ? `<div class="reply-context"><strong>@${data.replyTo.username}</strong> ${data.replyTo.text}</div>` : "";
+        let headerHtml = `${replyHtml}<div class="message-header"><img src="${data.avatar}" class="avatar-small" style="cursor:pointer;" onclick="showGlobalUserProfile('${data.sender}')"><span class="message-sender" style="color: ${nameColor}; cursor:pointer;" onclick="showGlobalUserProfile('${data.sender}')">${data.username}</span><span style="font-size: 0.8em; color: gray;">${new Date(data.timestamp).toLocaleTimeString()}</span></div>`;
+        msgElement.innerHTML = `${actionsHtml}${headerHtml}<div class="msg-content-wrapper">${buildRes.html}</div>`;
+    } else { msgElement.innerHTML = `${actionsHtml}<div class="msg-content-wrapper">${buildRes.html}</div>`; }
+
+    buildRes.embeds.forEach(async (eObj) => {
+        const sSnap = await get(ref(db, `servers/${eObj.code}`));
+        if(sSnap.exists()) {
+            const sData = sSnap.val();
+            const iHtml = sData.icon ? `<div class="invite-embed-icon" style="background-image:url(${sData.icon})"></div>` : `<div class="invite-embed-icon">${sData.name.charAt(0)}</div>`;
+            const embedContainer = msgElement.querySelector('#' + eObj.id);
+            if(embedContainer) {
+                embedContainer.innerHTML = `<div class="invite-embed"><h4>You've been invited to join a server</h4><div class="invite-embed-content">${iHtml}<div class="invite-embed-info"><div class="invite-embed-name">${sData.name}</div><button onclick="window.location.href='${appBaseUrl}?invite=${eObj.code}'" style="margin:0; padding:5px 15px; background:#3ba55c;">Join</button></div></div></div>`;
+            }
+        }
+    });
+
+    const delBtn = msgElement.querySelector('.msg-action-btn.del'); 
+    if (delBtn) {
+        delBtn.addEventListener('click', () => { 
+            customConfirm("Are you sure you want to delete this message? This action cannot be undone.", "Delete Message", async (yes) => {
+                if(yes) await remove(ref(db, `${chatType === 'server' ? 'messages' : 'dms'}/${currentChatId}/${msgId}`));
+            });
+        }); 
+    }
+
+    const replyBtn = msgElement.querySelector('.msg-action-btn.reply'); if (replyBtn) replyBtn.addEventListener('click', () => triggerReply(msgId, data.username, data.text || "Attachment..."));
+    msgElement.addEventListener('dblclick', () => triggerReply(msgId, data.username, data.text || "Attachment..."));
+    const imgEl = msgElement.querySelector('.message-image'); if (imgEl) imgEl.addEventListener('click', () => { document.getElementById('enlarged-image').src = data.imageUrl; document.getElementById('download-image-btn').href = data.imageUrl; document.getElementById('image-modal').style.display = 'flex'; });
+    
+    return msgElement;
+}
 
 async function loadMessages(dbPath, chatNameLabel) {
     messagesDiv.innerHTML = `<div class="welcome-message"><h1>Welcome to ${chatNameLabel}!</h1><p>This is the start of the ${chatNameLabel} channel.</p></div>`;
     lastMsgSender = null; lastMsgTime = 0;
+    oldestMsgTimestamp = null;
+    isFetchingMore = false;
     
     if (unsubscribeMessages) unsubscribeMessages();
     if (unsubscribeMessagesRemoved) unsubscribeMessagesRemoved();
@@ -788,76 +1050,29 @@ async function loadMessages(dbPath, chatNameLabel) {
     let lastReadTime = lastReadSnap.val() || 0;
     let insertedDivider = false;
 
-    const processMessage = (msgId, data, isLive) => {
-        const isConsecutive = (lastMsgSender === data.sender) && (data.timestamp - lastMsgTime < 300000) && (!data.replyTo);
-        
-        const msgElement = document.createElement('div');
-        msgElement.classList.add('message');
-        if(isConsecutive) msgElement.classList.add('consecutive');
-        msgElement.id = `msg-${msgId}`;
-        
-        messagesDiv.appendChild(msgElement);
-        lastMsgTime = data.timestamp; if(!isConsecutive) lastMsgSender = data.sender;
-
-        if (data.timestamp > lastReadTime && !insertedDivider && data.sender !== auth.currentUser.email) {
-            insertedDivider = true;
-            const div = document.createElement('div'); div.className = 'new-messages-divider'; div.innerHTML = `<span>New Messages</span>`;
-            messagesDiv.insertBefore(div, msgElement);
-            if(!isLive) setTimeout(() => { div.scrollIntoView({behavior: "smooth", block: "center"}); }, 100);
-        }
-
-        (async () => {
-            const buildRes = await buildMessageHtml(data);
-            if(buildRes.isMentioned && data.sender !== auth.currentUser.email) msgElement.classList.add('mentioned');
-
-            let canDelete = (data.sender === auth.currentUser.email || (chatType === 'server' && (myServerPerms.admin || myServerPerms.deleteMessages)));
-            let nameColor = "white";
-            if(chatType === 'server' && data.roleId && data.roleId !== 'member' && data.roleId !== 'owner') { const rSnap = await get(ref(db, `servers/${currentServerId}/roles/${data.roleId}`)); if(rSnap.exists()) nameColor = rSnap.val().color; }
-
-            let actionsHtml = `<div class="msg-actions"><button class="msg-action-btn reply">↩ Reply</button>${canDelete ? `<button class="msg-action-btn del">🗑️ Delete</button>` : ''}</div>`;
-            if (!isConsecutive) {
-                let replyHtml = data.replyTo ? `<div class="reply-context"><strong>@${data.replyTo.username}</strong> ${data.replyTo.text}</div>` : "";
-                let headerHtml = `${replyHtml}<div class="message-header"><img src="${data.avatar}" class="avatar-small"><span class="message-sender" style="color: ${nameColor};">${data.username}</span><span style="font-size: 0.8em; color: gray;">${new Date(data.timestamp).toLocaleTimeString()}</span></div>`;
-                msgElement.innerHTML = `${actionsHtml}${headerHtml}<div class="msg-content-wrapper">${buildRes.html}</div>`;
-            } else { msgElement.innerHTML = `${actionsHtml}<div class="msg-content-wrapper">${buildRes.html}</div>`; }
-
-            buildRes.embeds.forEach(async (eObj) => {
-                const sSnap = await get(ref(db, `servers/${eObj.code}`));
-                if(sSnap.exists()) {
-                    const sData = sSnap.val();
-                    const iHtml = sData.icon ? `<div class="invite-embed-icon" style="background-image:url(${sData.icon})"></div>` : `<div class="invite-embed-icon">${sData.name.charAt(0)}</div>`;
-                    const embedContainer = document.getElementById(eObj.id);
-                    if(embedContainer) {
-                        embedContainer.innerHTML = `<div class="invite-embed"><h4>You've been invited to join a server</h4><div class="invite-embed-content">${iHtml}<div class="invite-embed-info"><div class="invite-embed-name">${sData.name}</div><button onclick="window.location.href='${appBaseUrl}?invite=${eObj.code}'" style="margin:0; padding:5px 15px; background:#3ba55c;">Join</button></div></div></div>`;
-                    }
-                }
-            });
-
-            const delBtn = msgElement.querySelector('.msg-action-btn.del'); 
-            if (delBtn) {
-                delBtn.addEventListener('click', () => { 
-                    customConfirm("Are you sure you want to delete this message? This action cannot be undone.", "Delete Message", async (yes) => {
-                        if(yes) await remove(ref(db, `${dbPath}/${msgId}`));
-                    });
-                }); 
-            }
-
-            const replyBtn = msgElement.querySelector('.msg-action-btn.reply'); if (replyBtn) replyBtn.addEventListener('click', () => triggerReply(msgId, data.username, data.text || "Attachment..."));
-            msgElement.addEventListener('dblclick', () => triggerReply(msgId, data.username, data.text || "Attachment..."));
-            const imgEl = msgElement.querySelector('.message-image'); if (imgEl) imgEl.addEventListener('click', () => { document.getElementById('enlarged-image').src = data.imageUrl; document.getElementById('download-image-btn').href = data.imageUrl; document.getElementById('image-modal').style.display = 'flex'; });
-        })();
-    };
-
-    // Removed the limitToLast(50) here!
-    const msgRef = query(ref(db, dbPath), orderByChild('timestamp'));
+    // Load initial 50 messages
+    const msgRef = query(ref(db, dbPath), orderByChild('timestamp'), limitToLast(50));
     const initialSnap = await get(msgRef);
     
     let highestTimestamp = 0;
-    initialSnap.forEach(childSnap => {
-        const data = childSnap.val();
-        processMessage(childSnap.key, data, false);
+    let firstMsg = true;
+
+    for (const childSnap of Object.entries(initialSnap.val() || {})) {
+        const msgId = childSnap[0]; const data = childSnap[1];
+        if(firstMsg) { oldestMsgTimestamp = data.timestamp; firstMsg = false; }
+        
+        const el = await createMessageDOM(msgId, data, lastMsgSender, lastMsgTime);
+        messagesDiv.appendChild(el);
+        lastMsgSender = data.sender; lastMsgTime = data.timestamp;
         highestTimestamp = Math.max(highestTimestamp, data.timestamp);
-    });
+        
+        if (data.timestamp > lastReadTime && !insertedDivider && data.sender !== auth.currentUser.email) {
+            insertedDivider = true;
+            const div = document.createElement('div'); div.className = 'new-messages-divider'; div.innerHTML = `<span>New Messages</span>`;
+            messagesDiv.insertBefore(div, el);
+            setTimeout(() => { div.scrollIntoView({behavior: "smooth", block: "center"}); }, 100);
+        }
+    }
 
     if(!insertedDivider) {
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
@@ -865,10 +1080,13 @@ async function loadMessages(dbPath, chatNameLabel) {
     }
 
     const liveRef = query(ref(db, dbPath), orderByChild('timestamp'), startAt(highestTimestamp + 1));
-    unsubscribeMessages = onChildAdded(liveRef, (childSnap) => {
+    unsubscribeMessages = onChildAdded(liveRef, async (childSnap) => {
         const data = childSnap.val();
         if(data.timestamp > highestTimestamp) {
-            processMessage(childSnap.key, data, true);
+            const el = await createMessageDOM(childSnap.key, data, lastMsgSender, lastMsgTime);
+            messagesDiv.appendChild(el);
+            lastMsgSender = data.sender; lastMsgTime = data.timestamp;
+            
             if (!insertedDivider || (messagesDiv.scrollHeight - messagesDiv.scrollTop < messagesDiv.clientHeight + 150)) {
                 messagesDiv.scrollTop = messagesDiv.scrollHeight;
             }
