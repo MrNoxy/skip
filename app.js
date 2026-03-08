@@ -662,6 +662,7 @@ function loadMemberList(serverId) {
 
 // Global Sync for Channels AND Categories
 let currentChannelsData = {}; let currentCategoriesData = {};
+let dragSrcEl = null; // Added to fix the Uncaught ReferenceError
 
 function initChannelSync(serverId) {
     if(unsubscribeChannels) unsubscribeChannels(); if(unsubscribeCategories) unsubscribeCategories();
