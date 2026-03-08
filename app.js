@@ -848,7 +848,8 @@ async function loadMessages(dbPath, chatNameLabel) {
         })();
     };
 
-    const msgRef = query(ref(db, dbPath), orderByChild('timestamp'), limitToLast(50));
+    // Removed the limitToLast(50) here!
+    const msgRef = query(ref(db, dbPath), orderByChild('timestamp'));
     const initialSnap = await get(msgRef);
     
     let highestTimestamp = 0;
