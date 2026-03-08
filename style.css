@@ -237,9 +237,9 @@ button:disabled { background-color: #40444b; cursor: not-allowed; color: gray; }
 .role-setting-item:active { cursor: grabbing; }
 .role-setting-item.drag-over { border-top: 2px solid #5865F2; }
 
-/* Mobile UI */
-#mobile-back-btn { display: none; background: #202225; margin-right: 15px; font-size: 16px; }
-#mobile-back-btn-home { display: none; background: #202225; margin-right: 15px; font-size: 16px; }
+/* Mobile UI Back Buttons */
+.mobile-back-btn { display: none; background: transparent; color: #b9bbbe; padding: 0; margin-right: 15px; cursor: pointer; align-items: center; justify-content: center; border: none; }
+.mobile-back-btn:hover { color: white; background: transparent; }
 
 @media (max-width: 768px) {
     #channel-sidebar { width: calc(100vw - 72px); }
@@ -253,8 +253,7 @@ button:disabled { background-color: #40444b; cursor: not-allowed; color: gray; }
     body.mobile-home-active #channel-sidebar { display: none; }
     body.mobile-home-active #main-view-container { display: flex; }
     
-    #mobile-back-btn { display: inline-block; }
-    #mobile-back-btn-home { display: inline-block; }
+    .mobile-back-btn { display: flex; }
     .modal-content { width: 80%; }
     .message-image { max-width: 200px; max-height: 200px; }
     
