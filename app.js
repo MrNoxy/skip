@@ -120,7 +120,7 @@ document.getElementById('input-modal-field')?.addEventListener('keypress', (e) =
 window.showGlobalUserProfile = async function(email, event) {
     if (event) event.stopPropagation();
     
-    const safeEmail = sanitizeEmail(email); // FIX: Sanitize email to prevent path errors
+    const safeEmail = sanitizeEmail(email); 
     const modal = document.getElementById('global-user-profile-modal');
     const content = modal.querySelector('.modal-content');
     
@@ -141,15 +141,18 @@ window.showGlobalUserProfile = async function(email, event) {
     removeFriendBtn.style.display = 'none';
     sendMsgBtn.style.display = 'none';
     
-    modal.style.display = 'block'; // Block instead of flex to allow absolute pos
+    modal.style.display = 'block'; 
     
-    // Position popout where clicked
     if(event) {
         let x = event.clientX;
         let y = event.clientY;
         const rect = content.getBoundingClientRect();
-        if(x + rect.width > window.innerWidth) x = window.innerWidth - rect.width - 10;
-        if(y + rect.height > window.innerHeight) y = window.innerHeight - rect.height - 10;
+        
+        if (x + 340 > window.innerWidth) x = window.innerWidth - 350;
+        if (y + rect.height > window.innerHeight) y = window.innerHeight - rect.height - 20;
+        if (x < 10) x = 10;
+        if (y < 10) y = 10;
+        
         content.style.left = `${x}px`;
         content.style.top = `${y}px`;
     }
@@ -197,7 +200,6 @@ window.showGlobalUserProfile = async function(email, event) {
     }
 };
 
-// Clicking the transparent overlay hides the popout
 document.getElementById('global-user-profile-modal')?.addEventListener('click', (e) => { 
     if(e.target.id === 'global-user-profile-modal') e.target.style.display = 'none'; 
 });
@@ -340,7 +342,7 @@ document.addEventListener('click', (e) => { if (!e.target.closest('#user-control
 // ==========================================
 function switchToHomeView() {
     document.body.classList.remove('mobile-chat-active');
-    document.body.classList.add('mobile-home-active');
+    document.body.classList.remove('mobile-home-active');
     
     chatType = 'home'; currentChatId = null; currentServerId = null;
     document.getElementById('server-name-display').innerText = "Friends & DMs";
@@ -367,11 +369,27 @@ function switchToHomeView() {
 
 document.getElementById('home-btn')?.addEventListener('click', switchToHomeView);
 
-document.getElementById('mobile-back-btn')?.addEventListener('click', () => { document.body.classList.remove('mobile-chat-active'); });
-document.getElementById('mobile-back-btn-home')?.addEventListener('click', () => { document.body.classList.remove('mobile-home-active'); });
+document.getElementById('mobile-back-btn')?.addEventListener('click', () => { 
+    document.body.classList.remove('mobile-chat-active'); 
+    document.body.classList.remove('mobile-home-active'); 
+});
+document.getElementById('mobile-back-btn-home')?.addEventListener('click', () => { 
+    document.body.classList.remove('mobile-chat-active'); 
+    document.body.classList.remove('mobile-home-active'); 
+});
 
-document.getElementById('nav-friends-btn')?.addEventListener('click', () => { currentHomeTab = 'friends'; if(chatType !== 'home') switchToHomeView(); else renderHomeContent(); });
-document.getElementById('nav-requests-btn')?.addEventListener('click', () => { currentHomeTab = 'requests'; if(chatType !== 'home') switchToHomeView(); else renderHomeContent(); });
+document.getElementById('nav-friends-btn')?.addEventListener('click', () => { 
+    currentHomeTab = 'friends'; 
+    if(chatType !== 'home') switchToHomeView(); 
+    document.body.classList.add('mobile-home-active'); 
+    renderHomeContent(); 
+});
+document.getElementById('nav-requests-btn')?.addEventListener('click', () => { 
+    currentHomeTab = 'requests'; 
+    if(chatType !== 'home') switchToHomeView(); 
+    document.body.classList.add('mobile-home-active'); 
+    renderHomeContent(); 
+});
 
 function renderHomeContent() {
     if (chatType !== 'home') return;
@@ -548,6 +566,8 @@ function openDM(dmId, friendEmail) {
     document.getElementById('chat-title').innerText = `@${uData.username}#${uData.tag}`;
     document.getElementById('chat-title').style.cursor = "pointer";
     document.getElementById('chat-title').onclick = (e) => showGlobalUserProfile(friendEmail, e);
+    
+    document.body.classList.remove('mobile-home-active');
     document.body.classList.add('mobile-chat-active');
     
     document.querySelectorAll('.home-nav-item').forEach(el => el.classList.remove('active'));
@@ -603,7 +623,9 @@ function loadMyServers() {
                 if(sData.icon) { div.style.backgroundImage = `url(${sData.icon})`; } else { div.innerText = sData.name.charAt(0).toUpperCase(); }
                 
                 div.addEventListener('click', async () => {
-                    document.body.classList.remove('mobile-chat-active'); currentServerId = serverId;
+                    document.body.classList.remove('mobile-chat-active'); 
+                    document.body.classList.remove('mobile-home-active');
+                    currentServerId = serverId;
                     document.getElementById('server-name-display').innerText = sData.name;
                     document.getElementById('server-dropdown-arrow').style.display = 'inline';
                     
@@ -828,6 +850,9 @@ function renderChannels(serverId) {
                     document.querySelectorAll('.channel-item').forEach(el => el.classList.remove('active'));
                     div.classList.add('active');
 
+                    document.body.classList.remove('mobile-home-active');
+                    document.body.classList.add('mobile-chat-active');
+                    
                     enableChat(); loadMessages(`messages/${channelData.id}`, `# ${channelData.name}`); 
                 } 
             });
@@ -844,7 +869,6 @@ function renderChannels(serverId) {
             channelList.appendChild(div);
             if (unreadState.channels.has(channelData.id)) updateBadge(`channel-${channelData.id}`, true, false, false);
             
-            // Append Voice Users directly under the voice channel
             if(channelData.type === "voice" && currentServerVoiceRosters[channelData.id]) {
                 const roster = currentServerVoiceRosters[channelData.id];
                 Object.keys(roster).forEach(peerEmail => {
@@ -946,7 +970,13 @@ function removeHiddenAudio(peerEmail) {
 // ==========================================
 // --- MESSAGES, EMBEDS & NOTIFICATIONS ---
 // ==========================================
-function enableChat() { document.getElementById('msg-input').disabled = false; document.getElementById('send-btn').disabled = false; document.getElementById('upload-img-btn').disabled = false; document.body.classList.add('mobile-chat-active'); }
+function enableChat() { 
+    document.getElementById('msg-input').disabled = false; 
+    document.getElementById('send-btn').disabled = false; 
+    document.getElementById('upload-img-btn').disabled = false; 
+    document.body.classList.remove('mobile-home-active');
+    document.body.classList.add('mobile-chat-active'); 
+}
 
 function processMentionsAndText(text) {
     if (!text) return { html: "", isMentioned: false };
@@ -994,13 +1024,14 @@ messagesDiv?.addEventListener('scroll', () => {
 scrollBtn?.addEventListener('click', () => { messagesDiv.scrollTop = messagesDiv.scrollHeight; update(ref(db, `users/${currentUserSafeEmail}/lastRead`), { [currentChatId]: Date.now() }); });
 
 function insertWelcomeMessage() {
-    if(!document.getElementById('chat-welcome-msg')) {
-        const w = document.createElement('div');
+    let w = document.getElementById('chat-welcome-msg');
+    if(!w) {
+        w = document.createElement('div');
         w.id = 'chat-welcome-msg';
         w.className = 'welcome-message';
         w.innerHTML = `<h1>Welcome to ${currentChatLabelText}!</h1><p>This is the start of the ${currentChatLabelText} channel.</p>`;
-        messagesDiv.insertBefore(w, messagesDiv.firstChild);
     }
+    messagesDiv.insertBefore(w, messagesDiv.firstChild);
 }
 
 async function fetchOlderMessages() {
@@ -1094,7 +1125,7 @@ async function createMessageDOM(msgId, data, prevSender, prevTime) {
 }
 
 async function loadMessages(dbPath, chatNameLabel) {
-    messagesDiv.innerHTML = ''; // Start clean without appending welcome yet
+    messagesDiv.innerHTML = '';
     currentChatLabelText = chatNameLabel;
     lastMsgSender = null; lastMsgTime = 0;
     oldestMsgTimestamp = null;
@@ -1107,7 +1138,6 @@ async function loadMessages(dbPath, chatNameLabel) {
     let lastReadTime = lastReadSnap.val() || 0;
     let insertedDivider = false;
 
-    // Load initial 50 messages
     document.getElementById('chat-loading-spinner').style.display = 'block';
     const msgRef = query(ref(db, dbPath), orderByChild('timestamp'), limitToLast(50));
     const initialSnap = await get(msgRef);
@@ -1134,7 +1164,6 @@ async function loadMessages(dbPath, chatNameLabel) {
         }
     }
 
-    // Append Welcome to top if we loaded the very beginning of the chat
     if (initialMessages.length < 50) {
         insertWelcomeMessage();
         oldestMsgTimestamp = null;
