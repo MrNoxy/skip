@@ -214,7 +214,7 @@
     </div>
 
     <div id="confirm-modal" class="modal-overlay" style="display: none; z-index: 3000;">
-        <div class="modal-content text-center">
+        <div class="modal-content text-center" style="width: 350px;">
             <h3 id="confirm-modal-title" style="color: var(--text-bright);">Confirm</h3>
             <p id="confirm-modal-desc" style="color: var(--text-main); margin-bottom: 20px; font-size: 14px; word-break: break-word;"></p>
             <div style="display: flex; gap: 10px;">
@@ -225,7 +225,7 @@
     </div>
 
     <div id="input-modal" class="modal-overlay" style="display: none; z-index: 2500;">
-        <div class="modal-content">
+        <div class="modal-content" style="width: 350px;">
             <h3 id="input-modal-title" style="color: var(--text-bright);">Title</h3>
             <p id="input-modal-desc" style="color: var(--text-main); margin-bottom: 15px; font-size: 14px; display: none;"></p>
             <input type="text" id="input-modal-field" placeholder="..." autocomplete="off">
@@ -237,7 +237,7 @@
     </div>
 
     <div id="alert-modal" class="modal-overlay" style="display: none; z-index: 3500;">
-        <div class="modal-content text-center">
+        <div class="modal-content text-center" style="width: 350px;">
             <h3 id="alert-modal-title" style="color: var(--text-bright);">Notice</h3>
             <p id="alert-modal-desc" style="color: var(--text-main); margin-bottom: 20px; font-size: 14px; word-break: break-word;"></p>
             <button id="alert-modal-ok" style="width: 100%;">OK</button>
@@ -245,7 +245,7 @@
     </div>
 
     <div id="profile-modal" class="modal-overlay" style="display: none;">
-        <div class="modal-content">
+        <div class="modal-content" style="width: 350px;">
             <h3 style="color: var(--text-bright);">Edit Profile</h3>
             <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
                 <img id="profile-preview" class="avatar-large" src="https://cdn.pixabay.com/photo/2023/02/18/11/00/icon-7797704_640.png" alt="Avatar">
@@ -263,7 +263,7 @@
     </div>
 
     <div id="assign-role-modal" class="modal-overlay" style="display: none;">
-        <div class="modal-content">
+        <div class="modal-content" style="width: 350px;">
             <h3 id="assign-role-title" style="color: var(--text-bright);">Manage User</h3>
             <label style="color: var(--text-main);">Assign Role:</label>
             <select id="assign-role-select"></select>
@@ -281,48 +281,183 @@
     </div>
 
     <div id="context-menu" style="display: none;">
-        <div class="context-item" id="ctx-delete" style="color: var(--accent-danger);">
-            <svg class="svg-icon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg> Delete
+        </div>
+
+    <div id="server-settings-modal" class="fs-modal-overlay">
+        <div class="fs-modal-layout">
+            <div class="fs-sidebar" id="ss-sidebar">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h3><span id="ss-header-name">Server Name</span></h3>
+                    <button id="close-server-settings-btn" class="fs-close-btn-mobile" title="Close">✖</button>
+                </div>
+                
+                <div class="fs-tab" data-tab="profile" id="tab-ss-profile">Server Profile</div>
+                <div class="fs-tab" data-tab="engagement" id="tab-ss-engagement">Engagement</div>
+                <div class="fs-tab" data-tab="roles" id="tab-ss-roles">Roles</div>
+                <div style="height: 1px; background: var(--border-color); margin: 10px 0;"></div>
+                <div class="fs-tab" data-tab="delete" id="tab-ss-delete" style="color: var(--accent-danger);">Delete Server</div>
+            </div>
+            
+            <div class="fs-content-area" id="ss-content">
+                <div style="display: flex; align-items: center; margin-bottom: 20px;">
+                    <button class="mobile-back-btn fs-mobile-back" id="ss-mobile-back">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                    </button>
+                    <h2 style="margin: 0; color: var(--text-bright);">Server Settings</h2>
+                </div>
+                
+                <div class="ss-pane" id="pane-ss-profile">
+                    <label style="color: var(--text-main); font-weight: bold; margin-bottom:10px; display:block;">Server Banner</label>
+                    <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
+                        <div id="ss-banner-preview" style="width: 100%; height: 120px; background-color: var(--bg-tertiary); border: 1px dashed var(--border-color); border-radius: 6px; background-size: cover; background-position: center;"></div>
+                        <input type="file" id="ss-banner-upload" accept="image/*">
+                    </div>
+                    
+                    <label style="color: var(--text-main); font-weight: bold; margin-bottom:10px; display:block;">Server Icon</label>
+                    <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
+                        <div id="ss-icon-preview" class="avatar-large" style="background-color: var(--bg-tertiary); display: flex; justify-content: center; align-items: center; font-size: 24px; background-size: cover; background-position: center; border: 1px solid var(--border-color);"></div>
+                        <input type="file" id="ss-icon-upload" accept="image/*">
+                    </div>
+                    
+                    <label style="color: var(--text-main); font-weight: bold; margin-bottom:10px; display:block;">Server Name</label>
+                    <input type="text" id="ss-server-name" placeholder="Server Name" autocomplete="off" class="fs-input">
+                    
+                    <div style="margin-top: 30px; padding-top: 15px; border-top: 1px solid var(--border-color);">
+                        <button id="ss-save-profile-btn" style="width: auto;">Save Profile Changes</button>
+                    </div>
+                </div>
+
+                <div class="ss-pane" id="pane-ss-engagement">
+                    <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">Let Skip automatically post system messages when users join or leave this server.</p>
+                    
+                    <label style="color: var(--text-main); font-weight: bold; margin-bottom:10px; display:block;">System Messages Channel (Join)</label>
+                    <select id="ss-join-channel" class="fs-input"></select>
+                    
+                    <label style="color: var(--text-main); font-weight: bold; margin-bottom:10px; margin-top:20px; display:block;">System Messages Channel (Leave)</label>
+                    <select id="ss-leave-channel" class="fs-input"></select>
+                    
+                    <div style="margin-top: 30px; padding-top: 15px; border-top: 1px solid var(--border-color);">
+                        <button id="ss-save-engagement-btn" style="width: auto;">Save Engagement</button>
+                    </div>
+                </div>
+
+                <div class="ss-pane" id="pane-ss-roles" style="height: 100%;">
+                    <div style="display: flex; gap: 20px; height: 100%;" id="ss-roles-flex-container">
+                        
+                        <div id="ss-roles-list-left" style="width: 250px; display: flex; flex-direction: column; border-right: 1px solid var(--border-color); padding-right: 20px; overflow-y: auto;">
+                            <button id="ss-create-role-btn" style="margin: 0 0 15px 0;">+ Create Role</button>
+                            <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">Drag roles to reorder. @everyone is always default.</p>
+                            <div id="ss-roles-list"></div>
+                        </div>
+
+                        <div id="ss-role-edit-area" style="flex-grow: 1; display: none; overflow-y: auto; padding-right: 10px;">
+                            <button class="mobile-back-btn fs-mobile-back" id="ss-roles-pane-mobile-back" style="display:none; margin-bottom: 15px;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg> Back to Roles
+                            </button>
+                            
+                            <h3 style="color: var(--text-bright); margin-top: 0;">Edit Role</h3>
+                            
+                            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                                <div style="flex: 1;">
+                                    <label style="color: var(--text-main); font-weight: bold; margin-bottom:5px; display:block; font-size:12px;">ROLE NAME</label>
+                                    <input type="text" id="er-name" class="fs-input" style="margin: 0; width: 100%;">
+                                </div>
+                                <div>
+                                    <label style="color: var(--text-main); font-weight: bold; margin-bottom:5px; display:block; font-size:12px;">ROLE COLOR</label>
+                                    <input type="color" id="er-color" class="fs-input" style="width: 60px; height: 40px; padding: 0; cursor: pointer; border: none;">
+                                </div>
+                            </div>
+
+                            <label class="toggle-row">
+                                <div>
+                                    <strong style="color: var(--text-bright);">Display role separately</strong>
+                                    <span style="color: var(--text-muted); font-size: 12px; display:block;">Allow anyone to @mention this role</span>
+                                </div>
+                                <input type="checkbox" id="er-mentionable">
+                            </label>
+
+                            <h4 style="color: var(--text-muted); text-transform: uppercase; font-size: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px; margin-top: 30px;">General Permissions</h4>
+                            
+                            <label class="toggle-row"><div><strong style="color: var(--text-bright);">View Channels</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to view channels by default.</span></div><input type="checkbox" id="p-viewChannels"></label>
+                            <label class="toggle-row"><div><strong style="color: var(--text-bright);">Send Messages</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to send text messages.</span></div><input type="checkbox" id="p-sendMessages"></label>
+                            
+                            <h4 style="color: var(--text-muted); text-transform: uppercase; font-size: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px; margin-top: 30px;">Advanced Permissions</h4>
+
+                            <label class="toggle-row"><div><strong style="color: var(--text-bright);">Manage Channels</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to create, edit, or delete channels/categories.</span></div><input type="checkbox" id="p-manageChannels"></label>
+                            <label class="toggle-row"><div><strong style="color: var(--text-bright);">Manage Roles</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to create, edit, or assign roles.</span></div><input type="checkbox" id="p-manageRoles"></label>
+                            <label class="toggle-row"><div><strong style="color: var(--text-bright);">Manage Messages</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to delete messages by other users.</span></div><input type="checkbox" id="p-manageMessages"></label>
+                            <label class="toggle-row"><div><strong style="color: var(--text-bright);">Manage Server Profile</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to change server name, icon, and banner.</span></div><input type="checkbox" id="p-manageServerProfile"></label>
+                            <label class="toggle-row"><div><strong style="color: var(--text-bright);">Manage Server Overview</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to modify engagement logic (join/leave channels).</span></div><input type="checkbox" id="p-manageServerOverview"></label>
+                            <label class="toggle-row" style="margin-bottom: 30px;"><div><strong style="color: var(--accent-danger);">Administrator (Manage All Settings)</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Grants all permissions and bypasses overrides.</span></div><input type="checkbox" id="p-manageServerSettings"></label>
+
+                            <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--border-color);">
+                                <button id="save-role-settings-btn" style="margin-left: 0;">Save Role</button>
+                                <button id="delete-role-btn" style="background-color: transparent; border: 1px solid var(--accent-danger); color: var(--accent-danger);">Delete Role</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="ss-pane" id="pane-ss-delete">
+                    <h3 style="color: var(--text-bright); margin-top: 0;">Delete Server</h3>
+                    <p style="color: var(--text-main);">Are you absolutely sure you want to do this? This action cannot be undone and will permanently wipe all messages, channels, and roles.</p>
+                    <button id="delete-server-btn" style="background-color: var(--accent-danger); margin-left: 0; margin-top: 15px;">Yes, Delete Server</button>
+                </div>
+            </div>
+            
+            <div class="fs-close-btn desktop-only" id="close-server-settings-btn-desktop">✖</div>
         </div>
     </div>
 
-    <div id="server-settings-modal" class="modal-overlay" style="display: none;">
-        <div class="modal-content" style="width: 500px; max-width: 90vw;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h2 style="margin: 0; color: var(--text-bright);">Server Settings</h2>
-                <button id="close-server-settings-btn" class="small-btn" style="background: var(--bg-hover);">✖</button>
+    <div id="channel-settings-modal" class="fs-modal-overlay">
+        <div class="fs-modal-layout">
+            <div class="fs-sidebar" id="cs-sidebar">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h3><span id="cs-header-name"># channel</span></h3>
+                    <button id="close-channel-settings-btn" class="fs-close-btn-mobile" title="Close">✖</button>
+                </div>
+                
+                <div class="fs-tab active" data-tab="overview" id="tab-cs-overview">Overview</div>
+                <div class="fs-tab" data-tab="perms" id="tab-cs-perms">Permissions</div>
+                <div style="height: 1px; background: var(--border-color); margin: 10px 0;"></div>
+                <div class="fs-tab" data-tab="delete" id="tab-cs-delete" style="color: var(--accent-danger);">Delete Channel</div>
             </div>
             
-            <div style="display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
-                <button id="tab-overview" class="small-btn">Overview</button>
-                <button id="tab-roles" class="small-btn" style="background: transparent; color: var(--text-muted);">Roles</button>
-            </div>
+            <div class="fs-content-area" id="cs-content">
+                <div style="display: flex; align-items: center; margin-bottom: 20px;">
+                    <button class="mobile-back-btn fs-mobile-back" id="cs-mobile-back">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                    </button>
+                    <h2 style="margin: 0; color: var(--text-bright);">Channel Settings</h2>
+                </div>
+                
+                <div class="ss-pane" id="pane-cs-overview" style="display: block;">
+                    <label style="color: var(--text-main); font-weight: bold; margin-bottom:10px; display:block;">Channel Name</label>
+                    <input type="text" id="cs-channel-name" placeholder="new-channel" autocomplete="off" class="fs-input">
+                    
+                    <div style="margin-top: 30px; padding-top: 15px; border-top: 1px solid var(--border-color);">
+                        <button id="cs-save-overview-btn" style="width: auto; margin-left: 0;">Save Changes</button>
+                    </div>
+                </div>
 
-            <div id="ss-overview">
-                <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
-                    <div id="ss-icon-preview" class="avatar-large" style="background-color: var(--bg-main); display: flex; justify-content: center; align-items: center; font-size: 24px; background-size: cover; background-position: center; border: 1px solid var(--border-color);"></div>
-                    <input type="file" id="ss-icon-upload" accept="image/*">
+                <div class="ss-pane" id="pane-cs-perms" style="display: none;">
+                    <p style="color: var(--text-muted);">Advanced channel permission overrides will appear here in a future update.</p>
                 </div>
-                <label style="color: var(--text-main);">Server Name</label>
-                <input type="text" id="ss-server-name" placeholder="Server Name" autocomplete="off">
-                <button id="ss-save-overview-btn" style="width: 100%; margin-top: 10px;">Save Changes</button>
-                <div style="margin-top: 30px; border-top: 1px solid var(--accent-danger); padding-top: 15px;">
-                    <button id="delete-server-btn" style="background-color: var(--accent-danger); width: 100%;">Delete Server</button>
-                </div>
-            </div>
 
-            <div id="ss-roles" style="display: none;">
-                <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                    <input type="text" id="ss-new-role-name" placeholder="New Role Name" style="flex: 1; margin: 0;" autocomplete="off">
-                    <input type="color" id="ss-new-role-color" value="#abb2bf" style="width: 40px; height: 36px; padding: 0; border: none; background: transparent; cursor: pointer;">
-                    <button id="ss-create-role-btn">Create</button>
+                <div class="ss-pane" id="pane-cs-delete" style="display: none;">
+                    <h3 style="color: var(--text-bright); margin-top: 0;">Delete Channel</h3>
+                    <p style="color: var(--text-main);">This will permanently remove the channel and all messages inside it.</p>
                 </div>
-                <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">Drag and drop roles below to reorder them.</p>
-                <div id="ss-roles-list" style="max-height: 200px; overflow-y: auto; background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 4px; padding: 10px;"></div>
             </div>
+            
+            <div class="fs-close-btn desktop-only" id="close-channel-settings-btn-desktop">✖</div>
         </div>
     </div>
 
     <script type="module" src="app.js"></script>
+    <script>
+        document.getElementById('close-server-settings-btn-desktop').onclick = () => document.getElementById('server-settings-modal').style.display = 'none';
+        document.getElementById('close-channel-settings-btn-desktop').onclick = () => document.getElementById('channel-settings-modal').style.display = 'none';
+    </script>
 </body>
 </html>

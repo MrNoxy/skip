@@ -24,7 +24,7 @@ let chatType = 'home';
 let currentHomeTab = 'friends'; 
 let currentUserSafeEmail = null;
 let myProfile = {}; 
-let myServerPerms = { admin: false, manageChannels: false, deleteMessages: false };
+let myServerPerms = { viewChannels: true, sendMessages: true, manageChannels: false, manageServerSettings: false, manageServerProfile: false, manageServerOverview: false, manageRoles: false, manageMessages: false };
 let myServerRoles = []; 
 
 // Mention & Global Caching
@@ -67,10 +67,11 @@ function generateCode() { return Math.random().toString(36).substring(2, 10); }
 const icons = {
     textChannel: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="9" x2="20" y2="9"></line><line x1="4" y1="15" x2="20" y2="15"></line><line x1="10" y1="3" x2="8" y2="21"></line><line x1="16" y1="3" x2="14" y2="21"></line></svg>`,
     voiceChannel: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>`,
-    trash: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`,
+    trash: `<svg class="svg-icon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`,
+    gear: `<svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>`,
     addFriend: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>`,
     removeFriend: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="18" y1="8" x2="23" y2="13"></line><line x1="23" y1="8" x2="18" y2="13"></line></svg>`,
-    closeDM: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`,
+    closeDM: `<svg class="svg-icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`,
     message: `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-2.67 0-8 1.34-8 4v3h16v-3c0-2.66-5.33-4-8-4z"/></svg>`,
     reply: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>`
 };
@@ -127,6 +128,7 @@ window.showGlobalUserProfile = async function(email, event) {
     const nameEl = document.getElementById('gup-username');
     const tagEl = document.getElementById('gup-tag');
     const avatarEl = document.getElementById('gup-avatar');
+    const bannerEl = document.getElementById('gup-banner');
     
     const addFriendBtn = document.getElementById('gup-add-friend');
     const removeFriendBtn = document.getElementById('gup-remove-friend');
@@ -134,6 +136,7 @@ window.showGlobalUserProfile = async function(email, event) {
     
     nameEl.innerText = "Loading..."; tagEl.innerText = "";
     avatarEl.src = "https://cdn.pixabay.com/photo/2023/02/18/11/00/icon-7797704_640.png";
+    bannerEl.style.backgroundColor = "var(--accent-primary)";
     
     addFriendBtn.style.display = 'none';
     removeFriendBtn.style.display = 'none';
@@ -203,22 +206,27 @@ document.getElementById('global-user-profile-modal')?.addEventListener('click', 
 });
 
 // ==========================================
-// --- CONTEXT MENU ---
+// --- CONTEXT MENU (Delegated) ---
 // ==========================================
 let contextTarget = null;
 const ctxMenu = document.getElementById('context-menu');
 
 function showContextMenu(e, type, id) {
     e.preventDefault();
-    const ctxItem = document.getElementById('ctx-delete');
+    
+    let html = '';
     if (type === 'channel' || type === 'category') {
-        if (!myServerPerms.admin && !myServerPerms.manageChannels) return; 
-        ctxItem.innerHTML = `${icons.trash} Delete ${type}`;
+        if (!myServerPerms.admin && !myServerPerms.manageChannels && !myServerPerms.manageServerSettings) return; 
+        if(type === 'channel') html += `<div class="context-item" id="ctx-edit">${icons.gear} Edit Channel</div>`;
+        html += `<div class="context-item" id="ctx-delete" style="color: var(--accent-danger);">${icons.trash} Delete ${type}</div>`;
     } else if (type === 'dm') {
-        ctxItem.innerHTML = `${icons.closeDM} Close DM`;
+        html = `<div class="context-item" id="ctx-delete" style="color: var(--accent-danger);">${icons.closeDM} Close DM</div>`;
     } else if (type === 'friend') {
-        ctxItem.innerHTML = `${icons.removeFriend} Remove Friend`;
+        html = `<div class="context-item" id="ctx-delete" style="color: var(--accent-danger);">${icons.removeFriend} Remove Friend</div>`;
     }
+    
+    if(html === '') return;
+    ctxMenu.innerHTML = html;
     
     contextTarget = { type, id };
     ctxMenu.style.display = 'flex';
@@ -229,10 +237,11 @@ function showContextMenu(e, type, id) {
     ctxMenu.style.top = `${y}px`;
 }
 
-document.addEventListener('click', () => { if(ctxMenu) ctxMenu.style.display = 'none'; });
+document.addEventListener('click', (e) => { 
+    const ctxDel = e.target.closest('#ctx-delete');
+    const ctxEdit = e.target.closest('#ctx-edit');
 
-document.getElementById('ctx-delete')?.addEventListener('click', () => {
-    if (contextTarget) {
+    if(ctxDel && contextTarget) {
         if(contextTarget.type === 'dm') {
             update(ref(db, `users/${currentUserSafeEmail}/friends/${contextTarget.id}`), { hidden: true });
         } else if(contextTarget.type === 'friend') {
@@ -250,6 +259,14 @@ document.getElementById('ctx-delete')?.addEventListener('click', () => {
                 }
             });
         }
+        ctxMenu.style.display = 'none';
+    } else if (ctxEdit && contextTarget && contextTarget.type === 'channel') {
+        openChannelSettings(contextTarget.id);
+        ctxMenu.style.display = 'none';
+    }
+
+    if(ctxMenu && !e.target.closest('#context-menu')) {
+        ctxMenu.style.display = 'none';
     }
 });
 
@@ -333,7 +350,7 @@ document.getElementById('save-profile-btn')?.addEventListener('click', async () 
 // Status Dropdown
 document.getElementById('my-status-indicator')?.addEventListener('click', (e) => { e.stopPropagation(); document.getElementById('status-selector').style.display = 'block'; });
 document.querySelectorAll('.status-option').forEach(opt => { opt.addEventListener('click', (e) => { const s = e.target.getAttribute('data-status'); update(ref(db, `users/${currentUserSafeEmail}`), {status: s, saved_status: s}); document.getElementById('status-selector').style.display = 'none'; }); });
-document.addEventListener('click', (e) => { if (!e.target.closest('#user-controls')) { const s = document.getElementById('status-selector'); if(s) s.style.display = 'none'; } if (!e.target.closest('#sidebar-header') && !e.target.closest('#server-settings-modal')) { const sd = document.getElementById('server-dropdown'); if(sd) sd.style.display = 'none'; } });
+document.addEventListener('click', (e) => { if (!e.target.closest('#user-controls')) { const s = document.getElementById('status-selector'); if(s) s.style.display = 'none'; } if (!e.target.closest('#sidebar-header') && !e.target.closest('#server-settings-modal') && !e.target.closest('#channel-settings-modal')) { const sd = document.getElementById('server-dropdown'); if(sd) sd.style.display = 'none'; } });
 
 // ==========================================
 // --- NAVIGATION, HOME & FRIENDS VIEW ---
@@ -345,6 +362,7 @@ function switchToHomeView() {
     chatType = 'home'; currentChatId = null; currentServerId = null;
     document.getElementById('server-name-display').innerText = "Friends & DMs";
     document.getElementById('server-dropdown-arrow').style.display = 'none';
+    document.getElementById('sidebar-header').style.backgroundImage = 'none';
     
     document.getElementById('home-sidebar-content').style.display = 'block';
     document.getElementById('channel-list').style.display = 'none';
@@ -583,9 +601,14 @@ document.getElementById('create-server-btn')?.addEventListener('click', () => {
     openInputModal("Create Server", "Server Name", "Give your server a name:", (serverName) => {
         if (serverName) {
             const serverId = generateCode();
+            const everyonePerms = { viewChannels: true, sendMessages: true, manageChannels: false, manageServerSettings: false, manageServerProfile: false, manageServerOverview: false, manageRoles: false, manageMessages: false };
+            
             set(ref(db, `servers/${serverId}`), { name: serverName, owner: auth.currentUser.email });
+            set(ref(db, `servers/${serverId}/roles/everyone`), { name: '@everyone', color: '#abb2bf', order: -1, mentionable: true, perms: everyonePerms });
+            
             set(ref(db, `server_members/${serverId}/${currentUserSafeEmail}`), { role: 'owner' });
             set(ref(db, `users/${currentUserSafeEmail}/servers/${serverId}`), { order: Date.now() });
+            
             const catId = push(ref(db, `categories/${serverId}`)).key;
             set(ref(db, `categories/${serverId}/${catId}`), { name: "Information", order: 0 });
             push(ref(db, `channels/${serverId}`), { name: "general", type: "text", categoryId: catId, order: 0 });
@@ -597,8 +620,17 @@ document.getElementById('create-server-btn')?.addEventListener('click', () => {
 async function joinServerByCode(codeToJoin) {
     const snapshot = await get(child(ref(db), `servers/${codeToJoin}`));
     if (snapshot.exists()) {
+        const sData = snapshot.val();
         await set(ref(db, `server_members/${codeToJoin}/${currentUserSafeEmail}`), { role: 'member' });
         await set(ref(db, `users/${currentUserSafeEmail}/servers/${codeToJoin}`), { order: Date.now() });
+        
+        if(sData.engagement && sData.engagement.joinChannel) {
+            push(ref(db, `messages/${sData.engagement.joinChannel}`), {
+                sender: 'system', username: 'System', avatar: 'https://cdn.pixabay.com/photo/2023/02/18/11/00/icon-7797704_640.png',
+                text: `Welcome to the server, <strong style="color:var(--text-bright);">@${myProfile.username}</strong>!`,
+                timestamp: Date.now(), roleId: 'system'
+            });
+        }
         customAlert("Joined server successfully!", "Success");
     } else { customAlert("Invalid invite link or code.", "Error"); }
 }
@@ -627,6 +659,13 @@ function loadMyServers() {
                     document.getElementById('server-name-display').innerText = sData.name;
                     document.getElementById('server-dropdown-arrow').style.display = 'inline';
                     
+                    if(sData.banner) {
+                        document.getElementById('sidebar-header').style.backgroundImage = `linear-gradient(to bottom, rgba(24, 26, 31, 0.7), var(--bg-secondary)), url(${sData.banner})`;
+                        document.getElementById('sidebar-header').style.backgroundSize = 'cover';
+                    } else {
+                        document.getElementById('sidebar-header').style.backgroundImage = 'none';
+                    }
+                    
                     document.getElementById('home-sidebar-content').style.display = 'none';
                     document.getElementById('channel-list').style.display = 'block';
                     document.getElementById('home-area').style.display = 'none';
@@ -640,17 +679,36 @@ function loadMyServers() {
                     div.classList.add('active');
                     document.getElementById('home-btn').classList.remove('active');
 
+                    // Resolve Advanced Permissions
                     const myRoleSnap = await get(ref(db, `server_members/${serverId}/${currentUserSafeEmail}/role`));
-                    const roleId = myRoleSnap.val();
-                    myServerRoles = roleId && roleId !== 'member' ? [roleId] : [];
-                    if (sData.owner === auth.currentUser.email || roleId === 'owner') { myServerPerms = { admin: true, manageChannels: true, deleteMessages: true }; myServerRoles.push('owner'); } 
-                    else if (roleId && roleId !== 'member') { const pSnap = await get(ref(db, `servers/${serverId}/roles/${roleId}`)); if(pSnap.exists()) myServerPerms = pSnap.val().perms || {}; } 
-                    else { myServerPerms = { admin: false, manageChannels: false, deleteMessages: false }; }
+                    let roleId = myRoleSnap.val() || 'everyone';
+                    if(roleId === 'member') roleId = 'everyone'; // Legacy fallback
+                    myServerRoles = roleId !== 'everyone' && roleId !== 'owner' ? ['everyone', roleId] : ['everyone'];
+                    
+                    const rolesSnap = await get(ref(db, `servers/${serverId}/roles`));
+                    serverRolesCache = rolesSnap.val() || {};
+                    
+                    // Base perms from @everyone
+                    let resolvedPerms = { ...(serverRolesCache['everyone']?.perms || { viewChannels: true, sendMessages: true }) };
+                    
+                    if(roleId !== 'everyone' && roleId !== 'owner' && serverRolesCache[roleId]) {
+                        const rPerms = serverRolesCache[roleId].perms;
+                        if(rPerms) for(let p in rPerms) { if(rPerms[p]) resolvedPerms[p] = true; }
+                    }
+                    
+                    if (sData.owner === auth.currentUser.email || roleId === 'owner' || resolvedPerms.manageServerSettings) { 
+                        myServerRoles.push('owner');
+                        resolvedPerms = { viewChannels: true, sendMessages: true, manageChannels: true, manageServerSettings: true, manageServerProfile: true, manageServerOverview: true, manageRoles: true, manageMessages: true }; 
+                    } 
+                    
+                    myServerPerms = resolvedPerms;
 
-                    document.getElementById('menu-server-settings').style.display = myServerPerms.admin ? 'flex' : 'none';
-                    document.getElementById('menu-add-category').style.display = myServerPerms.manageChannels || myServerPerms.admin ? 'flex' : 'none';
-                    document.getElementById('menu-add-text').style.display = myServerPerms.manageChannels || myServerPerms.admin ? 'flex' : 'none';
-                    document.getElementById('menu-add-voice').style.display = myServerPerms.manageChannels || myServerPerms.admin ? 'flex' : 'none';
+                    // Configure Dropdown Menu dynamically based on specific perms
+                    const anySettings = myServerPerms.manageServerSettings || myServerPerms.manageServerProfile || myServerPerms.manageServerOverview || myServerPerms.manageRoles;
+                    document.getElementById('menu-server-settings').style.display = anySettings ? 'flex' : 'none';
+                    document.getElementById('menu-add-category').style.display = myServerPerms.manageChannels ? 'flex' : 'none';
+                    document.getElementById('menu-add-text').style.display = myServerPerms.manageChannels ? 'flex' : 'none';
+                    document.getElementById('menu-add-voice').style.display = myServerPerms.manageChannels ? 'flex' : 'none';
 
                     initChannelSync(serverId); loadMemberList(serverId); 
                 });
@@ -680,17 +738,101 @@ document.getElementById('menu-add-text')?.addEventListener('click', () => { open
 document.getElementById('menu-add-voice')?.addEventListener('click', () => { openInputModal("Add Voice Channel", "Lounge", "", (name) => { if (name && currentServerId) { push(ref(db, `channels/${currentServerId}`), { name: name, type: "voice", order: Date.now() }); } }); document.getElementById('server-dropdown').style.display='none'; });
 document.getElementById('menu-invite')?.addEventListener('click', () => { if (currentServerId) { const link = `${appBaseUrl}?invite=${currentServerId}`; navigator.clipboard.writeText(link).then(() => { customAlert(`Link copied!\n${link}`, "Success"); }).catch(() => { openInputModal("Copy Link", "", "", ()=>{}, link); }); } document.getElementById('server-dropdown').style.display='none'; });
 
+// ==========================================
+// --- FULL SCREEN SETTINGS MENUS ---
+// ==========================================
 let tempServerIcon = null;
+let tempServerBanner = null;
+
+function setupServerSettingsTabs() {
+    document.querySelectorAll('#server-settings-modal .fs-tab').forEach(tab => {
+        tab.addEventListener('click', (e) => {
+            const tabName = e.target.getAttribute('data-tab');
+            if(!tabName) return;
+            
+            document.querySelectorAll('#server-settings-modal .fs-tab').forEach(t => t.classList.remove('active'));
+            e.target.classList.add('active');
+            
+            document.querySelectorAll('#server-settings-modal .ss-pane').forEach(p => p.style.display = 'none');
+            document.getElementById(`pane-ss-${tabName}`).style.display = 'block';
+            
+            if(window.innerWidth <= 768) {
+                document.querySelector('#server-settings-modal .fs-modal-layout').classList.add('mobile-viewing-content');
+            }
+        });
+    });
+}
+setupServerSettingsTabs();
+
+document.getElementById('ss-mobile-back')?.addEventListener('click', () => {
+    document.querySelector('#server-settings-modal .fs-modal-layout').classList.remove('mobile-viewing-content');
+});
+
 document.getElementById('menu-server-settings')?.addEventListener('click', async () => {
     document.getElementById('server-dropdown').style.display='none';
     const sSnap = await get(ref(db, `servers/${currentServerId}`)); const sData = sSnap.val();
-    document.getElementById('ss-server-name').value = sData.name; const preview = document.getElementById('ss-icon-preview');
+    
+    // Apply granular permissions
+    document.getElementById('tab-ss-profile').style.display = (myServerPerms.manageServerSettings || myServerPerms.manageServerProfile) ? 'block' : 'none';
+    document.getElementById('tab-ss-engagement').style.display = (myServerPerms.manageServerSettings || myServerPerms.manageServerOverview) ? 'block' : 'none';
+    document.getElementById('tab-ss-roles').style.display = (myServerPerms.manageServerSettings || myServerPerms.manageRoles) ? 'block' : 'none';
+    document.getElementById('tab-ss-delete').style.display = (myServerPerms.manageServerSettings || sData.owner === auth.currentUser.email) ? 'block' : 'none';
+    
+    document.getElementById('ss-header-name').innerText = sData.name;
+    document.getElementById('ss-server-name').value = sData.name;
+    
+    const preview = document.getElementById('ss-icon-preview');
     if(sData.icon) { preview.style.backgroundImage = `url(${sData.icon})`; preview.innerText = ""; tempServerIcon = sData.icon; } else { preview.style.backgroundImage = 'none'; preview.innerText = sData.name.charAt(0); }
-    document.getElementById('server-settings-modal').style.display = 'flex'; loadRoles();
+    
+    const bannerPreview = document.getElementById('ss-banner-preview');
+    if(sData.banner) { bannerPreview.style.backgroundImage = `url(${sData.banner})`; tempServerBanner = sData.banner; } else { bannerPreview.style.backgroundImage = 'none'; }
+    
+    // Load Engagement Data
+    const joinSel = document.getElementById('ss-join-channel');
+    const leaveSel = document.getElementById('ss-leave-channel');
+    joinSel.innerHTML = '<option value="">No Messages</option>';
+    leaveSel.innerHTML = '<option value="">No Messages</option>';
+    
+    Object.keys(currentChannelsData).forEach(cId => {
+        if(currentChannelsData[cId].type === 'text') {
+            joinSel.innerHTML += `<option value="${cId}"># ${currentChannelsData[cId].name}</option>`;
+            leaveSel.innerHTML += `<option value="${cId}"># ${currentChannelsData[cId].name}</option>`;
+        }
+    });
+    if(sData.engagement) {
+        if(sData.engagement.joinChannel) joinSel.value = sData.engagement.joinChannel;
+        if(sData.engagement.leaveChannel) leaveSel.value = sData.engagement.leaveChannel;
+    }
+
+    document.getElementById('server-settings-modal').style.display = 'flex'; 
+    document.querySelector('#server-settings-modal .fs-modal-layout').classList.remove('mobile-viewing-content');
+    
+    // Auto-click first available tab
+    const firstVisibleTab = document.querySelector('#server-settings-modal .fs-tab[style="display: block;"]');
+    if(firstVisibleTab) firstVisibleTab.click();
+    
+    loadRolesAdvanced();
 });
+
 document.getElementById('close-server-settings-btn')?.addEventListener('click', () => document.getElementById('server-settings-modal').style.display = 'none');
+
 document.getElementById('ss-icon-upload')?.addEventListener('change', (e) => { const file = e.target.files[0]; if (file) { const reader = new FileReader(); reader.onloadend = () => { tempServerIcon = reader.result; document.getElementById('ss-icon-preview').style.backgroundImage = `url(${tempServerIcon})`; document.getElementById('ss-icon-preview').innerText = ""; }; reader.readAsDataURL(file); } });
-document.getElementById('ss-save-overview-btn')?.addEventListener('click', () => { const newName = document.getElementById('ss-server-name').value.trim(); if(newName && currentServerId) { update(ref(db, `servers/${currentServerId}`), {name: newName, icon: tempServerIcon}); customAlert("Server updated!"); } });
+document.getElementById('ss-banner-upload')?.addEventListener('change', (e) => { const file = e.target.files[0]; if (file) { const reader = new FileReader(); reader.onloadend = () => { tempServerBanner = reader.result; document.getElementById('ss-banner-preview').style.backgroundImage = `url(${tempServerBanner})`; }; reader.readAsDataURL(file); } });
+
+document.getElementById('ss-save-profile-btn')?.addEventListener('click', () => { 
+    const newName = document.getElementById('ss-server-name').value.trim(); 
+    if(newName && currentServerId) { update(ref(db, `servers/${currentServerId}`), {name: newName, icon: tempServerIcon, banner: tempServerBanner}); customAlert("Server Profile updated!"); } 
+});
+
+document.getElementById('ss-save-engagement-btn')?.addEventListener('click', () => {
+    if(currentServerId) {
+        update(ref(db, `servers/${currentServerId}/engagement`), {
+            joinChannel: document.getElementById('ss-join-channel').value || null,
+            leaveChannel: document.getElementById('ss-leave-channel').value || null
+        });
+        customAlert("Engagement settings saved!");
+    }
+});
 
 document.getElementById('delete-server-btn')?.addEventListener('click', async () => {
     customConfirm("Are you ABSOLUTELY sure you want to delete this server? This will wipe all channels, roles, and messages.", "Delete Server", async (yes) => {
@@ -701,33 +843,197 @@ document.getElementById('delete-server-btn')?.addEventListener('click', async ()
     });
 });
 
-document.getElementById('tab-overview')?.addEventListener('click', (e) => { e.target.style.color='var(--text-bright)'; document.getElementById('tab-roles').style.color='var(--text-muted)'; document.getElementById('ss-overview').style.display='block'; document.getElementById('ss-roles').style.display='none'; });
-document.getElementById('tab-roles')?.addEventListener('click', (e) => { e.target.style.color='var(--text-bright)'; document.getElementById('tab-overview').style.color='var(--text-muted)'; document.getElementById('ss-roles').style.display='block'; document.getElementById('ss-overview').style.display='none'; });
-
+// Roles Advanced
 let dragRoleEl = null;
-function loadRoles() {
-    const list = document.getElementById('ss-roles-list');
-    onValue(ref(db, `servers/${currentServerId}/roles`), (snap) => {
-        list.innerHTML = ''; let rolesArray = [];
-        snap.forEach(c => { let data = c.val(); data.id = c.key; rolesArray.push(data); });
-        rolesArray.sort((a,b) => (a.order || 0) - (b.order || 0));
+let currentEditingRoleId = null;
+let rolesArrayCache = [];
 
-        rolesArray.forEach((rData, index, arr) => {
-            const roleId = rData.id; const div = document.createElement('div'); div.className = 'role-setting-item'; div.id = `role-set-${roleId}`; div.draggable = true;
-            div.innerHTML = `<div style="color: ${rData.color}; font-weight: bold; pointer-events: none;">☰ ${rData.name}</div>
-                <div><label style="font-size:11px; margin-right:5px;"><input type="checkbox" ${rData.perms.admin?'checked':''} class="r-perm" data-role="${roleId}" data-perm="admin"> Admin</label>
-                <label style="font-size:11px; margin-right:5px;"><input type="checkbox" ${rData.perms.manageChannels?'checked':''} class="r-perm" data-role="${roleId}" data-perm="manageChannels"> Channels</label>
-                <label style="font-size:11px;"><input type="checkbox" ${rData.perms.deleteMessages?'checked':''} class="r-perm" data-role="${roleId}" data-perm="deleteMessages"> Del Msg</label></div>`;
-            div.addEventListener('dragstart', (e) => { dragRoleEl = div; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/html', div.innerHTML); });
-            div.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; div.classList.add('drag-over'); return false; });
-            div.addEventListener('dragleave', (e) => { div.classList.remove('drag-over'); });
-            div.addEventListener('drop', (e) => { e.stopPropagation(); div.classList.remove('drag-over'); if (dragRoleEl !== div) { const srcId = dragRoleEl.id.replace('role-set-', ''); const targetOrder = rData.order || 0; const prevRole = arr[index - 1]; const nextRole = arr[index + 1]; const srcData = rolesArray.find(r => r.id === srcId); if ((srcData.order||0) < targetOrder) { update(ref(db, `servers/${currentServerId}/roles/${srcId}`), { order: nextRole ? (targetOrder + nextRole.order)/2 : targetOrder + 10 }); } else { update(ref(db, `servers/${currentServerId}/roles/${srcId}`), { order: prevRole ? (targetOrder + prevRole.order)/2 : targetOrder - 10 }); } } return false; });
+function loadRolesAdvanced() {
+    const list = document.getElementById('ss-roles-list-left');
+    onValue(ref(db, `servers/${currentServerId}/roles`), (snap) => {
+        list.innerHTML = ''; rolesArrayCache = [];
+        let rolesData = snap.val() || {};
+        
+        // Inject @everyone if perfectly missing from DB migration
+        if(!rolesData['everyone']) {
+            rolesData['everyone'] = { name: '@everyone', color: '#abb2bf', order: -999, mentionable: true, perms: { viewChannels: true, sendMessages: true } };
+        }
+        
+        Object.keys(rolesData).forEach(k => { let data = rolesData[k]; data.id = k; rolesArrayCache.push(data); });
+        rolesArrayCache.sort((a,b) => (b.order || 0) - (a.order || 0));
+
+        rolesArrayCache.forEach((rData, index, arr) => {
+            const roleId = rData.id; 
+            const div = document.createElement('div'); div.className = 'role-list-item'; div.id = `role-set-${roleId}`; 
+            
+            if(roleId !== 'everyone') {
+                div.draggable = true;
+                div.addEventListener('dragstart', (e) => { dragRoleEl = div; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/html', div.innerHTML); });
+                div.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; div.classList.add('drag-over'); return false; });
+                div.addEventListener('dragleave', (e) => { div.classList.remove('drag-over'); });
+                div.addEventListener('drop', (e) => { 
+                    e.stopPropagation(); div.classList.remove('drag-over'); 
+                    if (dragRoleEl !== div) { 
+                        const srcId = dragRoleEl.id.replace('role-set-', ''); 
+                        const targetOrder = rData.order || 0; 
+                        const prevRole = arr[index - 1]; const nextRole = arr[index + 1]; 
+                        const srcData = rolesArrayCache.find(r => r.id === srcId); 
+                        if ((srcData.order||0) > targetOrder) { update(ref(db, `servers/${currentServerId}/roles/${srcId}`), { order: nextRole && nextRole.id !== 'everyone' ? (targetOrder + nextRole.order)/2 : targetOrder - 10 }); } 
+                        else { update(ref(db, `servers/${currentServerId}/roles/${srcId}`), { order: prevRole ? (targetOrder + prevRole.order)/2 : targetOrder + 10 }); } 
+                    } return false; 
+                });
+            }
+            
+            div.innerHTML = `<span style="color: ${rData.color};">●</span> ${rData.name}`;
+            div.addEventListener('click', () => editRole(roleId));
             list.appendChild(div);
         });
-        document.querySelectorAll('.r-perm').forEach(chk => { chk.addEventListener('change', (e) => { const rId = e.target.getAttribute('data-role'); const p = e.target.getAttribute('data-perm'); update(ref(db, `servers/${currentServerId}/roles/${rId}/perms`), { [p]: e.target.checked }); }); });
+        
+        if(!currentEditingRoleId && rolesArrayCache.length > 0) editRole('everyone');
+        else if (currentEditingRoleId) editRole(currentEditingRoleId, true);
     });
 }
-document.getElementById('ss-create-role-btn')?.addEventListener('click', () => { const name = document.getElementById('ss-new-role-name').value; const color = document.getElementById('ss-new-role-color').value; if(name && currentServerId) { push(ref(db, `servers/${currentServerId}/roles`), { name, color, order: Date.now(), perms: {admin:false, manageChannels:false, deleteMessages:false} }); document.getElementById('ss-new-role-name').value = ''; } });
+
+function editRole(roleId, noSwitch = false) {
+    currentEditingRoleId = roleId;
+    document.querySelectorAll('.role-list-item').forEach(el => el.classList.remove('active'));
+    const activeEl = document.getElementById(`role-set-${roleId}`);
+    if(activeEl) activeEl.classList.add('active');
+    
+    document.getElementById('ss-role-edit-area').style.display = 'block';
+    
+    const rData = rolesArrayCache.find(r => r.id === roleId);
+    if(!rData) return;
+    
+    document.getElementById('er-name').value = rData.name;
+    document.getElementById('er-name').disabled = roleId === 'everyone';
+    document.getElementById('er-color').value = rData.color || '#abb2bf';
+    document.getElementById('er-mentionable').checked = !!rData.mentionable;
+    
+    const p = rData.perms || {};
+    document.getElementById('p-viewChannels').checked = !!p.viewChannels;
+    document.getElementById('p-sendMessages').checked = !!p.sendMessages;
+    document.getElementById('p-manageChannels').checked = !!p.manageChannels;
+    document.getElementById('p-manageServerSettings').checked = !!p.manageServerSettings;
+    document.getElementById('p-manageServerProfile').checked = !!p.manageServerProfile;
+    document.getElementById('p-manageServerOverview').checked = !!p.manageServerOverview;
+    document.getElementById('p-manageRoles').checked = !!p.manageRoles;
+    document.getElementById('p-manageMessages').checked = !!p.manageMessages;
+    
+    document.getElementById('delete-role-btn').style.display = roleId === 'everyone' ? 'none' : 'block';
+    
+    if(!noSwitch && window.innerWidth <= 768) {
+        document.getElementById('ss-roles-list-left').style.display = 'none';
+        document.getElementById('ss-roles-pane-mobile-back').style.display = 'block';
+    }
+}
+
+document.getElementById('ss-roles-pane-mobile-back')?.addEventListener('click', () => {
+    document.getElementById('ss-roles-list-left').style.display = 'flex';
+    document.getElementById('ss-roles-pane-mobile-back').style.display = 'none';
+    document.getElementById('ss-role-edit-area').style.display = 'none';
+});
+
+document.getElementById('ss-create-role-btn')?.addEventListener('click', () => { 
+    if(currentServerId) { push(ref(db, `servers/${currentServerId}/roles`), { name: 'New Role', color: '#abb2bf', order: Date.now(), mentionable: true, perms: {viewChannels:true, sendMessages:true} }); } 
+});
+
+document.getElementById('save-role-settings-btn')?.addEventListener('click', () => {
+    if(currentServerId && currentEditingRoleId) {
+        const payload = {
+            color: document.getElementById('er-color').value,
+            mentionable: document.getElementById('er-mentionable').checked,
+            perms: {
+                viewChannels: document.getElementById('p-viewChannels').checked,
+                sendMessages: document.getElementById('p-sendMessages').checked,
+                manageChannels: document.getElementById('p-manageChannels').checked,
+                manageServerSettings: document.getElementById('p-manageServerSettings').checked,
+                manageServerProfile: document.getElementById('p-manageServerProfile').checked,
+                manageServerOverview: document.getElementById('p-manageServerOverview').checked,
+                manageRoles: document.getElementById('p-manageRoles').checked,
+                manageMessages: document.getElementById('p-manageMessages').checked
+            }
+        };
+        if(currentEditingRoleId !== 'everyone') payload.name = document.getElementById('er-name').value.trim();
+        
+        update(ref(db, `servers/${currentServerId}/roles/${currentEditingRoleId}`), payload);
+        customAlert("Role updated successfully.");
+    }
+});
+
+document.getElementById('delete-role-btn')?.addEventListener('click', () => {
+    if(currentServerId && currentEditingRoleId && currentEditingRoleId !== 'everyone') {
+        customConfirm("Delete this role permanently?", "Delete Role", async (yes) => {
+            if(yes) {
+                await remove(ref(db, `servers/${currentServerId}/roles/${currentEditingRoleId}`));
+                currentEditingRoleId = null;
+                document.getElementById('ss-role-edit-area').style.display = 'none';
+                if(window.innerWidth <= 768) document.getElementById('ss-roles-pane-mobile-back').click();
+            }
+        });
+    }
+});
+
+// Channel Settings Full Screen Logic
+let currentEditingChannelId = null;
+
+function openChannelSettings(channelId) {
+    currentEditingChannelId = channelId;
+    const cData = currentChannelsData[channelId];
+    if(!cData) return;
+    
+    document.getElementById('cs-header-name').innerText = `# ${cData.name}`;
+    document.getElementById('cs-channel-name').value = cData.name;
+    
+    document.querySelectorAll('#channel-settings-modal .fs-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-cs-overview').classList.add('active');
+    document.querySelectorAll('#channel-settings-modal .ss-pane').forEach(p => p.style.display = 'none');
+    document.getElementById('pane-cs-overview').style.display = 'block';
+    
+    document.getElementById('channel-settings-modal').style.display = 'flex';
+    document.querySelector('#channel-settings-modal .fs-modal-layout').classList.remove('mobile-viewing-content');
+}
+
+document.querySelectorAll('#channel-settings-modal .fs-tab').forEach(tab => {
+    tab.addEventListener('click', (e) => {
+        const tabName = e.target.getAttribute('data-tab');
+        if(!tabName) return;
+        
+        document.querySelectorAll('#channel-settings-modal .fs-tab').forEach(t => t.classList.remove('active'));
+        e.target.classList.add('active');
+        
+        document.querySelectorAll('#channel-settings-modal .ss-pane').forEach(p => p.style.display = 'none');
+        document.getElementById(`pane-cs-${tabName}`).style.display = 'block';
+        
+        if(window.innerWidth <= 768) {
+            document.querySelector('#channel-settings-modal .fs-modal-layout').classList.add('mobile-viewing-content');
+        }
+    });
+});
+
+document.getElementById('cs-mobile-back')?.addEventListener('click', () => { document.querySelector('#channel-settings-modal .fs-modal-layout').classList.remove('mobile-viewing-content'); });
+document.getElementById('close-channel-settings-btn')?.addEventListener('click', () => { document.getElementById('channel-settings-modal').style.display = 'none'; });
+
+document.getElementById('cs-save-overview-btn')?.addEventListener('click', () => {
+    const newName = document.getElementById('cs-channel-name').value.trim();
+    if(newName && currentServerId && currentEditingChannelId) {
+        update(ref(db, `channels/${currentServerId}/${currentEditingChannelId}`), { name: newName.toLowerCase() });
+        customAlert("Channel updated!");
+        document.getElementById('cs-header-name').innerText = `# ${newName.toLowerCase()}`;
+    }
+});
+document.getElementById('tab-cs-delete')?.addEventListener('click', () => {
+    if(currentServerId && currentEditingChannelId) {
+        customConfirm("Delete this channel forever?", "Delete Channel", async (yes) => {
+            if(yes) {
+                await remove(ref(db, `channels/${currentServerId}/${currentEditingChannelId}`));
+                await remove(ref(db, `messages/${currentEditingChannelId}`));
+                document.getElementById('channel-settings-modal').style.display = 'none';
+            }
+        });
+    }
+});
+
 
 // Members System
 let userToManageEmail = null;
@@ -780,12 +1086,12 @@ function loadMemberList(serverId) {
                 });
                 mDiv.addEventListener('contextmenu', (e) => {
                     e.preventDefault();
-                    if (!myServerPerms.admin || m.email === auth.currentUser.email) return;
+                    if (!myServerPerms.admin && !myServerPerms.manageRoles || m.email === auth.currentUser.email) return;
                     userToManageEmail = m.email;
                     const select = document.getElementById('assign-role-select');
-                    select.innerHTML = `<option value="member">Member (Default)</option>`;
+                    select.innerHTML = ``; // default is handled by 'everyone' mathematically now, but explicitly storing is fine
                     Object.keys(rolesData).forEach(rId => { select.innerHTML += `<option value="${rId}">${rolesData[rId].name}</option>`; });
-                    select.value = membersSnap.val()[m.email].role || 'member';
+                    select.value = membersSnap.val()[m.email].role || 'everyone';
                     document.getElementById('assign-role-modal').style.display = 'flex';
                 });
                 listContent.appendChild(mDiv);
@@ -969,9 +1275,9 @@ function removeHiddenAudio(peerEmail) {
 // --- MESSAGES, EMBEDS & NOTIFICATIONS ---
 // ==========================================
 function enableChat() { 
-    document.getElementById('msg-input').disabled = false; 
-    document.getElementById('send-btn').disabled = false; 
-    document.getElementById('upload-img-btn').disabled = false; 
+    document.getElementById('msg-input').disabled = !myServerPerms.sendMessages; 
+    document.getElementById('send-btn').disabled = !myServerPerms.sendMessages; 
+    document.getElementById('upload-img-btn').disabled = !myServerPerms.sendMessages; 
     document.body.classList.remove('mobile-home-active');
     document.body.classList.add('mobile-chat-active'); 
 }
@@ -1082,7 +1388,7 @@ async function createMessageDOM(msgId, data, prevSender, prevTime) {
     const buildRes = await buildMessageHtml(data);
     if(buildRes.isMentioned && data.sender !== auth.currentUser.email) msgElement.classList.add('mentioned');
 
-    let canDelete = (data.sender === auth.currentUser.email || (chatType === 'server' && (myServerPerms.admin || myServerPerms.deleteMessages)));
+    let canDelete = (data.sender === auth.currentUser.email || (chatType === 'server' && (myServerPerms.admin || myServerPerms.manageMessages)));
     let nameColor = "var(--text-bright)";
     if(chatType === 'server' && data.roleId && data.roleId !== 'member' && data.roleId !== 'owner') { const rSnap = await get(ref(db, `servers/${currentServerId}/roles/${data.roleId}`)); if(rSnap.exists()) nameColor = rSnap.val().color; }
 
@@ -1253,14 +1559,14 @@ document.getElementById('msg-input')?.addEventListener('paste', (e) => {
         const item = items[index];
         if (item.kind === 'file' && item.type.startsWith('image/')) {
             const blob = item.getAsFile(); if (blob.size > 2 * 1024 * 1024) return customAlert("Pasted image is too large (max 2MB).");
-            const reader = new FileReader(); reader.onloadend = () => { pendingAttachmentBase64 = reader.result; document.getElementById('attachment-preview-img').src = pendingAttachmentBase64; document.getElementById('attachment-preview-area').style.display = 'flex'; }; reader.readAsDataURL(blob);
+            const reader = new FileReader(); reader.onloadend = () => { pendingAttachmentBase64 = result; document.getElementById('attachment-preview-img').src = pendingAttachmentBase64; document.getElementById('attachment-preview-area').style.display = 'flex'; }; reader.readAsDataURL(blob);
         }
     }
 });
 
 async function sendMessage() {
     const input = document.getElementById('msg-input'); const text = input.value.trim();
-    if ((text !== "" || pendingAttachmentBase64) && currentChatId) {
+    if ((text !== "" || pendingAttachmentBase64) && currentChatId && myServerPerms.sendMessages) {
         const path = chatType === 'server' ? `messages/${currentChatId}` : `dms/${currentChatId}`;
         let roleId = 'member';
         if(chatType === 'server') { const mSnap = await get(ref(db, `server_members/${currentServerId}/${currentUserSafeEmail}/role`)); roleId = mSnap.val() || 'member'; }
