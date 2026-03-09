@@ -127,7 +127,6 @@ window.showGlobalUserProfile = async function(email, event) {
     const nameEl = document.getElementById('gup-username');
     const tagEl = document.getElementById('gup-tag');
     const avatarEl = document.getElementById('gup-avatar');
-    const bannerEl = document.getElementById('gup-banner');
     
     const addFriendBtn = document.getElementById('gup-add-friend');
     const removeFriendBtn = document.getElementById('gup-remove-friend');
@@ -135,7 +134,6 @@ window.showGlobalUserProfile = async function(email, event) {
     
     nameEl.innerText = "Loading..."; tagEl.innerText = "";
     avatarEl.src = "https://cdn.pixabay.com/photo/2023/02/18/11/00/icon-7797704_640.png";
-    bannerEl.style.backgroundColor = "#5865F2";
     
     addFriendBtn.style.display = 'none';
     removeFriendBtn.style.display = 'none';
@@ -264,7 +262,7 @@ document.getElementById('register-btn')?.addEventListener('click', async () => {
         const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
         const safeEmail = sanitizeEmail(email); const baseName = email.split('@')[0];
         const randomTag = Math.floor(1000 + Math.random() * 9000).toString(); 
-        const defaultAvatar = `https://ui-avatars.com/api/?name=${baseName.charAt(0)}&background=5865F2&color=fff&size=150`;
+        const defaultAvatar = `https://ui-avatars.com/api/?name=${baseName.charAt(0)}&background=4d78cc&color=fff&size=150`;
 
         await set(ref(db, `users/${safeEmail}`), { email, uid: userCredential.user.uid, username: baseName, tag: randomTag, avatar: defaultAvatar, status: 'online', saved_status: 'online' });
         await set(ref(db, `user_tags/${baseName}_${randomTag}`), safeEmail);
@@ -407,7 +405,7 @@ function renderHomeContent() {
         hF.style.display = 'flex'; hR.style.display = 'none';
         
         content.innerHTML = '';
-        if(activeFriendsData.length === 0) { content.innerHTML = '<div style="color: gray; text-align: center; margin-top: 50px;">You have no friends. Add some!</div>'; return; }
+        if(activeFriendsData.length === 0) { content.innerHTML = '<div style="color: var(--text-muted); text-align: center; margin-top: 50px;">You have no friends. Add some!</div>'; return; }
         
         activeFriendsData.forEach(fData => {
             const cachedUser = globalUsersCache[fData.email] || {};
@@ -420,8 +418,8 @@ function renderHomeContent() {
                 <div class="friend-card-left" onclick="showGlobalUserProfile('${fData.email}', event)" style="cursor:pointer;">
                     <div class="avatar-container"><img src="${displayAvatar}" class="avatar-small"><div class="status-indicator status-${displayStatus}"></div></div>
                     <div style="display:flex; flex-direction:column;">
-                        <span style="font-weight:bold; color:white; font-size:15px;">${displayName}</span>
-                        <span style="font-size:12px; color:gray;">${displayStatus}</span>
+                        <span style="font-weight:bold; color:var(--text-bright); font-size:15px;">${displayName}</span>
+                        <span style="font-size:12px; color:var(--text-muted);">${displayStatus}</span>
                     </div>
                 </div>
                 <div class="friend-card-right">
@@ -446,10 +444,10 @@ function renderHomeContent() {
         navR.classList.add('active');
         hF.style.display = 'none'; hR.style.display = 'flex';
         
-        content.innerHTML = '<div style="color: gray; text-align: center; margin-top: 50px;">Loading requests...</div>';
+        content.innerHTML = '<div style="color: var(--text-muted); text-align: center; margin-top: 50px;">Loading requests...</div>';
         get(ref(db, `friend_requests/${currentUserSafeEmail}`)).then(snap => {
             content.innerHTML = '';
-            if(!snap.exists() || Object.keys(snap.val()).length === 0) { content.innerHTML = '<div style="color: gray; text-align: center; margin-top: 50px;">No pending requests.</div>'; return; }
+            if(!snap.exists() || Object.keys(snap.val()).length === 0) { content.innerHTML = '<div style="color: var(--text-muted); text-align: center; margin-top: 50px;">No pending requests.</div>'; return; }
             
             snap.forEach(child => {
                 const senderEmail = child.key; const sData = child.val();
@@ -457,7 +455,7 @@ function renderHomeContent() {
                 div.innerHTML = `
                     <div class="friend-card-left" onclick="showGlobalUserProfile('${senderEmail}', event)" style="cursor:pointer;">
                         <img src="${sData.avatar}" class="avatar-small">
-                        <span style="font-weight:bold; color:white; font-size:15px;">${sData.username}</span>
+                        <span style="font-weight:bold; color:var(--text-bright); font-size:15px;">${sData.username}</span>
                     </div>
                     <div class="friend-card-right">
                         <div class="action-circle green accept-fr" title="Accept"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
@@ -526,7 +524,7 @@ function loadFriendsList() {
             const displayStatus = cachedUser.status || "offline";
 
             const div = document.createElement('div'); div.classList.add('channel-item', 'friend-item'); div.id = `dm-${fDataStatic.dmId}`;
-            div.innerHTML = `<div class="avatar-container"><img src="${displayAvatar}" class="avatar-small" id="f-avatar-${fEmail}"><div class="status-indicator status-${displayStatus}" id="status-${fEmail}"></div></div><span id="f-name-${fEmail}">${displayName}</span>`;
+            div.innerHTML = `<div class="avatar-container"><img src="${displayAvatar}" class="avatar-small" id="f-avatar-${fEmail}"><div class="status-indicator status-${displayStatus}" id="status-${fEmail}"></div></div><span id="f-name-${fEmail}" class="c-name">${displayName}</span>`;
             
             div.addEventListener('contextmenu', (e) => showContextMenu(e, 'dm', fEmail));
             let touchTimer; div.addEventListener('touchstart', (e) => { touchTimer = setTimeout(() => showContextMenu(e, 'dm', fEmail), 500); }); div.addEventListener('touchend', () => clearTimeout(touchTimer)); div.addEventListener('touchmove', () => clearTimeout(touchTimer));
@@ -703,8 +701,8 @@ document.getElementById('delete-server-btn')?.addEventListener('click', async ()
     });
 });
 
-document.getElementById('tab-overview')?.addEventListener('click', (e) => { e.target.style.color='white'; document.getElementById('tab-roles').style.color='gray'; document.getElementById('ss-overview').style.display='block'; document.getElementById('ss-roles').style.display='none'; });
-document.getElementById('tab-roles')?.addEventListener('click', (e) => { e.target.style.color='white'; document.getElementById('tab-overview').style.color='gray'; document.getElementById('ss-roles').style.display='block'; document.getElementById('ss-overview').style.display='none'; });
+document.getElementById('tab-overview')?.addEventListener('click', (e) => { e.target.style.color='var(--text-bright)'; document.getElementById('tab-roles').style.color='var(--text-muted)'; document.getElementById('ss-overview').style.display='block'; document.getElementById('ss-roles').style.display='none'; });
+document.getElementById('tab-roles')?.addEventListener('click', (e) => { e.target.style.color='var(--text-bright)'; document.getElementById('tab-overview').style.color='var(--text-muted)'; document.getElementById('ss-roles').style.display='block'; document.getElementById('ss-overview').style.display='none'; });
 
 let dragRoleEl = null;
 function loadRoles() {
@@ -775,7 +773,7 @@ function loadMemberList(serverId) {
 
             group.members.forEach(m => {
                 const mDiv = document.createElement('div'); mDiv.className = 'member-item';
-                let nameColor = group.color || "white"; if(gKey === 'owner' || gKey === 'online' || gKey === 'offline') nameColor = "white";
+                let nameColor = group.color || "var(--text-main)"; if(gKey === 'owner' || gKey === 'online' || gKey === 'offline') nameColor = "var(--text-main)";
                 mDiv.innerHTML = `<div class="avatar-container"><img src="${m.data.avatar}" class="avatar-small"><div class="status-indicator status-${m.status}"></div></div><div class="member-username" style="color: ${nameColor}; pointer-events:none;">${m.data.username}</div>`;
                 mDiv.addEventListener('click', (e) => {
                     showGlobalUserProfile(m.email, e);
@@ -985,13 +983,13 @@ function processMentionsAndText(text) {
     
     if(myProfile.username && text.includes('@' + myProfile.username)) isMentioned = true;
     myServerRoles.forEach(role => { if(serverRolesCache[role] && text.includes('@' + serverRolesCache[role].name)) isMentioned = true; });
-    processed = processed.replace(/@([a-zA-Z0-9_]+)/g, `<strong style="color: #faa61a; background: rgba(250, 166, 26, 0.1); padding: 0 3px; border-radius: 3px;">@$1</strong>`);
+    processed = processed.replace(/@([a-zA-Z0-9_]+)/g, `<strong style="color: var(--accent-warning); background: rgba(229, 192, 123, 0.1); padding: 0 3px; border-radius: 3px;">@$1</strong>`);
     return { html: processed, isMentioned };
 }
 
 async function buildMessageHtml(data) {
     const mentionData = processMentionsAndText(data.text);
-    let contentHtml = `<div style="margin-left: 42px; word-break: break-word; color: #dcddde;">${mentionData.html}</div>`;
+    let contentHtml = `<div style="margin-left: 42px; word-break: break-word; color: var(--text-main);">${mentionData.html}</div>`;
     
     const inviteRegex = new RegExp(`${appBaseUrl.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\?invite=([a-zA-Z0-9]+)`, 'g');
     let match; let tempEmbeds = [];
@@ -1085,14 +1083,14 @@ async function createMessageDOM(msgId, data, prevSender, prevTime) {
     if(buildRes.isMentioned && data.sender !== auth.currentUser.email) msgElement.classList.add('mentioned');
 
     let canDelete = (data.sender === auth.currentUser.email || (chatType === 'server' && (myServerPerms.admin || myServerPerms.deleteMessages)));
-    let nameColor = "white";
+    let nameColor = "var(--text-bright)";
     if(chatType === 'server' && data.roleId && data.roleId !== 'member' && data.roleId !== 'owner') { const rSnap = await get(ref(db, `servers/${currentServerId}/roles/${data.roleId}`)); if(rSnap.exists()) nameColor = rSnap.val().color; }
 
     let actionsHtml = `<div class="msg-actions"><button class="msg-action-btn reply">${icons.reply} Reply</button>${canDelete ? `<button class="msg-action-btn del">${icons.trash} Delete</button>` : ''}</div>`;
     
     if (!isConsecutive) {
         let replyHtml = data.replyTo ? `<div class="reply-context"><strong>@${data.replyTo.username}</strong> ${data.replyTo.text}</div>` : "";
-        let headerHtml = `${replyHtml}<div class="message-header"><img src="${data.avatar}" class="avatar-small" style="cursor:pointer;" onclick="showGlobalUserProfile('${data.sender}', event)"><span class="message-sender" style="color: ${nameColor}; cursor:pointer;" onclick="showGlobalUserProfile('${data.sender}', event)">${data.username}</span><span style="font-size: 0.8em; color: gray;">${new Date(data.timestamp).toLocaleTimeString()}</span></div>`;
+        let headerHtml = `${replyHtml}<div class="message-header"><img src="${data.avatar}" class="avatar-small" style="cursor:pointer;" onclick="showGlobalUserProfile('${data.sender}', event)"><span class="message-sender" style="color: ${nameColor}; cursor:pointer;" onclick="showGlobalUserProfile('${data.sender}', event)">${data.username}</span><span style="font-size: 0.8em; color: var(--text-muted);">${new Date(data.timestamp).toLocaleTimeString()}</span></div>`;
         msgElement.innerHTML = `${actionsHtml}${headerHtml}<div class="msg-content-wrapper">${buildRes.html}</div>`;
     } else { msgElement.innerHTML = `${actionsHtml}<div class="msg-content-wrapper">${buildRes.html}</div>`; }
 
@@ -1103,7 +1101,7 @@ async function createMessageDOM(msgId, data, prevSender, prevTime) {
             const iHtml = sData.icon ? `<div class="invite-embed-icon" style="background-image:url(${sData.icon})"></div>` : `<div class="invite-embed-icon">${sData.name.charAt(0)}</div>`;
             const embedContainer = msgElement.querySelector('#' + eObj.id);
             if(embedContainer) {
-                embedContainer.innerHTML = `<div class="invite-embed"><h4>You've been invited to join a server</h4><div class="invite-embed-content">${iHtml}<div class="invite-embed-info"><div class="invite-embed-name">${sData.name}</div><button onclick="window.location.href='${appBaseUrl}?invite=${eObj.code}'" style="margin:0; padding:5px 15px; background:#3ba55c;">Join</button></div></div></div>`;
+                embedContainer.innerHTML = `<div class="invite-embed"><h4>You've been invited to join a server</h4><div class="invite-embed-content">${iHtml}<div class="invite-embed-info"><div class="invite-embed-name">${sData.name}</div><button onclick="window.location.href='${appBaseUrl}?invite=${eObj.code}'" style="margin:0; padding:5px 15px;">Join</button></div></div></div>`;
             }
         }
     });
@@ -1197,7 +1195,7 @@ async function loadMessages(dbPath, chatNameLabel) {
 // Replier Logic
 function triggerReply(msgId, username, text) {
     replyingToMessage = { id: msgId, username: username, text: text.length > 50 ? text.substring(0, 50) + '...' : text };
-    document.getElementById('reply-banner-text').innerHTML = `Replying to <strong>@${username}</strong>`;
+    document.getElementById('reply-banner-text').innerHTML = `Replying to <strong style="color:var(--text-bright);">@${username}</strong>`;
     document.getElementById('reply-banner').style.display = 'flex'; document.getElementById('msg-input').focus();
 }
 document.getElementById('cancel-reply-btn')?.addEventListener('click', () => { replyingToMessage = null; document.getElementById('reply-banner').style.display = 'none'; });
