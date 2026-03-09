@@ -49,7 +49,7 @@ let replyingToMessage = null;
 let pendingAttachmentBase64 = null; 
 let pendingAttachmentOriginal = null;
 
-let notificationsActive = false; 
+let notificationsActive = true; 
 const appStartTime = Date.now(); 
 let unreadState = { dms: new Set(), channels: new Set(), servers: new Set() };
 
@@ -1030,7 +1030,7 @@ async function joinServerByCode(codeToJoin) {
         if(sData.engagement && sData.engagement.joinChannel) {
             push(ref(db, `messages/${sData.engagement.joinChannel}`), {
                 sender: 'system', username: 'System', avatar: 'https://cdn.pixabay.com/photo/2023/02/18/11/00/icon-7797704_640.png',
-                text: `Welcome to the server, <strong style="color:var(--text-bright);">@${myProfile.username}</strong>!`,
+                text: `Welcome to the server, **@${myProfile.username}**!`,
                 timestamp: Date.now(), roleId: 'system'
             });
         }
@@ -1153,7 +1153,7 @@ document.getElementById('menu-leave-server')?.addEventListener('click', () => {
                 if(sSnap.exists() && sSnap.val().engagement?.leaveChannel) {
                     push(ref(db, `messages/${sSnap.val().engagement.leaveChannel}`), {
                         sender: 'system', username: 'System', avatar: 'https://cdn.pixabay.com/photo/2023/02/18/11/00/icon-7797704_640.png',
-                        text: `<strong style="color:var(--text-bright);">@${myProfile.username}</strong> just left the server.`,
+                        text: `**@${myProfile.username}** just left the server.`,
                         timestamp: Date.now(), roleId: 'system'
                     });
                 }
@@ -2016,10 +2016,14 @@ async function createMessageDOM(msgId, data, prevSender, prevTime) {
     // Message Actions listeners
     const delBtn = msgElement.querySelector('.msg-action-btn.del'); 
     if (delBtn) {
-        delBtn.addEventListener('click', () => { 
-            customConfirm("Are you sure you want to delete this message? This action cannot be undone.", "Delete Message", async (yes) => {
-                if(yes) await remove(ref(db, `${chatType === 'server' ? 'messages' : 'dms'}/${currentChatId}/${msgId}`));
-            });
+        delBtn.addEventListener('click', (e) => { 
+            if (e.shiftKey) {
+                remove(ref(db, `${chatType === 'server' ? 'messages' : 'dms'}/${currentChatId}/${msgId}`));
+            } else {
+                customConfirm("Are you sure you want to delete this message? This action cannot be undone.", "Delete Message", async (yes) => {
+                    if(yes) await remove(ref(db, `${chatType === 'server' ? 'messages' : 'dms'}/${currentChatId}/${msgId}`));
+                });
+            }
         }); 
     }
 
@@ -2041,7 +2045,9 @@ async function createMessageDOM(msgId, data, prevSender, prevTime) {
             const ta = contentWrapper.querySelector('.edit-msg-input');
             ta.style.height = ta.scrollHeight + 'px';
             ta.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = (this.scrollHeight) + 'px'; });
-            ta.addEventListener('keypress', (e) => {
+            
+            // Shift + Enter for new line, Enter to save inside edit box
+            ta.addEventListener('keydown', (e) => {
                 if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); contentWrapper.querySelector('.save-edit-btn').click(); }
             });
             ta.focus();
@@ -2050,6 +2056,13 @@ async function createMessageDOM(msgId, data, prevSender, prevTime) {
             contentWrapper.querySelector('.save-edit-btn').onclick = () => {
                 const newText = ta.value.trim();
                 if(newText && newText !== rawText) {
+                    // Instantly update the local UI without a reload/flicker
+                    data.text = newText;
+                    data.edited = true;
+                    buildMessageHtml(data).then(res => {
+                        contentWrapper.innerHTML = res.html;
+                    });
+                    // Push update to DB for others
                     update(ref(db, `${chatType === 'server' ? 'messages' : 'dms'}/${currentChatId}/${msgId}`), { text: newText, edited: true });
                 } else {
                     contentWrapper.innerHTML = originalHtml;
@@ -2422,7 +2435,7 @@ async function sendMessage() {
 }
 
 document.getElementById('send-btn')?.addEventListener('click', sendMessage);
-document.getElementById('msg-input')?.addEventListener('keypress', (e) => { 
+document.getElementById('msg-input')?.addEventListener('keydown', (e) => { 
     if (e.key === 'Enter' && !e.shiftKey) { 
         e.preventDefault(); 
         sendMessage(); 

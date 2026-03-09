@@ -192,7 +192,7 @@ input, textarea { font-size: 16px !important; }
 #member-list-content { flex-grow: 1; padding: 15px 10px; overflow-y: auto; }
 .member-category { text-transform: uppercase; font-size: 11px; font-weight: bold; color: var(--text-muted); margin-top: 15px; margin-bottom: 5px; padding-left: 5px; }
 .member-item { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 4px; cursor: pointer; transition: 0.2s; }
-.member-item:hover { background-color: var(--bg-tertiary); }
+.member-item:hover { background: var(--bg-tertiary); }
 .member-item .avatar-container { flex-shrink: 0; }
 .member-username { font-weight: bold; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
