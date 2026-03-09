@@ -42,9 +42,12 @@ let unsubscribeMembers = null;
 let unsubscribeChannels = null;
 let unsubscribeCategories = null;
 let unsubscribeVoiceRosters = null;
+let dmsNotifListener = null;
+let serversNotifListener = null;
 
 let replyingToMessage = null; 
 let pendingAttachmentBase64 = null; 
+
 let notificationsActive = false; 
 const appStartTime = Date.now(); 
 let unreadState = { dms: new Set(), channels: new Set(), servers: new Set() };
@@ -66,7 +69,7 @@ const icons = {
     textChannel: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="9" x2="20" y2="9"></line><line x1="4" y1="15" x2="20" y2="15"></line><line x1="10" y1="3" x2="8" y2="21"></line><line x1="16" y1="3" x2="14" y2="21"></line></svg>`,
     voiceChannel: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>`,
     trash: `<svg class="svg-icon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`,
-    gear: `<svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>`,
+    gear: `<svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>`,
     addFriend: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>`,
     removeFriend: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="18" y1="8" x2="23" y2="13"></line><line x1="23" y1="8" x2="18" y2="13"></line></svg>`,
     closeDM: `<svg class="svg-icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`,
@@ -769,7 +772,7 @@ function openDM(dmId, friendEmail) {
     chatType = 'dm'; currentChatId = dmId; 
     const uData = globalUsersCache[friendEmail];
     currentDMOtherUser = uData;
-    myServerPerms = { viewChannels: true, sendMessages: true, manageMessages: false }; // Full perms in DMs usually except deleting others
+    myServerPerms = { viewChannels: true, sendMessages: true, manageMessages: false }; 
     
     update(ref(db, `users/${currentUserSafeEmail}/friends/${friendEmail}`), { hidden: false });
     
@@ -886,7 +889,6 @@ function loadMyServers() {
                     const rolesSnap = await get(ref(db, `servers/${serverId}/roles`));
                     serverRolesCache = rolesSnap.val() || {};
                     
-                    // Base perms from @everyone
                     let resolvedPerms = { ...(serverRolesCache['everyone']?.perms || { viewChannels: true, sendMessages: true }) };
                     
                     myServerRoles.forEach(roleId => {
@@ -903,7 +905,7 @@ function loadMyServers() {
                     
                     myServerPerms = resolvedPerms;
 
-                    // Configure Dropdown Menu dynamically based on specific perms
+                    // Configure Dropdown Menu dynamically
                     const anySettings = myServerPerms.manageServerSettings || myServerPerms.manageServerProfile || myServerPerms.manageServerOverview || myServerPerms.manageRoles;
                     document.getElementById('menu-server-settings').style.display = anySettings ? 'flex' : 'none';
                     document.getElementById('menu-add-category').style.display = myServerPerms.manageChannels ? 'flex' : 'none';
@@ -933,7 +935,7 @@ function loadMyServers() {
     });
 }
 
-document.getElementById('server-header-clickable')?.addEventListener('click', (e) => { e.stopPropagation(); if (currentServerId) { const d = document.getElementById('server-dropdown'); d.style.display = d.style.display === 'none' ? 'block' : 'none'; } });
+document.getElementById('server-header-clickable')?.addEventListener('click', (e) => { e.stopPropagation(); if (currentServerId) { const d = document.getElementById('server-dropdown'); d.style.display = d.style.display === 'none' ? 'flex' : 'none'; } });
 document.getElementById('menu-add-category')?.addEventListener('click', () => { openInputModal("Add Category", "Category Name", "", (name) => { if (name && currentServerId) { push(ref(db, `categories/${currentServerId}`), { name: name.toUpperCase(), order: Date.now() }); } }); document.getElementById('server-dropdown').style.display='none'; });
 document.getElementById('menu-add-text')?.addEventListener('click', () => { openInputModal("Add Text Channel", "channel-name", "", (name) => { if (name && currentServerId) { push(ref(db, `channels/${currentServerId}`), { name: name.toLowerCase(), type: "text", order: Date.now() }); } }); document.getElementById('server-dropdown').style.display='none'; });
 document.getElementById('menu-add-voice')?.addEventListener('click', () => { openInputModal("Add Voice Channel", "Lounge", "", (name) => { if (name && currentServerId) { push(ref(db, `channels/${currentServerId}`), { name: name, type: "voice", order: Date.now() }); } }); document.getElementById('server-dropdown').style.display='none'; });
@@ -1342,7 +1344,6 @@ document.getElementById('tab-cs-delete')?.addEventListener('click', () => {
     }
 });
 
-
 // Members System
 function loadMemberList(serverId) {
     if(unsubscribeMembers) unsubscribeMembers();
@@ -1493,6 +1494,85 @@ function renderChannels(serverId) {
             }
         });
     });
+}
+
+// ==========================================
+// --- VOICE CHAT ENGINE ---
+// ==========================================
+function initVoiceChat() { 
+    myPeer = new Peer(); 
+    myPeer.on('open', id => myCurrentPeerId = id); 
+    myPeer.on('call', call => { 
+        call.answer(localAudioStream); 
+        const cEmail = call.metadata ? call.metadata.callerEmail : call.peer; 
+        call.on('stream', stream => setupHiddenAudio(cEmail, stream)); 
+        activeCalls[cEmail] = call; 
+    }); 
+}
+
+async function joinVoiceChannel(serverId, channelId) { 
+    if (currentVoiceChannel === channelId) return; 
+    if (!myCurrentPeerId) return customAlert("Voice server connecting..."); 
+    leaveVoiceChannel(); 
+    try { 
+        localAudioStream = await navigator.mediaDevices.getUserMedia({ audio: true }); 
+        currentVoiceChannel = channelId; 
+        document.getElementById('voice-controls-area').style.display = 'flex'; 
+        
+        const vcRef = ref(db, `voice_rosters/${serverId}/${channelId}/${currentUserSafeEmail}`); 
+        await set(vcRef, myCurrentPeerId); 
+        onDisconnect(vcRef).remove(); 
+        
+        onValue(ref(db, `voice_rosters/${serverId}/${channelId}`), (snap) => { 
+            snap.forEach((childSnapshot) => { 
+                const pEmail = childSnapshot.key; 
+                const pId = childSnapshot.val(); 
+                if (pEmail !== currentUserSafeEmail && !activeCalls[pEmail]) { 
+                    const call = myPeer.call(pId, localAudioStream, { metadata: { callerEmail: currentUserSafeEmail } }); 
+                    call.on('stream', stream => setupHiddenAudio(pEmail, stream)); 
+                    activeCalls[pEmail] = call; 
+                } 
+            }); 
+        }); 
+    } catch (err) { customAlert("Mic access denied.", "Error"); } 
+}
+
+function leaveVoiceChannel() { 
+    if (!currentVoiceChannel) return; 
+    Object.keys(activeCalls).forEach(pEmail => { activeCalls[pEmail].close(); removeHiddenAudio(pEmail); }); 
+    activeCalls = {}; 
+    if (localAudioStream) { localAudioStream.getTracks().forEach(track => track.stop()); } 
+    remove(ref(db, `voice_rosters/${currentServerId}/${currentVoiceChannel}/${currentUserSafeEmail}`)); 
+    currentVoiceChannel = null; 
+    document.getElementById('voice-controls-area').style.display = 'none'; 
+}
+
+document.getElementById('disconnect-vc-btn')?.addEventListener('click', leaveVoiceChannel);
+document.getElementById('mute-btn')?.addEventListener('click', (e) => { 
+    isMuted = !isMuted; 
+    if(localAudioStream) { localAudioStream.getAudioTracks()[0].enabled = !isMuted; } 
+    e.currentTarget.classList.toggle('muted-state'); 
+});
+document.getElementById('deafen-btn')?.addEventListener('click', (e) => { 
+    isDeafened = !isDeafened; 
+    e.currentTarget.classList.toggle('muted-state'); 
+    document.querySelectorAll('.vc-audio-element').forEach(audio => audio.muted = isDeafened); 
+});
+
+function setupHiddenAudio(peerEmail, stream) { 
+    if (document.getElementById(`audio-${peerEmail}`)) return; 
+    const container = document.getElementById('hidden-audio-container'); 
+    const audio = document.createElement('audio');
+    audio.id = `audio-${peerEmail}`;
+    audio.className = 'vc-audio-element';
+    audio.autoplay = true;
+    audio.srcObject = stream;
+    if(isDeafened) audio.muted = true;
+    container.appendChild(audio);
+}
+function removeHiddenAudio(peerEmail) { 
+    const el = document.getElementById(`audio-${peerEmail}`); 
+    if (el) el.remove(); 
 }
 
 // ==========================================
@@ -1785,6 +1865,53 @@ async function loadMessages(dbPath, chatNameLabel) {
     if (chatType === 'dm') clearUnread('dm', currentChatId); else if (chatType === 'server') clearUnread('channel', currentChatId, currentServerId);
 }
 
+// Replier Logic
+function triggerReply(msgId, username, text) {
+    replyingToMessage = { id: msgId, username: username, text: text.length > 50 ? text.substring(0, 50) + '...' : text };
+    document.getElementById('reply-banner-text').innerHTML = `Replying to <strong style="color:var(--text-bright);">@${username}</strong>`;
+    document.getElementById('reply-banner').style.display = 'flex'; document.getElementById('msg-input').focus();
+}
+document.getElementById('cancel-reply-btn')?.addEventListener('click', () => { replyingToMessage = null; document.getElementById('reply-banner').style.display = 'none'; });
+
+// Mention Autocomplete
+const msgInput = document.getElementById('msg-input');
+const mentionMenu = document.getElementById('mention-menu');
+let mentionStartIndex = -1; let mentionSearchTerm = null;
+
+msgInput?.addEventListener('input', () => {
+    const val = msgInput.value; const cursorPos = msgInput.selectionStart;
+    const textBeforeCursor = val.substring(0, cursorPos);
+    const match = textBeforeCursor.match(/@(\w*)$/);
+    if (match) { mentionStartIndex = match.index; mentionSearchTerm = match[1].toLowerCase(); showMentionMenu(mentionSearchTerm); } 
+    else { mentionMenu.style.display = 'none'; }
+});
+
+function showMentionMenu(term) {
+    mentionMenu.innerHTML = ''; let matches = [];
+    if (chatType === 'server') {
+        Object.values(serverRolesCache).forEach(role => { if (role.name.toLowerCase().includes(term)) matches.push({ type: 'role', name: role.name, color: role.color }); });
+        currentServerMembersList.forEach(m => { if (m.username.toLowerCase().includes(term)) matches.push({ type: 'user', name: m.username, avatar: m.avatar }); });
+    } else if (chatType === 'dm') {
+        if(currentDMOtherUser) matches.push({ type: 'user', name: currentDMOtherUser.username, avatar: currentDMOtherUser.avatar });
+        matches.push({ type: 'user', name: myProfile.username, avatar: myProfile.avatar });
+        matches = matches.filter(m => m.name.toLowerCase().includes(term));
+    }
+    
+    if (matches.length === 0) { mentionMenu.style.display = 'none'; return; }
+    
+    matches.forEach(m => {
+        const div = document.createElement('div'); div.className = 'mention-item';
+        if (m.type === 'role') { div.innerHTML = `<div style="width:24px; height:24px; border-radius:50%; background:${m.color}; display:flex; align-items:center; justify-content:center; font-size:12px; color:white;">@</div><span>${m.name}</span>`; } 
+        else { div.innerHTML = `<img src="${m.avatar}" class="mention-avatar"><span>${m.name}</span>`; }
+        div.addEventListener('click', () => {
+            const val = msgInput.value; const before = val.substring(0, mentionStartIndex); const after = val.substring(msgInput.selectionStart);
+            msgInput.value = before + '@' + m.name + ' ' + after; mentionMenu.style.display = 'none'; msgInput.focus();
+        });
+        mentionMenu.appendChild(div);
+    });
+    mentionMenu.style.display = 'flex';
+}
+
 // Emojis & Reactions Logic
 const emojiPicker = document.getElementById('emoji-picker');
 const emojiBtn = document.getElementById('emoji-picker-btn');
@@ -1888,7 +2015,50 @@ function insertEmoji(idOrChar, name, isCustom) {
 
 document.addEventListener('click', (e) => { if(!e.target.closest('#emoji-picker') && !e.target.closest('#emoji-picker-btn')) emojiPicker.style.display = 'none'; });
 
-// Input logic
+// Image / Paste Preview Logic
+document.getElementById('upload-img-btn')?.addEventListener('click', () => document.getElementById('image-upload').click());
+document.getElementById('image-upload')?.addEventListener('change', (e) => {
+    const file = e.target.files[0]; if (!file || !currentChatId) return;
+    if (file.size > 2 * 1024 * 1024) return customAlert("File too large. Please select an image under 2MB.", "Error");
+    const reader = new FileReader(); reader.onloadend = () => { pendingAttachmentBase64 = reader.result; document.getElementById('attachment-preview-img').src = pendingAttachmentBase64; document.getElementById('attachment-preview-area').style.display = 'flex'; document.getElementById('image-upload').value = ""; }; reader.readAsDataURL(file);
+});
+document.getElementById('remove-attachment-btn')?.addEventListener('click', () => { pendingAttachmentBase64 = null; document.getElementById('attachment-preview-area').style.display = 'none'; });
+document.getElementById('msg-input')?.addEventListener('paste', (e) => {
+    const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+    for (let index in items) {
+        const item = items[index];
+        if (item.kind === 'file' && item.type.startsWith('image/')) {
+            const blob = item.getAsFile(); if (blob.size > 2 * 1024 * 1024) return customAlert("Pasted image is too large (max 2MB).");
+            const reader = new FileReader(); reader.onloadend = () => { pendingAttachmentBase64 = reader.result; document.getElementById('attachment-preview-img').src = pendingAttachmentBase64; document.getElementById('attachment-preview-area').style.display = 'flex'; }; reader.readAsDataURL(blob);
+        }
+    }
+});
+
+async function sendMessage() {
+    const input = document.getElementById('msg-input'); const text = input.value.trim();
+    if ((text !== "" || pendingAttachmentBase64) && currentChatId && myServerPerms.sendMessages) {
+        const path = chatType === 'server' ? `messages/${currentChatId}` : `dms/${currentChatId}`;
+        let roleId = 'member';
+        if(chatType === 'server') { const mSnap = await get(ref(db, `server_members/${currentServerId}/${currentUserSafeEmail}/role`)); roleId = mSnap.val() || 'member'; }
+        
+        let msgPayload = { sender: auth.currentUser.email, username: myProfile.username, avatar: myProfile.avatar, text: text, timestamp: Date.now(), roleId: roleId };
+        
+        if (replyingToMessage) { msgPayload.replyTo = replyingToMessage; replyingToMessage = null; document.getElementById('reply-banner').style.display = 'none'; }
+        if (pendingAttachmentBase64) { msgPayload.imageUrl = pendingAttachmentBase64; pendingAttachmentBase64 = null; document.getElementById('attachment-preview-area').style.display = 'none'; }
+
+        push(ref(db, path), msgPayload);
+        input.value = "";
+        mentionMenu.style.display = 'none';
+        
+        if(chatType === 'dm') {
+            const friendEmail = currentChatId.replace(currentUserSafeEmail, '').replace('_', '');
+            update(ref(db, `users/${currentUserSafeEmail}/friends/${friendEmail}`), { lastActivity: Date.now(), hidden: false });
+            update(ref(db, `users/${friendEmail}/friends/${currentUserSafeEmail}`), { lastActivity: Date.now(), hidden: false });
+        }
+        update(ref(db, `users/${currentUserSafeEmail}/lastRead`), { [currentChatId]: Date.now() });
+    }
+}
+
 document.getElementById('send-btn')?.addEventListener('click', sendMessage);
 document.getElementById('msg-input')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
 
