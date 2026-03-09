@@ -44,14 +44,16 @@ input { font-size: 16px !important; }
 
 /* --- Far Left: Server Sidebar --- */
 #server-sidebar { width: 72px; background-color: var(--bg-main); display: flex; flex-direction: column; align-items: center; padding-top: 10px; overflow-y: auto; flex-shrink: 0; border-right: 1px solid var(--border-color); }
-.server-icon { width: 48px; height: 48px; background-color: var(--bg-tertiary); border-radius: 8px; display: flex; justify-content: center; align-items: center; margin-bottom: 10px; cursor: pointer; font-weight: bold; font-size: 20px; transition: 0.2s ease; position: relative; background-size: cover; background-position: center; color: var(--text-main); border: 1px solid transparent; }
+.server-icon { width: 48px; height: 48px; background-color: var(--bg-tertiary); border-radius: 8px; display: flex; justify-content: center; align-items: center; margin-bottom: 10px; cursor: pointer; font-weight: bold; font-size: 20px; transition: 0.2s ease; position: relative; background-size: cover; background-position: center; color: white; border: 1px solid transparent; }
 .server-icon:hover { border-radius: 12px; background-color: var(--accent-primary); color: white; border-color: transparent;}
 .server-icon.active { border-radius: 12px; background-color: var(--accent-primary); color: white; border-color: transparent;}
 .server-icon.drag-over { border: 2px dashed var(--accent-primary); opacity: 0.5; }
 
 /* --- Middle: Channel Sidebar --- */
 #channel-sidebar { width: 240px; background-color: var(--bg-secondary); display: flex; flex-direction: column; flex-shrink: 0; height: 100%; border-right: 1px solid var(--border-color); }
-#sidebar-header { padding: 10px; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); position: relative; height: 110px; box-sizing: border-box; transition: background 0.3s; }
+#sidebar-header { padding: 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); position: relative; height: 55px; box-sizing: border-box; transition: background 0.3s; background-position: center; }
+#sidebar-header.server-header-banner { height: 110px; align-items: flex-end; }
+
 #server-header-clickable { display: flex; align-items: center; cursor: pointer; flex-grow: 1; border-radius: 4px; padding: 4px 6px; margin-left: -6px; transition: 0.2s; color: var(--text-bright); text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
 #server-header-clickable:hover { background-color: rgba(255, 255, 255, 0.1); }
 #server-name-display { margin: 0; font-size: 15px; font-weight: bold; margin-right: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
@@ -68,14 +70,12 @@ input { font-size: 16px !important; }
 .svg-icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; display: inline-block; vertical-align: middle; margin-right: 5px; }
 
 /* Dropdowns & Context Menus */
-#server-dropdown, #context-menu { position: absolute; background-color: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); z-index: 100; padding: 6px; }
+#server-dropdown, #context-menu { position: absolute; background-color: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); z-index: 100; padding: 6px; display:flex; flex-direction: column; }
 #server-dropdown { top: 55px; left: 10px; width: 200px; }
 .dropdown-item, .context-item { padding: 8px 10px; border-radius: 4px; cursor: pointer; font-size: 13px; color: var(--text-main); margin-bottom: 2px; display: flex; align-items: center; }
 .dropdown-item:hover, .context-item:hover { background-color: var(--accent-primary); color: white; }
 .invite-item { color: var(--accent-primary); } 
 .invite-item:hover { background-color: var(--accent-primary); color: white; }
-#ctx-delete { color: var(--accent-danger); }
-#ctx-delete:hover { background-color: var(--accent-danger); color: white; }
 
 /* --- Channels & Categories --- */
 #channel-list { flex-grow: 1; padding: 10px 10px 0 10px; overflow-y: auto; }
@@ -162,7 +162,16 @@ input { font-size: 16px !important; }
 #remove-attachment-btn { position: absolute; top: -8px; right: -8px; background: var(--accent-danger); color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 12px; padding: 0; margin: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.5);}
 #remove-attachment-btn:hover { background: var(--accent-danger-hover); }
 
-/* Mention Autocomplete Menu */
+/* Custom Emojis & Mentions */
+.custom-emoji { width: 24px; height: 24px; vertical-align: middle; object-fit: contain; }
+
+#emoji-picker { position: absolute; bottom: calc(100% - 15px); right: 20px; width: 320px; max-height: 300px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; overflow-y: auto; box-shadow: 0 8px 16px rgba(0,0,0,0.4); z-index: 20; padding: 10px; }
+.ep-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 5px; }
+.ep-grid img { width: 32px; height: 32px; cursor: pointer; border-radius: 4px; padding: 2px; }
+.ep-grid img:hover { background: var(--bg-hover); }
+.text-emojis span { display: flex; align-items: center; justify-content: center; font-size: 24px; cursor: pointer; width: 32px; height: 32px; border-radius: 4px; }
+.text-emojis span:hover { background: var(--bg-hover); }
+
 #mention-menu { position: absolute; bottom: calc(100% - 15px); left: 20px; width: 300px; max-height: 200px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; overflow-y: auto; box-shadow: 0 8px 16px rgba(0,0,0,0.4); z-index: 20; display: none; flex-direction: column; padding: 5px; }
 .mention-item { padding: 8px 10px; display: flex; align-items: center; gap: 10px; cursor: pointer; border-radius: 4px; color: var(--text-main); }
 .mention-item:hover { background: var(--bg-tertiary); color: var(--text-bright); }
@@ -233,6 +242,11 @@ button:disabled { background-color: var(--bg-tertiary); cursor: not-allowed; col
 .message-image { max-width: 250px; max-height: 250px; border-radius: 6px; margin-top: 5px; display: block; cursor: pointer; transition: 0.2s ease; border: 1px solid var(--border-color); }
 .message-image:hover { opacity: 0.85; }
 
+.reactions-container { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; margin-left: 42px; }
+.msg-reaction { background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; padding: 4px 6px; font-size: 12px; color: var(--text-main); display: flex; align-items: center; cursor: pointer; user-select: none; }
+.msg-reaction:hover { border-color: var(--text-muted); }
+.msg-reaction.active { background: rgba(77, 120, 204, 0.2); border-color: var(--accent-primary); color: var(--accent-primary); }
+
 /* Embeds */
 .invite-embed { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; padding: 15px; margin-top: 5px; width: fit-content; min-width: 250px; }
 .invite-embed h4 { margin: 0 0 10px 0; font-size: 12px; color: var(--text-muted); text-transform: uppercase; }
@@ -280,6 +294,8 @@ button:disabled { background-color: var(--bg-tertiary); cursor: not-allowed; col
 .role-list-item:hover { background: var(--bg-tertiary); color: var(--text-bright); }
 .role-list-item.active { background: var(--bg-hover); color: var(--text-bright); }
 .role-list-item.drag-over { border-top: 2px solid var(--accent-primary); }
+
+.role-badge { display: inline-flex; align-items: center; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 4px; padding: 2px 6px; font-size: 11px; color: var(--text-bright); gap: 4px; }
 
 /* Mobile UI Back Buttons */
 .mobile-back-btn { display: none; background: transparent; color: var(--text-main); padding: 0; margin-right: 15px; cursor: pointer; align-items: center; justify-content: center; border: none; }

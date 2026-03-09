@@ -33,6 +33,7 @@ let currentDMOtherUser = null;
 let serverRolesCache = {}; 
 let globalUsersCache = {}; 
 let activeFriendsData = []; 
+let globalEmojisCache = {};
 
 // Listeners
 let unsubscribeMessages = null; 
@@ -41,12 +42,9 @@ let unsubscribeMembers = null;
 let unsubscribeChannels = null;
 let unsubscribeCategories = null;
 let unsubscribeVoiceRosters = null;
-let dmsNotifListener = null;
-let serversNotifListener = null;
 
 let replyingToMessage = null; 
 let pendingAttachmentBase64 = null; 
-
 let notificationsActive = false; 
 const appStartTime = Date.now(); 
 let unreadState = { dms: new Set(), channels: new Set(), servers: new Set() };
@@ -68,13 +66,39 @@ const icons = {
     textChannel: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="9" x2="20" y2="9"></line><line x1="4" y1="15" x2="20" y2="15"></line><line x1="10" y1="3" x2="8" y2="21"></line><line x1="16" y1="3" x2="14" y2="21"></line></svg>`,
     voiceChannel: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>`,
     trash: `<svg class="svg-icon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`,
-    gear: `<svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>`,
+    gear: `<svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>`,
     addFriend: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>`,
     removeFriend: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="18" y1="8" x2="23" y2="13"></line><line x1="23" y1="8" x2="18" y2="13"></line></svg>`,
     closeDM: `<svg class="svg-icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`,
     message: `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-2.67 0-8 1.34-8 4v3h16v-3c0-2.66-5.33-4-8-4z"/></svg>`,
-    reply: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>`
+    reply: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>`,
+    leave: `<svg class="svg-icon" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>`,
+    smile: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>`,
+    addReaction: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line><line x1="20" y1="4" x2="24" y2="4"></line><line x1="22" y1="2" x2="22" y2="6"></line></svg>`
 };
+
+// Evaluate Permissions globally taking Overwrites into account
+function getChannelPerm(channelId, permName) {
+    if (myServerPerms.manageServerSettings || myServerRoles.includes('owner')) return true;
+    let result = !!myServerPerms[permName]; 
+    const overwrites = currentChannelsData[channelId]?.overwrites || {};
+    
+    if (overwrites['everyone'] && overwrites['everyone'][permName] !== undefined && overwrites['everyone'][permName] !== "inherit") {
+        result = overwrites['everyone'][permName] === "allow";
+    }
+    
+    let roleAllowed = false; let roleDenied = false;
+    myServerRoles.forEach(rId => {
+        if (overwrites[rId] && overwrites[rId][permName] !== undefined && overwrites[rId][permName] !== "inherit") {
+            if (overwrites[rId][permName] === "allow") roleAllowed = true;
+            if (overwrites[rId][permName] === "deny") roleDenied = true;
+        }
+    });
+    
+    if (roleAllowed) return true;
+    if (roleDenied) return false;
+    return result;
+}
 
 // ==========================================
 // --- GLOBAL MODAL CONTROLLERS ---
@@ -129,6 +153,7 @@ window.showGlobalUserProfile = async function(email, event) {
     const tagEl = document.getElementById('gup-tag');
     const avatarEl = document.getElementById('gup-avatar');
     const bannerEl = document.getElementById('gup-banner');
+    const rolesContainer = document.getElementById('gup-roles-container');
     
     const addFriendBtn = document.getElementById('gup-add-friend');
     const removeFriendBtn = document.getElementById('gup-remove-friend');
@@ -137,6 +162,8 @@ window.showGlobalUserProfile = async function(email, event) {
     nameEl.innerText = "Loading..."; tagEl.innerText = "";
     avatarEl.src = "https://cdn.pixabay.com/photo/2023/02/18/11/00/icon-7797704_640.png";
     bannerEl.style.backgroundColor = "var(--accent-primary)";
+    rolesContainer.style.display = 'none';
+    rolesContainer.innerHTML = '';
     
     addFriendBtn.style.display = 'none';
     removeFriendBtn.style.display = 'none';
@@ -148,12 +175,10 @@ window.showGlobalUserProfile = async function(email, event) {
         let x = event.clientX;
         let y = event.clientY;
         const rect = content.getBoundingClientRect();
-        
         if (x + 340 > window.innerWidth) x = window.innerWidth - 350;
         if (y + rect.height > window.innerHeight) y = window.innerHeight - rect.height - 20;
         if (x < 10) x = 10;
         if (y < 10) y = 10;
-        
         content.style.left = `${x}px`;
         content.style.top = `${y}px`;
     }
@@ -164,6 +189,47 @@ window.showGlobalUserProfile = async function(email, event) {
         nameEl.innerText = uData.username;
         tagEl.innerText = `#${uData.tag}`;
         avatarEl.src = uData.avatar;
+        
+        // Roles rendering if inside a server
+        if(currentServerId) {
+            const memSnap = await get(ref(db, `server_members/${currentServerId}/${safeEmail}`));
+            if(memSnap.exists()) {
+                const memInfo = memSnap.val();
+                let userRoles = memInfo.roles ? Object.keys(memInfo.roles) : (memInfo.role && memInfo.role !== 'member' ? [memInfo.role] : []);
+                
+                rolesContainer.style.display = 'block';
+                rolesContainer.innerHTML = '<div style="font-size: 11px; font-weight: bold; color: var(--text-muted); margin-bottom: 5px; text-transform: uppercase;">Roles</div>';
+                
+                const roleFlex = document.createElement('div');
+                roleFlex.style.display = 'flex'; roleFlex.style.flexWrap = 'wrap'; roleFlex.style.gap = '5px';
+                
+                userRoles.forEach(rId => {
+                    const rData = serverRolesCache[rId];
+                    if(rData && rId !== 'everyone') {
+                        const badge = document.createElement('div');
+                        badge.className = 'role-badge';
+                        badge.style.borderColor = rData.color;
+                        badge.innerHTML = `<span style="color:${rData.color}">●</span> ${rData.name}`;
+                        roleFlex.appendChild(badge);
+                    }
+                });
+                
+                if(myServerPerms.manageRoles || myServerRoles.includes('owner')) {
+                    const addRoleBtn = document.createElement('div');
+                    addRoleBtn.className = 'role-badge';
+                    addRoleBtn.style.cursor = 'pointer';
+                    addRoleBtn.innerHTML = `+`;
+                    addRoleBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        openQuickRoleAssign(safeEmail, userRoles);
+                    };
+                    roleFlex.appendChild(addRoleBtn);
+                }
+                
+                if(roleFlex.children.length > 0) rolesContainer.appendChild(roleFlex);
+                else rolesContainer.style.display = 'none';
+            }
+        }
         
         if(safeEmail !== currentUserSafeEmail) {
             const friendSnap = await get(ref(db, `users/${currentUserSafeEmail}/friends/${safeEmail}`));
@@ -205,6 +271,34 @@ document.getElementById('global-user-profile-modal')?.addEventListener('click', 
     if(e.target.id === 'global-user-profile-modal') e.target.style.display = 'none'; 
 });
 
+function openQuickRoleAssign(targetEmail, currentRolesArray) {
+    const list = document.getElementById('assign-role-select');
+    list.innerHTML = '';
+    list.multiple = true;
+    list.style.height = '150px';
+    
+    Object.keys(serverRolesCache).forEach(rId => {
+        if(rId === 'everyone') return;
+        const opt = document.createElement('option');
+        opt.value = rId;
+        opt.text = serverRolesCache[rId].name;
+        if(currentRolesArray.includes(rId)) opt.selected = true;
+        list.appendChild(opt);
+    });
+    
+    document.getElementById('assign-role-modal').style.display = 'flex';
+    document.getElementById('save-role-btn').onclick = () => {
+        const selected = Array.from(list.selectedOptions).map(o => o.value);
+        let rolesObj = {};
+        selected.forEach(r => rolesObj[r] = true);
+        
+        update(ref(db, `server_members/${currentServerId}/${targetEmail}`), { roles: rolesObj });
+        document.getElementById('assign-role-modal').style.display = 'none';
+        document.getElementById('global-user-profile-modal').style.display = 'none';
+    };
+}
+
+
 // ==========================================
 // --- CONTEXT MENU (Delegated) ---
 // ==========================================
@@ -216,13 +310,15 @@ function showContextMenu(e, type, id) {
     
     let html = '';
     if (type === 'channel' || type === 'category') {
-        if (!myServerPerms.admin && !myServerPerms.manageChannels && !myServerPerms.manageServerSettings) return; 
+        if (!myServerPerms.manageChannels && !myServerPerms.manageServerSettings && !myServerRoles.includes('owner')) return; 
         if(type === 'channel') html += `<div class="context-item" id="ctx-edit">${icons.gear} Edit Channel</div>`;
         html += `<div class="context-item" id="ctx-delete" style="color: var(--accent-danger);">${icons.trash} Delete ${type}</div>`;
     } else if (type === 'dm') {
         html = `<div class="context-item" id="ctx-delete" style="color: var(--accent-danger);">${icons.closeDM} Close DM</div>`;
     } else if (type === 'friend') {
         html = `<div class="context-item" id="ctx-delete" style="color: var(--accent-danger);">${icons.removeFriend} Remove Friend</div>`;
+    } else if (type === 'emoji') {
+        html = `<div class="context-item" id="ctx-save-emoji" style="color: var(--text-bright);">${icons.addFriend} Save Emoji</div>`;
     }
     
     if(html === '') return;
@@ -237,9 +333,17 @@ function showContextMenu(e, type, id) {
     ctxMenu.style.top = `${y}px`;
 }
 
+document.addEventListener('contextmenu', (e) => {
+    if(e.target.classList.contains('custom-emoji')) {
+        const eid = e.target.getAttribute('data-id');
+        if(eid) showContextMenu(e, 'emoji', eid);
+    }
+});
+
 document.addEventListener('click', (e) => { 
     const ctxDel = e.target.closest('#ctx-delete');
     const ctxEdit = e.target.closest('#ctx-edit');
+    const ctxSaveEmoji = e.target.closest('#ctx-save-emoji');
 
     if(ctxDel && contextTarget) {
         if(contextTarget.type === 'dm') {
@@ -262,6 +366,13 @@ document.addEventListener('click', (e) => {
         ctxMenu.style.display = 'none';
     } else if (ctxEdit && contextTarget && contextTarget.type === 'channel') {
         openChannelSettings(contextTarget.id);
+        ctxMenu.style.display = 'none';
+    } else if (ctxSaveEmoji && contextTarget && contextTarget.type === 'emoji') {
+        const targetEmoji = globalEmojisCache[contextTarget.id];
+        if(targetEmoji) {
+            set(ref(db, `users/${currentUserSafeEmail}/emojis/${contextTarget.id}`), true);
+            customAlert("Custom emoji saved to your personal collection!");
+        }
         ctxMenu.style.display = 'none';
     }
 
@@ -291,10 +402,6 @@ document.getElementById('login-btn')?.addEventListener('click', () => {
     signInWithEmailAndPassword(auth, document.getElementById('email').value, document.getElementById('password').value).catch(e => customAlert(e.message, "Login Error"));
 });
 
-document.getElementById('logout-btn')?.addEventListener('click', () => {
-    leaveVoiceChannel(); if (currentUserSafeEmail) set(ref(db, `users/${currentUserSafeEmail}/status`), 'offline'); signOut(auth);
-});
-
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         authSection.style.display = 'none'; appContainer.style.display = 'flex'; currentUserSafeEmail = sanitizeEmail(user.email);
@@ -307,6 +414,11 @@ onAuthStateChanged(auth, async (user) => {
                 document.getElementById('my-avatar').src = myProfile.avatar;
                 document.getElementById('my-status-indicator').className = `status-indicator status-${myProfile.status || 'online'}`;
             }
+        });
+
+        // Preload all emojis for rendering
+        onValue(ref(db, 'emojis'), snap => {
+            globalEmojisCache = snap.val() || {};
         });
 
         const connectedRef = ref(db, '.info/connected');
@@ -328,15 +440,53 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// Profile Modals
-const profileModal = document.getElementById('profile-modal');
+// Full Screen User Settings
 let tempBase64Avatar = null;
-document.getElementById('user-controls')?.addEventListener('click', (e) => {
-    if(e.target.id === 'logout-btn' || e.target.id === 'my-status-indicator' || e.target.closest('#status-selector')) return; 
-    document.getElementById('edit-username').value = myProfile.username; document.getElementById('edit-tag').value = myProfile.tag; document.getElementById('profile-preview').src = myProfile.avatar;
-    tempBase64Avatar = myProfile.avatar; profileModal.style.display = 'flex';
+
+function setupUserSettingsTabs() {
+    document.querySelectorAll('#user-settings-modal .fs-tab').forEach(tab => {
+        tab.addEventListener('click', (e) => {
+            const tabName = e.target.getAttribute('data-tab');
+            if(!tabName) return;
+            
+            document.querySelectorAll('#user-settings-modal .fs-tab').forEach(t => t.classList.remove('active'));
+            e.target.classList.add('active');
+            
+            document.querySelectorAll('#user-settings-modal .ss-pane').forEach(p => p.style.display = 'none');
+            document.getElementById(`pane-us-${tabName}`).style.display = 'block';
+            
+            if(window.innerWidth <= 768) {
+                document.querySelector('#user-settings-modal .fs-modal-layout').classList.add('mobile-viewing-content');
+            }
+        });
+    });
+}
+setupUserSettingsTabs();
+
+document.getElementById('us-mobile-back')?.addEventListener('click', () => {
+    document.querySelector('#user-settings-modal .fs-modal-layout').classList.remove('mobile-viewing-content');
 });
-document.getElementById('close-profile-btn')?.addEventListener('click', () => profileModal.style.display = 'none');
+document.getElementById('close-user-settings-btn')?.addEventListener('click', () => document.getElementById('user-settings-modal').style.display = 'none');
+document.getElementById('close-user-settings-btn-desktop')?.addEventListener('click', () => document.getElementById('user-settings-modal').style.display = 'none');
+
+document.getElementById('user-controls')?.addEventListener('click', (e) => {
+    if(e.target.id === 'my-status-indicator' || e.target.closest('#status-selector')) return; 
+    document.getElementById('edit-username').value = myProfile.username; 
+    document.getElementById('edit-tag').value = myProfile.tag; 
+    document.getElementById('profile-preview').src = myProfile.avatar;
+    tempBase64Avatar = myProfile.avatar; 
+    
+    document.getElementById('user-settings-modal').style.display = 'flex';
+    document.querySelector('#user-settings-modal .fs-modal-layout').classList.remove('mobile-viewing-content');
+    document.querySelector('#user-settings-modal .fs-tab[data-tab="account"]').click();
+    
+    loadPersonalEmojis();
+});
+
+document.getElementById('us-logout-btn')?.addEventListener('click', () => {
+    leaveVoiceChannel(); if (currentUserSafeEmail) set(ref(db, `users/${currentUserSafeEmail}/status`), 'offline'); signOut(auth);
+});
+
 document.getElementById('avatar-upload')?.addEventListener('change', (e) => { const file = e.target.files[0]; if (file) { const reader = new FileReader(); reader.onloadend = () => { tempBase64Avatar = reader.result; document.getElementById('profile-preview').src = tempBase64Avatar; }; reader.readAsDataURL(file); } });
 document.getElementById('save-profile-btn')?.addEventListener('click', async () => {
     const newUsername = document.getElementById('edit-username').value.trim(); const newTag = document.getElementById('edit-tag').value.trim();
@@ -344,13 +494,55 @@ document.getElementById('save-profile-btn')?.addEventListener('click', async () 
     await remove(ref(db, `user_tags/${myProfile.username}_${myProfile.tag}`)); 
     await set(ref(db, `user_tags/${newUsername}_${newTag}`), currentUserSafeEmail); 
     await update(ref(db, `users/${currentUserSafeEmail}`), {username: newUsername, tag: newTag, avatar: tempBase64Avatar});
-    profileModal.style.display = 'none';
+    customAlert("Profile Saved!");
+});
+
+// Personal Emojis
+function loadPersonalEmojis() {
+    const list = document.getElementById('us-emojis-list');
+    onValue(ref(db, `users/${currentUserSafeEmail}/emojis`), async (snap) => {
+        list.innerHTML = '';
+        if(!snap.exists()) { list.innerHTML = '<p style="color:var(--text-muted); font-size:12px;">No personal emojis yet.</p>'; return; }
+        
+        for(let eId of Object.keys(snap.val())) {
+            const eData = globalEmojisCache[eId];
+            if(eData) {
+                const d = document.createElement('div');
+                d.className = 'role-list-item';
+                d.style.display = 'flex'; d.style.justifyContent = 'space-between'; d.style.alignItems = 'center';
+                d.innerHTML = `<div><img src="${eData.url}" class="custom-emoji" style="margin-right:10px;"> :${eData.name}:</div>
+                               <button class="small-btn" style="background:transparent; border:1px solid var(--accent-danger); color:var(--accent-danger);">Remove</button>`;
+                d.querySelector('button').onclick = () => { remove(ref(db, `users/${currentUserSafeEmail}/emojis/${eId}`)); };
+                list.appendChild(d);
+            }
+        }
+    });
+}
+
+document.getElementById('us-upload-emoji-btn')?.addEventListener('click', () => {
+    const file = document.getElementById('us-emoji-file').files[0];
+    const name = document.getElementById('us-emoji-name').value.trim().replace(/[^a-zA-Z0-9_]/g, '');
+    if(!file || !name) return customAlert("Please select an image and enter a valid name.");
+    if(file.size > 1024 * 1024) return customAlert("Emoji must be under 1MB.");
+    
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+        const emojiId = push(ref(db, 'emojis')).key;
+        await set(ref(db, `emojis/${emojiId}`), { name: name, url: reader.result });
+        await set(ref(db, `users/${currentUserSafeEmail}/emojis/${emojiId}`), true);
+        document.getElementById('us-emoji-file').value = "";
+        document.getElementById('us-emoji-name').value = "";
+    };
+    reader.readAsDataURL(file);
 });
 
 // Status Dropdown
 document.getElementById('my-status-indicator')?.addEventListener('click', (e) => { e.stopPropagation(); document.getElementById('status-selector').style.display = 'block'; });
 document.querySelectorAll('.status-option').forEach(opt => { opt.addEventListener('click', (e) => { const s = e.target.getAttribute('data-status'); update(ref(db, `users/${currentUserSafeEmail}`), {status: s, saved_status: s}); document.getElementById('status-selector').style.display = 'none'; }); });
-document.addEventListener('click', (e) => { if (!e.target.closest('#user-controls')) { const s = document.getElementById('status-selector'); if(s) s.style.display = 'none'; } if (!e.target.closest('#sidebar-header') && !e.target.closest('#server-settings-modal') && !e.target.closest('#channel-settings-modal')) { const sd = document.getElementById('server-dropdown'); if(sd) sd.style.display = 'none'; } });
+document.addEventListener('click', (e) => { 
+    if (!e.target.closest('#user-controls')) { const s = document.getElementById('status-selector'); if(s) s.style.display = 'none'; } 
+    if (!e.target.closest('#sidebar-header') && !e.target.closest('#server-settings-modal') && !e.target.closest('#channel-settings-modal')) { const sd = document.getElementById('server-dropdown'); if(sd) sd.style.display = 'none'; } 
+});
 
 // ==========================================
 // --- NAVIGATION, HOME & FRIENDS VIEW ---
@@ -362,7 +554,10 @@ function switchToHomeView() {
     chatType = 'home'; currentChatId = null; currentServerId = null;
     document.getElementById('server-name-display').innerText = "Friends & DMs";
     document.getElementById('server-dropdown-arrow').style.display = 'none';
+    
+    document.getElementById('sidebar-header').classList.remove('server-header-banner');
     document.getElementById('sidebar-header').style.backgroundImage = 'none';
+    document.getElementById('server-stats-display').style.display = 'none';
     
     document.getElementById('home-sidebar-content').style.display = 'block';
     document.getElementById('channel-list').style.display = 'none';
@@ -574,6 +769,7 @@ function openDM(dmId, friendEmail) {
     chatType = 'dm'; currentChatId = dmId; 
     const uData = globalUsersCache[friendEmail];
     currentDMOtherUser = uData;
+    myServerPerms = { viewChannels: true, sendMessages: true, manageMessages: false }; // Full perms in DMs usually except deleting others
     
     update(ref(db, `users/${currentUserSafeEmail}/friends/${friendEmail}`), { hidden: false });
     
@@ -659,11 +855,13 @@ function loadMyServers() {
                     document.getElementById('server-name-display').innerText = sData.name;
                     document.getElementById('server-dropdown-arrow').style.display = 'inline';
                     
+                    const header = document.getElementById('sidebar-header');
                     if(sData.banner) {
-                        document.getElementById('sidebar-header').style.backgroundImage = `linear-gradient(to bottom, rgba(24, 26, 31, 0.7), var(--bg-secondary)), url(${sData.banner})`;
-                        document.getElementById('sidebar-header').style.backgroundSize = 'cover';
+                        header.classList.add('server-header-banner');
+                        header.style.backgroundImage = `linear-gradient(to bottom, rgba(24, 26, 31, 0.4), var(--bg-secondary)), url(${sData.banner})`;
                     } else {
-                        document.getElementById('sidebar-header').style.backgroundImage = 'none';
+                        header.classList.remove('server-header-banner');
+                        header.style.backgroundImage = 'none';
                     }
                     
                     document.getElementById('home-sidebar-content').style.display = 'none';
@@ -680,10 +878,10 @@ function loadMyServers() {
                     document.getElementById('home-btn').classList.remove('active');
 
                     // Resolve Advanced Permissions
-                    const myRoleSnap = await get(ref(db, `server_members/${serverId}/${currentUserSafeEmail}/role`));
-                    let roleId = myRoleSnap.val() || 'everyone';
-                    if(roleId === 'member') roleId = 'everyone'; // Legacy fallback
-                    myServerRoles = roleId !== 'everyone' && roleId !== 'owner' ? ['everyone', roleId] : ['everyone'];
+                    const myRoleSnap = await get(ref(db, `server_members/${serverId}/${currentUserSafeEmail}`));
+                    const memberInfo = myRoleSnap.val() || {};
+                    let userRoles = memberInfo.roles ? Object.keys(memberInfo.roles) : (memberInfo.role && memberInfo.role !== 'member' ? [memberInfo.role] : []);
+                    myServerRoles = ['everyone', ...userRoles];
                     
                     const rolesSnap = await get(ref(db, `servers/${serverId}/roles`));
                     serverRolesCache = rolesSnap.val() || {};
@@ -691,13 +889,15 @@ function loadMyServers() {
                     // Base perms from @everyone
                     let resolvedPerms = { ...(serverRolesCache['everyone']?.perms || { viewChannels: true, sendMessages: true }) };
                     
-                    if(roleId !== 'everyone' && roleId !== 'owner' && serverRolesCache[roleId]) {
-                        const rPerms = serverRolesCache[roleId].perms;
-                        if(rPerms) for(let p in rPerms) { if(rPerms[p]) resolvedPerms[p] = true; }
-                    }
+                    myServerRoles.forEach(roleId => {
+                        if(roleId !== 'everyone' && roleId !== 'owner' && serverRolesCache[roleId]) {
+                            const rPerms = serverRolesCache[roleId].perms;
+                            if(rPerms) for(let p in rPerms) { if(rPerms[p]) resolvedPerms[p] = true; }
+                        }
+                    });
                     
-                    if (sData.owner === auth.currentUser.email || roleId === 'owner' || resolvedPerms.manageServerSettings) { 
-                        myServerRoles.push('owner');
+                    if (sData.owner === auth.currentUser.email || myServerRoles.includes('owner') || resolvedPerms.manageServerSettings) { 
+                        if(!myServerRoles.includes('owner')) myServerRoles.push('owner');
                         resolvedPerms = { viewChannels: true, sendMessages: true, manageChannels: true, manageServerSettings: true, manageServerProfile: true, manageServerOverview: true, manageRoles: true, manageMessages: true }; 
                     } 
                     
@@ -709,6 +909,7 @@ function loadMyServers() {
                     document.getElementById('menu-add-category').style.display = myServerPerms.manageChannels ? 'flex' : 'none';
                     document.getElementById('menu-add-text').style.display = myServerPerms.manageChannels ? 'flex' : 'none';
                     document.getElementById('menu-add-voice').style.display = myServerPerms.manageChannels ? 'flex' : 'none';
+                    document.getElementById('menu-leave-server').style.display = (sData.owner === auth.currentUser.email) ? 'none' : 'flex';
 
                     initChannelSync(serverId); loadMemberList(serverId); 
                 });
@@ -737,6 +938,26 @@ document.getElementById('menu-add-category')?.addEventListener('click', () => { 
 document.getElementById('menu-add-text')?.addEventListener('click', () => { openInputModal("Add Text Channel", "channel-name", "", (name) => { if (name && currentServerId) { push(ref(db, `channels/${currentServerId}`), { name: name.toLowerCase(), type: "text", order: Date.now() }); } }); document.getElementById('server-dropdown').style.display='none'; });
 document.getElementById('menu-add-voice')?.addEventListener('click', () => { openInputModal("Add Voice Channel", "Lounge", "", (name) => { if (name && currentServerId) { push(ref(db, `channels/${currentServerId}`), { name: name, type: "voice", order: Date.now() }); } }); document.getElementById('server-dropdown').style.display='none'; });
 document.getElementById('menu-invite')?.addEventListener('click', () => { if (currentServerId) { const link = `${appBaseUrl}?invite=${currentServerId}`; navigator.clipboard.writeText(link).then(() => { customAlert(`Link copied!\n${link}`, "Success"); }).catch(() => { openInputModal("Copy Link", "", "", ()=>{}, link); }); } document.getElementById('server-dropdown').style.display='none'; });
+
+document.getElementById('menu-leave-server')?.addEventListener('click', () => {
+    if(currentServerId) {
+        customConfirm("Are you sure you want to leave this server?", "Leave Server", async (yes) => {
+            if(yes) {
+                const sSnap = await get(ref(db, `servers/${currentServerId}`));
+                if(sSnap.exists() && sSnap.val().engagement?.leaveChannel) {
+                    push(ref(db, `messages/${sSnap.val().engagement.leaveChannel}`), {
+                        sender: 'system', username: 'System', avatar: 'https://cdn.pixabay.com/photo/2023/02/18/11/00/icon-7797704_640.png',
+                        text: `<strong style="color:var(--text-bright);">@${myProfile.username}</strong> just left the server.`,
+                        timestamp: Date.now(), roleId: 'system'
+                    });
+                }
+                await remove(ref(db, `server_members/${currentServerId}/${currentUserSafeEmail}`));
+                await remove(ref(db, `users/${currentUserSafeEmail}/servers/${currentServerId}`));
+                switchToHomeView();
+            }
+        });
+    }
+});
 
 // ==========================================
 // --- FULL SCREEN SETTINGS MENUS ---
@@ -776,6 +997,7 @@ document.getElementById('menu-server-settings')?.addEventListener('click', async
     document.getElementById('tab-ss-profile').style.display = (myServerPerms.manageServerSettings || myServerPerms.manageServerProfile) ? 'block' : 'none';
     document.getElementById('tab-ss-engagement').style.display = (myServerPerms.manageServerSettings || myServerPerms.manageServerOverview) ? 'block' : 'none';
     document.getElementById('tab-ss-roles').style.display = (myServerPerms.manageServerSettings || myServerPerms.manageRoles) ? 'block' : 'none';
+    document.getElementById('tab-ss-emojis').style.display = (myServerPerms.manageServerSettings || myServerPerms.manageServerOverview) ? 'block' : 'none';
     document.getElementById('tab-ss-delete').style.display = (myServerPerms.manageServerSettings || sData.owner === auth.currentUser.email) ? 'block' : 'none';
     
     document.getElementById('ss-header-name').innerText = sData.name;
@@ -807,11 +1029,11 @@ document.getElementById('menu-server-settings')?.addEventListener('click', async
     document.getElementById('server-settings-modal').style.display = 'flex'; 
     document.querySelector('#server-settings-modal .fs-modal-layout').classList.remove('mobile-viewing-content');
     
-    // Auto-click first available tab
     const firstVisibleTab = document.querySelector('#server-settings-modal .fs-tab[style="display: block;"]');
     if(firstVisibleTab) firstVisibleTab.click();
     
     loadRolesAdvanced();
+    loadServerEmojis();
 });
 
 document.getElementById('close-server-settings-btn')?.addEventListener('click', () => document.getElementById('server-settings-modal').style.display = 'none');
@@ -854,7 +1076,6 @@ function loadRolesAdvanced() {
         list.innerHTML = ''; rolesArrayCache = [];
         let rolesData = snap.val() || {};
         
-        // Inject @everyone if perfectly missing from DB migration
         if(!rolesData['everyone']) {
             rolesData['everyone'] = { name: '@everyone', color: '#abb2bf', order: -999, mentionable: true, perms: { viewChannels: true, sendMessages: true } };
         }
@@ -974,6 +1195,45 @@ document.getElementById('delete-role-btn')?.addEventListener('click', () => {
     }
 });
 
+// Server Emojis
+function loadServerEmojis() {
+    const list = document.getElementById('ss-emojis-list');
+    onValue(ref(db, `servers/${currentServerId}/emojis`), async (snap) => {
+        list.innerHTML = '';
+        if(!snap.exists()) { list.innerHTML = '<p style="color:var(--text-muted); font-size:12px;">No server emojis yet.</p>'; return; }
+        
+        for(let eId of Object.keys(snap.val())) {
+            const eData = globalEmojisCache[eId];
+            if(eData) {
+                const d = document.createElement('div');
+                d.className = 'role-list-item';
+                d.style.display = 'flex'; d.style.justifyContent = 'space-between'; d.style.alignItems = 'center';
+                d.innerHTML = `<div><img src="${eData.url}" class="custom-emoji" style="margin-right:10px;"> :${eData.name}:</div>
+                               <button class="small-btn" style="background:transparent; border:1px solid var(--accent-danger); color:var(--accent-danger);">Remove</button>`;
+                d.querySelector('button').onclick = () => { remove(ref(db, `servers/${currentServerId}/emojis/${eId}`)); };
+                list.appendChild(d);
+            }
+        }
+    });
+}
+
+document.getElementById('ss-upload-emoji-btn')?.addEventListener('click', () => {
+    const file = document.getElementById('ss-emoji-file').files[0];
+    const name = document.getElementById('ss-emoji-name').value.trim().replace(/[^a-zA-Z0-9_]/g, '');
+    if(!file || !name) return customAlert("Please select an image and enter a valid name (no spaces).");
+    if(file.size > 1024 * 1024) return customAlert("Emoji must be under 1MB.");
+    
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+        const emojiId = push(ref(db, 'emojis')).key;
+        await set(ref(db, `emojis/${emojiId}`), { name: name, url: reader.result });
+        await set(ref(db, `servers/${currentServerId}/emojis/${emojiId}`), true);
+        document.getElementById('ss-emoji-file').value = "";
+        document.getElementById('ss-emoji-name').value = "";
+    };
+    reader.readAsDataURL(file);
+});
+
 // Channel Settings Full Screen Logic
 let currentEditingChannelId = null;
 
@@ -990,8 +1250,50 @@ function openChannelSettings(channelId) {
     document.querySelectorAll('#channel-settings-modal .ss-pane').forEach(p => p.style.display = 'none');
     document.getElementById('pane-cs-overview').style.display = 'block';
     
+    // Build Permissions List
+    const permList = document.getElementById('cs-roles-list-left');
+    permList.innerHTML = '';
+    const sortedRoles = Object.keys(serverRolesCache).map(k => ({id: k, ...serverRolesCache[k]})).sort((a,b) => (b.order||0) - (a.order||0));
+    
+    sortedRoles.forEach((r, idx) => {
+        const div = document.createElement('div'); div.className = 'role-list-item'; div.id = `cs-role-${r.id}`;
+        div.innerHTML = `<span style="color: ${r.color};">●</span> ${r.name}`;
+        div.onclick = () => editChannelPerms(r.id, channelId);
+        permList.appendChild(div);
+    });
+    
     document.getElementById('channel-settings-modal').style.display = 'flex';
     document.querySelector('#channel-settings-modal .fs-modal-layout').classList.remove('mobile-viewing-content');
+    
+    editChannelPerms('everyone', channelId);
+}
+
+function editChannelPerms(roleId, channelId) {
+    document.querySelectorAll('#cs-roles-list-left .role-list-item').forEach(el => el.classList.remove('active'));
+    const activeEl = document.getElementById(`cs-role-${roleId}`);
+    if(activeEl) activeEl.classList.add('active');
+    
+    document.getElementById('cs-role-edit-area').style.display = 'block';
+    
+    const rData = serverRolesCache[roleId];
+    document.getElementById('cs-editing-role-name').innerText = `Role: ${rData.name}`;
+    
+    const overwrites = currentChannelsData[channelId]?.overwrites?.[roleId] || {};
+    document.getElementById('cp-viewChannels').value = overwrites.viewChannels || "inherit";
+    document.getElementById('cp-sendMessages').value = overwrites.sendMessages || "inherit";
+    
+    document.getElementById('cs-save-perms-btn').onclick = () => {
+        update(ref(db, `channels/${currentServerId}/${channelId}/overwrites/${roleId}`), {
+            viewChannels: document.getElementById('cp-viewChannels').value,
+            sendMessages: document.getElementById('cp-sendMessages').value
+        });
+        customAlert("Channel permissions saved.");
+    };
+    
+    if(window.innerWidth <= 768) {
+        document.getElementById('cs-roles-list-left').style.display = 'none';
+        document.getElementById('cs-roles-pane-mobile-back').style.display = 'block';
+    }
 }
 
 document.querySelectorAll('#channel-settings-modal .fs-tab').forEach(tab => {
@@ -1009,6 +1311,12 @@ document.querySelectorAll('#channel-settings-modal .fs-tab').forEach(tab => {
             document.querySelector('#channel-settings-modal .fs-modal-layout').classList.add('mobile-viewing-content');
         }
     });
+});
+
+document.getElementById('cs-roles-pane-mobile-back')?.addEventListener('click', () => {
+    document.getElementById('cs-roles-list-left').style.display = 'flex';
+    document.getElementById('cs-roles-pane-mobile-back').style.display = 'none';
+    document.getElementById('cs-role-edit-area').style.display = 'none';
 });
 
 document.getElementById('cs-mobile-back')?.addEventListener('click', () => { document.querySelector('#channel-settings-modal .fs-modal-layout').classList.remove('mobile-viewing-content'); });
@@ -1036,39 +1344,50 @@ document.getElementById('tab-cs-delete')?.addEventListener('click', () => {
 
 
 // Members System
-let userToManageEmail = null;
-document.getElementById('toggle-members-btn')?.addEventListener('click', () => { const sidebar = document.getElementById('member-sidebar'); if (sidebar.style.display === 'none') { sidebar.style.display = 'flex'; } else { sidebar.style.display = 'none'; } });
-document.getElementById('close-members-mobile-btn')?.addEventListener('click', () => { document.getElementById('member-sidebar').style.display = 'none'; });
-document.getElementById('close-role-modal-btn')?.addEventListener('click', () => { document.getElementById('assign-role-modal').style.display = 'none'; });
-document.getElementById('save-role-btn')?.addEventListener('click', () => { const roleId = document.getElementById('assign-role-select').value; if (userToManageEmail && currentServerId) { update(ref(db, `server_members/${currentServerId}/${userToManageEmail}`), { role: roleId }); document.getElementById('assign-role-modal').style.display = 'none'; } });
-
 function loadMemberList(serverId) {
     if(unsubscribeMembers) unsubscribeMembers();
     const listContent = document.getElementById('member-list-content');
     
     unsubscribeMembers = onValue(ref(db, `server_members/${serverId}`), async (membersSnap) => {
-        const rolesSnap = await get(ref(db, `servers/${serverId}/roles`));
-        let rolesData = {}; if (rolesSnap.exists()) { rolesData = rolesSnap.val(); serverRolesCache = rolesData; }
-        
         let groups = { owner: { name: "Server Owner", order: -2, members: [] }, online: { name: "Online", order: 9998, members: [] }, offline: { name: "Offline", order: 9999, members: [] } };
-        Object.keys(rolesData).forEach(rId => { groups[rId] = { name: rolesData[rId].name, order: rolesData[rId].order || 0, color: rolesData[rId].color, members: [] }; });
+        Object.keys(serverRolesCache).forEach(rId => { groups[rId] = { name: serverRolesCache[rId].name, order: serverRolesCache[rId].order || 0, color: serverRolesCache[rId].color, members: [] }; });
         
         const memberPromises = []; currentServerMembersList = [];
+        let onlineCount = 0; let totalCount = 0;
+        
         membersSnap.forEach(mSnap => {
             const memberEmail = mSnap.key; const memberInfo = mSnap.val();
+            totalCount++;
             const p = get(child(ref(db), `users/${memberEmail}`)).then(uSnap => {
                 if (uSnap.exists()) {
                     const uData = uSnap.val(); const status = uData.status || 'offline'; let targetGroup = 'offline';
                     currentServerMembersList.push(uData); globalUsersCache[memberEmail] = uData;
+                    
+                    if(status !== 'offline' && status !== 'invisible') onlineCount++;
+                    
+                    let highestRole = null; let highestOrder = 9999;
+                    let userRoles = memberInfo.roles ? Object.keys(memberInfo.roles) : (memberInfo.role && memberInfo.role !== 'member' ? [memberInfo.role] : []);
+                    
+                    userRoles.forEach(rId => {
+                        if(serverRolesCache[rId] && serverRolesCache[rId].order < highestOrder) {
+                            highestOrder = serverRolesCache[rId].order;
+                            highestRole = rId;
+                        }
+                    });
+                    
                     if (memberInfo.role === 'owner') targetGroup = 'owner';
-                    else if (memberInfo.role && memberInfo.role !== 'member' && groups[memberInfo.role]) targetGroup = memberInfo.role;
+                    else if (highestRole && highestRole !== 'everyone') targetGroup = highestRole;
                     else if (status !== 'offline' && status !== 'invisible') targetGroup = 'online';
+                    
                     groups[targetGroup].members.push({ email: memberEmail, data: uData, status: status });
                 }
             });
             memberPromises.push(p);
         });
         await Promise.all(memberPromises);
+
+        document.getElementById('server-stats-display').innerText = `${onlineCount} Online • ${totalCount} Members`;
+        document.getElementById('server-stats-display').style.display = 'block';
 
         listContent.innerHTML = '';
         const sortedGroupKeys = Object.keys(groups).sort((a,b) => groups[a].order - groups[b].order);
@@ -1084,16 +1403,6 @@ function loadMemberList(serverId) {
                 mDiv.addEventListener('click', (e) => {
                     showGlobalUserProfile(m.email, e);
                 });
-                mDiv.addEventListener('contextmenu', (e) => {
-                    e.preventDefault();
-                    if (!myServerPerms.admin && !myServerPerms.manageRoles || m.email === auth.currentUser.email) return;
-                    userToManageEmail = m.email;
-                    const select = document.getElementById('assign-role-select');
-                    select.innerHTML = ``; // default is handled by 'everyone' mathematically now, but explicitly storing is fine
-                    Object.keys(rolesData).forEach(rId => { select.innerHTML += `<option value="${rId}">${rolesData[rId].name}</option>`; });
-                    select.value = membersSnap.val()[m.email].role || 'everyone';
-                    document.getElementById('assign-role-modal').style.display = 'flex';
-                });
                 listContent.appendChild(mDiv);
             });
         });
@@ -1101,31 +1410,25 @@ function loadMemberList(serverId) {
 }
 
 // Global Sync for Channels AND Categories
-let currentChannelsData = {}; let currentCategoriesData = {};
-let dragSrcEl = null;
-
-function initChannelSync(serverId) {
-    if(unsubscribeChannels) unsubscribeChannels(); 
-    if(unsubscribeCategories) unsubscribeCategories();
-    if(unsubscribeVoiceRosters) unsubscribeVoiceRosters();
-    
-    unsubscribeVoiceRosters = onValue(ref(db, `voice_rosters/${serverId}`), (snap) => {
-        currentServerVoiceRosters = snap.val() || {};
-        renderChannels(serverId);
-    });
-    unsubscribeChannels = onValue(ref(db, `channels/${serverId}`), (snap) => { currentChannelsData = snap.val() || {}; renderChannels(serverId); });
-    unsubscribeCategories = onValue(ref(db, `categories/${serverId}`), (snap) => { currentCategoriesData = snap.val() || {}; renderChannels(serverId); });
-}
-
 function renderChannels(serverId) {
     const channelList = document.getElementById('channel-list');
     let categories = { "uncategorized": { name: "UNCATEGORIZED", order: -1 } };
     Object.keys(currentCategoriesData).forEach(k => categories[k] = currentCategoriesData[k]);
     let grouped = {}; Object.keys(categories).forEach(k => grouped[k] = []);
-    Object.keys(currentChannelsData).forEach(cId => { const c = currentChannelsData[cId]; c.id = cId; const cid = c.categoryId && categories[c.categoryId] ? c.categoryId : "uncategorized"; grouped[cid].push(c); });
-    const sortedCats = Object.keys(categories).sort((a,b) => categories[a].order - categories[b].order);
     
+    Object.keys(currentChannelsData).forEach(cId => { 
+        const c = currentChannelsData[cId]; c.id = cId; 
+        const cid = c.categoryId && categories[c.categoryId] ? c.categoryId : "uncategorized"; 
+        
+        // Evaluate View Channels Perm
+        if(getChannelPerm(cId, 'viewChannels')) {
+            grouped[cid].push(c); 
+        }
+    });
+    
+    const sortedCats = Object.keys(categories).sort((a,b) => categories[a].order - categories[b].order);
     channelList.innerHTML = '';
+    
     sortedCats.forEach(catId => {
         if(grouped[catId].length === 0 && catId === "uncategorized") return;
         if(catId !== "uncategorized") {
@@ -1193,93 +1496,15 @@ function renderChannels(serverId) {
 }
 
 // ==========================================
-// --- VOICE CHAT ENGINE ---
-// ==========================================
-function initVoiceChat() { 
-    myPeer = new Peer(); 
-    myPeer.on('open', id => myCurrentPeerId = id); 
-    myPeer.on('call', call => { 
-        call.answer(localAudioStream); 
-        const cEmail = call.metadata ? call.metadata.callerEmail : call.peer; 
-        call.on('stream', stream => setupHiddenAudio(cEmail, stream)); 
-        activeCalls[cEmail] = call; 
-    }); 
-}
-
-async function joinVoiceChannel(serverId, channelId) { 
-    if (currentVoiceChannel === channelId) return; 
-    if (!myCurrentPeerId) return customAlert("Voice server connecting..."); 
-    leaveVoiceChannel(); 
-    try { 
-        localAudioStream = await navigator.mediaDevices.getUserMedia({ audio: true }); 
-        currentVoiceChannel = channelId; 
-        document.getElementById('voice-controls-area').style.display = 'flex'; 
-        
-        const vcRef = ref(db, `voice_rosters/${serverId}/${channelId}/${currentUserSafeEmail}`); 
-        await set(vcRef, myCurrentPeerId); 
-        onDisconnect(vcRef).remove(); 
-        
-        onValue(ref(db, `voice_rosters/${serverId}/${channelId}`), (snap) => { 
-            snap.forEach((childSnapshot) => { 
-                const pEmail = childSnapshot.key; 
-                const pId = childSnapshot.val(); 
-                if (pEmail !== currentUserSafeEmail && !activeCalls[pEmail]) { 
-                    const call = myPeer.call(pId, localAudioStream, { metadata: { callerEmail: currentUserSafeEmail } }); 
-                    call.on('stream', stream => setupHiddenAudio(pEmail, stream)); 
-                    activeCalls[pEmail] = call; 
-                } 
-            }); 
-        }); 
-    } catch (err) { customAlert("Mic access denied.", "Error"); } 
-}
-
-function leaveVoiceChannel() { 
-    if (!currentVoiceChannel) return; 
-    Object.keys(activeCalls).forEach(pEmail => { activeCalls[pEmail].close(); removeHiddenAudio(pEmail); }); 
-    activeCalls = {}; 
-    if (localAudioStream) { localAudioStream.getTracks().forEach(track => track.stop()); } 
-    remove(ref(db, `voice_rosters/${currentServerId}/${currentVoiceChannel}/${currentUserSafeEmail}`)); 
-    currentVoiceChannel = null; 
-    document.getElementById('voice-controls-area').style.display = 'none'; 
-}
-
-document.getElementById('disconnect-vc-btn')?.addEventListener('click', leaveVoiceChannel);
-document.getElementById('mute-btn')?.addEventListener('click', (e) => { 
-    isMuted = !isMuted; 
-    if(localAudioStream) { localAudioStream.getAudioTracks()[0].enabled = !isMuted; } 
-    e.currentTarget.classList.toggle('muted-state'); 
-});
-document.getElementById('deafen-btn')?.addEventListener('click', (e) => { 
-    isDeafened = !isDeafened; 
-    e.currentTarget.classList.toggle('muted-state'); 
-    document.querySelectorAll('.vc-audio-element').forEach(audio => audio.muted = isDeafened); 
-});
-
-function setupHiddenAudio(peerEmail, stream) { 
-    if (document.getElementById(`audio-${peerEmail}`)) return; 
-    const container = document.getElementById('hidden-audio-container'); 
-    const audio = document.createElement('audio');
-    audio.id = `audio-${peerEmail}`;
-    audio.className = 'vc-audio-element';
-    audio.autoplay = true;
-    audio.srcObject = stream;
-    if(isDeafened) audio.muted = true;
-    container.appendChild(audio);
-}
-function removeHiddenAudio(peerEmail) { 
-    const el = document.getElementById(`audio-${peerEmail}`); 
-    if (el) el.remove(); 
-}
-
-// ==========================================
 // --- MESSAGES, EMBEDS & NOTIFICATIONS ---
 // ==========================================
 function enableChat() { 
-    document.getElementById('msg-input').disabled = !myServerPerms.sendMessages; 
-    document.getElementById('send-btn').disabled = !myServerPerms.sendMessages; 
-    document.getElementById('upload-img-btn').disabled = !myServerPerms.sendMessages; 
-    document.body.classList.remove('mobile-home-active');
-    document.body.classList.add('mobile-chat-active'); 
+    const canSend = chatType === 'dm' ? true : getChannelPerm(currentChatId, 'sendMessages');
+    document.getElementById('msg-input').disabled = !canSend; 
+    document.getElementById('msg-input').placeholder = canSend ? "Message..." : "You do not have permission to send messages here.";
+    document.getElementById('send-btn').disabled = !canSend; 
+    document.getElementById('upload-img-btn').disabled = !canSend; 
+    document.getElementById('emoji-picker-btn').disabled = !canSend; 
 }
 
 function processMentionsAndText(text) {
@@ -1290,6 +1515,15 @@ function processMentionsAndText(text) {
     if(myProfile.username && text.includes('@' + myProfile.username)) isMentioned = true;
     myServerRoles.forEach(role => { if(serverRolesCache[role] && text.includes('@' + serverRolesCache[role].name)) isMentioned = true; });
     processed = processed.replace(/@([a-zA-Z0-9_]+)/g, `<strong style="color: var(--accent-warning); background: rgba(229, 192, 123, 0.1); padding: 0 3px; border-radius: 3px;">@$1</strong>`);
+    
+    // Parse Emojis [:name:id]
+    processed = processed.replace(/\[:([^:]+):([^\]]+)\]/g, (match, name, id) => {
+        if(globalEmojisCache[id]) {
+            return `<img src="${globalEmojisCache[id].url}" class="custom-emoji" data-id="${id}" alt="${name}" title=":${name}:">`;
+        }
+        return `:${name}:`;
+    });
+
     return { html: processed, isMentioned };
 }
 
@@ -1310,7 +1544,7 @@ async function buildMessageHtml(data) {
     return { html: contentHtml, isMentioned: mentionData.isMentioned, embeds: tempEmbeds };
 }
 
-let lastMsgSender = null; let lastMsgTime = 0; let scrollTimeout = null;
+let lastMsgSender = null; let lastMsgTime = 0;
 const scrollBtn = document.getElementById('scroll-bottom-btn');
 const messagesDiv = document.getElementById('messages');
 let oldestMsgTimestamp = null;
@@ -1391,14 +1625,27 @@ async function createMessageDOM(msgId, data, prevSender, prevTime) {
     let canDelete = (data.sender === auth.currentUser.email || (chatType === 'server' && (myServerPerms.admin || myServerPerms.manageMessages)));
     let nameColor = "var(--text-bright)";
     if(chatType === 'server' && data.roleId && data.roleId !== 'member' && data.roleId !== 'owner') { const rSnap = await get(ref(db, `servers/${currentServerId}/roles/${data.roleId}`)); if(rSnap.exists()) nameColor = rSnap.val().color; }
+    if(data.roleId === 'system') nameColor = "var(--accent-primary)";
 
-    let actionsHtml = `<div class="msg-actions"><button class="msg-action-btn reply">${icons.reply} Reply</button>${canDelete ? `<button class="msg-action-btn del">${icons.trash} Delete</button>` : ''}</div>`;
+    let actionsHtml = `<div class="msg-actions">
+        <button class="msg-action-btn react" onclick="openEmojiPickerForReaction('${msgId}')">${icons.addReaction} React</button>
+        <button class="msg-action-btn reply">${icons.reply} Reply</button>
+        ${canDelete ? `<button class="msg-action-btn del">${icons.trash} Delete</button>` : ''}
+    </div>`;
     
     if (!isConsecutive) {
         let replyHtml = data.replyTo ? `<div class="reply-context"><strong>@${data.replyTo.username}</strong> ${data.replyTo.text}</div>` : "";
         let headerHtml = `${replyHtml}<div class="message-header"><img src="${data.avatar}" class="avatar-small" style="cursor:pointer;" onclick="showGlobalUserProfile('${data.sender}', event)"><span class="message-sender" style="color: ${nameColor}; cursor:pointer;" onclick="showGlobalUserProfile('${data.sender}', event)">${data.username}</span><span style="font-size: 0.8em; color: var(--text-muted);">${new Date(data.timestamp).toLocaleTimeString()}</span></div>`;
         msgElement.innerHTML = `${actionsHtml}${headerHtml}<div class="msg-content-wrapper">${buildRes.html}</div>`;
     } else { msgElement.innerHTML = `${actionsHtml}<div class="msg-content-wrapper">${buildRes.html}</div>`; }
+
+    // Reactions container
+    const reactionsDiv = document.createElement('div');
+    reactionsDiv.className = 'reactions-container';
+    reactionsDiv.id = `reactions-${msgId}`;
+    msgElement.appendChild(reactionsDiv);
+    
+    if(data.reactions) renderReactions(msgId, data.reactions);
 
     buildRes.embeds.forEach(async (eObj) => {
         const sSnap = await get(ref(db, `servers/${eObj.code}`));
@@ -1426,6 +1673,37 @@ async function createMessageDOM(msgId, data, prevSender, prevTime) {
     const imgEl = msgElement.querySelector('.message-image'); if (imgEl) imgEl.addEventListener('click', () => { document.getElementById('enlarged-image').src = data.imageUrl; document.getElementById('download-image-btn').href = data.imageUrl; document.getElementById('image-modal').style.display = 'flex'; });
     
     return msgElement;
+}
+
+function renderReactions(msgId, reactionsObj) {
+    const container = document.getElementById(`reactions-${msgId}`);
+    if(!container) return;
+    container.innerHTML = '';
+    
+    Object.keys(reactionsObj).forEach(emojiKey => {
+        const users = reactionsObj[emojiKey].users || {};
+        const count = Object.keys(users).length;
+        if(count === 0) return;
+        
+        const hasMyVote = !!users[currentUserSafeEmail];
+        
+        const rDiv = document.createElement('div');
+        rDiv.className = `msg-reaction ${hasMyVote ? 'active' : ''}`;
+        
+        if(globalEmojisCache[emojiKey]) {
+            rDiv.innerHTML = `<img src="${globalEmojisCache[emojiKey].url}" style="width:16px;height:16px;vertical-align:middle;margin-right:4px;"> ${count}`;
+        } else {
+            rDiv.innerHTML = `<span style="font-size:14px;margin-right:4px;">${emojiKey}</span> ${count}`;
+        }
+        
+        rDiv.onclick = () => {
+            const dbPath = `${chatType === 'server' ? 'messages' : 'dms'}/${currentChatId}/${msgId}/reactions/${emojiKey}/users/${currentUserSafeEmail}`;
+            if(hasMyVote) remove(ref(db, dbPath));
+            else set(ref(db, dbPath), true);
+        };
+        
+        container.appendChild(rDiv);
+    });
 }
 
 async function loadMessages(dbPath, chatNameLabel) {
@@ -1495,106 +1773,124 @@ async function loadMessages(dbPath, chatNameLabel) {
     });
 
     unsubscribeMessagesRemoved = onChildRemoved(ref(db, dbPath), (snapshot) => { const msgEl = document.getElementById(`msg-${snapshot.key}`); if(msgEl) msgEl.remove(); });
+    
+    // Live update reactions
+    onValue(ref(db, dbPath), (snap) => {
+        snap.forEach(msgSnap => {
+            const mData = msgSnap.val();
+            if(mData.reactions) renderReactions(msgSnap.key, mData.reactions);
+        });
+    });
+
     if (chatType === 'dm') clearUnread('dm', currentChatId); else if (chatType === 'server') clearUnread('channel', currentChatId, currentServerId);
 }
 
-// Replier Logic
-function triggerReply(msgId, username, text) {
-    replyingToMessage = { id: msgId, username: username, text: text.length > 50 ? text.substring(0, 50) + '...' : text };
-    document.getElementById('reply-banner-text').innerHTML = `Replying to <strong style="color:var(--text-bright);">@${username}</strong>`;
-    document.getElementById('reply-banner').style.display = 'flex'; document.getElementById('msg-input').focus();
-}
-document.getElementById('cancel-reply-btn')?.addEventListener('click', () => { replyingToMessage = null; document.getElementById('reply-banner').style.display = 'none'; });
+// Emojis & Reactions Logic
+const emojiPicker = document.getElementById('emoji-picker');
+const emojiBtn = document.getElementById('emoji-picker-btn');
+let emojiHoverInterval = null;
+let currentReactionMsgId = null;
 
-// Mention Autocomplete
-const msgInput = document.getElementById('msg-input');
-const mentionMenu = document.getElementById('mention-menu');
-let mentionStartIndex = -1; let mentionSearchTerm = null;
+const standardEmojis = ['😀','😂','😍','😭','😎','👍','🙏','🔥','✨','🎉','💀','👀','💯','❤️'];
 
-msgInput?.addEventListener('input', () => {
-    const val = msgInput.value; const cursorPos = msgInput.selectionStart;
-    const textBeforeCursor = val.substring(0, cursorPos);
-    const match = textBeforeCursor.match(/@(\w*)$/);
-    if (match) { mentionStartIndex = match.index; mentionSearchTerm = match[1].toLowerCase(); showMentionMenu(mentionSearchTerm); } 
-    else { mentionMenu.style.display = 'none'; }
+emojiBtn.addEventListener('mouseenter', () => {
+    let i = 0;
+    emojiHoverInterval = setInterval(() => {
+        emojiBtn.innerHTML = `<span style="font-size:20px; line-height:1;">${standardEmojis[i % standardEmojis.length]}</span>`;
+        i++;
+    }, 200);
+});
+emojiBtn.addEventListener('mouseleave', () => {
+    clearInterval(emojiHoverInterval);
+    emojiBtn.innerHTML = icons.smile;
 });
 
-function showMentionMenu(term) {
-    mentionMenu.innerHTML = ''; let matches = [];
-    if (chatType === 'server') {
-        Object.values(serverRolesCache).forEach(role => { if (role.name.toLowerCase().includes(term)) matches.push({ type: 'role', name: role.name, color: role.color }); });
-        currentServerMembersList.forEach(m => { if (m.username.toLowerCase().includes(term)) matches.push({ type: 'user', name: m.username, avatar: m.avatar }); });
-    } else if (chatType === 'dm') {
-        if(currentDMOtherUser) matches.push({ type: 'user', name: currentDMOtherUser.username, avatar: currentDMOtherUser.avatar });
-        matches.push({ type: 'user', name: myProfile.username, avatar: myProfile.avatar });
-        matches = matches.filter(m => m.name.toLowerCase().includes(term));
-    }
+emojiBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    currentReactionMsgId = null;
+    toggleEmojiPicker();
+});
+
+window.openEmojiPickerForReaction = function(msgId) {
+    currentReactionMsgId = msgId;
+    toggleEmojiPicker();
+};
+
+function toggleEmojiPicker() {
+    if(emojiPicker.style.display === 'block') { emojiPicker.style.display = 'none'; return; }
     
-    if (matches.length === 0) { mentionMenu.style.display = 'none'; return; }
+    emojiPicker.innerHTML = '';
     
-    matches.forEach(m => {
-        const div = document.createElement('div'); div.className = 'mention-item';
-        if (m.type === 'role') { div.innerHTML = `<div style="width:24px; height:24px; border-radius:50%; background:${m.color}; display:flex; align-items:center; justify-content:center; font-size:12px; color:white;">@</div><span>${m.name}</span>`; } 
-        else { div.innerHTML = `<img src="${m.avatar}" class="mention-avatar"><span>${m.name}</span>`; }
-        div.addEventListener('click', () => {
-            const val = msgInput.value; const before = val.substring(0, mentionStartIndex); const after = val.substring(msgInput.selectionStart);
-            msgInput.value = before + '@' + m.name + ' ' + after; mentionMenu.style.display = 'none'; msgInput.focus();
+    // Server Emojis
+    if(currentServerId) {
+        get(ref(db, `servers/${currentServerId}/emojis`)).then(snap => {
+            if(snap.exists()) {
+                const sDiv = document.createElement('div'); sDiv.innerHTML = '<div style="font-size:11px; color:var(--text-muted); margin-bottom:5px; text-transform:uppercase;">Server</div>';
+                const flex = document.createElement('div'); flex.className = 'ep-grid';
+                Object.keys(snap.val()).forEach(eid => {
+                    const edata = globalEmojisCache[eid];
+                    if(edata) {
+                        const img = document.createElement('img'); img.src = edata.url; img.title = `:${edata.name}:`;
+                        img.onclick = () => insertEmoji(eid, edata.name, true);
+                        flex.appendChild(img);
+                    }
+                });
+                sDiv.appendChild(flex);
+                emojiPicker.appendChild(sDiv);
+            }
         });
-        mentionMenu.appendChild(div);
+    }
+
+    // Personal Emojis
+    get(ref(db, `users/${currentUserSafeEmail}/emojis`)).then(snap => {
+        if(snap.exists()) {
+            const pDiv = document.createElement('div'); pDiv.innerHTML = '<div style="font-size:11px; color:var(--text-muted); margin-top:10px; margin-bottom:5px; text-transform:uppercase;">Personal</div>';
+            const flex = document.createElement('div'); flex.className = 'ep-grid';
+            Object.keys(snap.val()).forEach(eid => {
+                const edata = globalEmojisCache[eid];
+                if(edata) {
+                    const img = document.createElement('img'); img.src = edata.url; img.title = `:${edata.name}:`;
+                    img.onclick = () => insertEmoji(eid, edata.name, true);
+                    flex.appendChild(img);
+                }
+            });
+            pDiv.appendChild(flex);
+            emojiPicker.appendChild(pDiv);
+        }
     });
-    mentionMenu.style.display = 'flex';
+
+    // Standard
+    const dDiv = document.createElement('div'); dDiv.innerHTML = '<div style="font-size:11px; color:var(--text-muted); margin-top:10px; margin-bottom:5px; text-transform:uppercase;">Standard</div>';
+    const flex = document.createElement('div'); flex.className = 'ep-grid text-emojis';
+    standardEmojis.forEach(e => {
+        const span = document.createElement('span'); span.innerText = e;
+        span.onclick = () => insertEmoji(e, e, false);
+        flex.appendChild(span);
+    });
+    dDiv.appendChild(flex);
+    emojiPicker.appendChild(dDiv);
+
+    emojiPicker.style.display = 'block';
 }
 
-// Image / Paste Preview Logic
-document.getElementById('upload-img-btn')?.addEventListener('click', () => document.getElementById('image-upload').click());
-document.getElementById('image-upload')?.addEventListener('change', (e) => {
-    const file = e.target.files[0]; if (!file || !currentChatId) return;
-    if (file.size > 2 * 1024 * 1024) return customAlert("File too large. Please select an image under 2MB.", "Error");
-    const reader = new FileReader(); reader.onloadend = () => { pendingAttachmentBase64 = reader.result; document.getElementById('attachment-preview-img').src = pendingAttachmentBase64; document.getElementById('attachment-preview-area').style.display = 'flex'; document.getElementById('image-upload').value = ""; }; reader.readAsDataURL(file);
-});
-document.getElementById('remove-attachment-btn')?.addEventListener('click', () => { pendingAttachmentBase64 = null; document.getElementById('attachment-preview-area').style.display = 'none'; });
-document.getElementById('msg-input')?.addEventListener('paste', (e) => {
-    const items = (e.clipboardData || e.originalEvent.clipboardData).items;
-    for (let index in items) {
-        const item = items[index];
-        if (item.kind === 'file' && item.type.startsWith('image/')) {
-            const blob = item.getAsFile(); if (blob.size > 2 * 1024 * 1024) return customAlert("Pasted image is too large (max 2MB).");
-            const reader = new FileReader(); reader.onloadend = () => { pendingAttachmentBase64 = result; document.getElementById('attachment-preview-img').src = pendingAttachmentBase64; document.getElementById('attachment-preview-area').style.display = 'flex'; }; reader.readAsDataURL(blob);
-        }
+function insertEmoji(idOrChar, name, isCustom) {
+    if(currentReactionMsgId) {
+        const dbPath = `${chatType === 'server' ? 'messages' : 'dms'}/${currentChatId}/${currentReactionMsgId}/reactions/${idOrChar}/users/${currentUserSafeEmail}`;
+        set(ref(db, dbPath), true);
+    } else {
+        const input = document.getElementById('msg-input');
+        if(isCustom) input.value += `[:${name}:${idOrChar}] `;
+        else input.value += `${idOrChar}`;
+        input.focus();
     }
-});
-
-async function sendMessage() {
-    const input = document.getElementById('msg-input'); const text = input.value.trim();
-    if ((text !== "" || pendingAttachmentBase64) && currentChatId && myServerPerms.sendMessages) {
-        const path = chatType === 'server' ? `messages/${currentChatId}` : `dms/${currentChatId}`;
-        let roleId = 'member';
-        if(chatType === 'server') { const mSnap = await get(ref(db, `server_members/${currentServerId}/${currentUserSafeEmail}/role`)); roleId = mSnap.val() || 'member'; }
-        
-        let msgPayload = { sender: auth.currentUser.email, username: myProfile.username, avatar: myProfile.avatar, text: text, timestamp: Date.now(), roleId: roleId };
-        
-        if (replyingToMessage) { msgPayload.replyTo = replyingToMessage; replyingToMessage = null; document.getElementById('reply-banner').style.display = 'none'; }
-        if (pendingAttachmentBase64) { msgPayload.imageUrl = pendingAttachmentBase64; pendingAttachmentBase64 = null; document.getElementById('attachment-preview-area').style.display = 'none'; }
-
-        push(ref(db, path), msgPayload);
-        input.value = "";
-        mentionMenu.style.display = 'none';
-        
-        if(chatType === 'dm') {
-            const friendEmail = currentChatId.replace(currentUserSafeEmail, '').replace('_', '');
-            update(ref(db, `users/${currentUserSafeEmail}/friends/${friendEmail}`), { lastActivity: Date.now(), hidden: false });
-            update(ref(db, `users/${friendEmail}/friends/${currentUserSafeEmail}`), { lastActivity: Date.now(), hidden: false });
-        }
-        update(ref(db, `users/${currentUserSafeEmail}/lastRead`), { [currentChatId]: Date.now() });
-    }
+    emojiPicker.style.display = 'none';
 }
 
+document.addEventListener('click', (e) => { if(!e.target.closest('#emoji-picker') && !e.target.closest('#emoji-picker-btn')) emojiPicker.style.display = 'none'; });
+
+// Input logic
 document.getElementById('send-btn')?.addEventListener('click', sendMessage);
 document.getElementById('msg-input')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
-document.getElementById('close-image-modal')?.addEventListener('click', () => document.getElementById('image-modal').style.display = 'none');
-
-// Notifications
-setTimeout(() => { notificationsActive = true; }, 2000);
 
 function startNotificationListeners() {
     if(dmsNotifListener) dmsNotifListener();

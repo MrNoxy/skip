@@ -30,9 +30,12 @@
 
         <div id="channel-sidebar">
             <div id="sidebar-header">
-                <div id="server-header-clickable">
-                    <h3 id="server-name-display">Friends & DMs</h3>
-                    <span id="server-dropdown-arrow" style="display: none;">▼</span>
+                <div style="flex-grow: 1; display:flex; flex-direction:column; justify-content:flex-end; height:100%;">
+                    <div id="server-header-clickable">
+                        <h3 id="server-name-display">Friends & DMs</h3>
+                        <span id="server-dropdown-arrow" style="display: none;">▼</span>
+                    </div>
+                    <div id="server-stats-display" style="display:none; font-size:11px; color:rgba(255,255,255,0.7); text-shadow: 0 1px 2px rgba(0,0,0,0.8); margin-top:2px; padding-left:6px;"></div>
                 </div>
                 
                 <div id="server-dropdown" style="display: none;">
@@ -50,6 +53,10 @@
                     </div>
                     <div class="dropdown-item invite-item" id="menu-invite">
                         <svg class="svg-icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg> Invite People
+                    </div>
+                    <div style="height:1px; background:var(--border-color); margin:5px 0;"></div>
+                    <div class="dropdown-item" id="menu-leave-server" style="display: none; color: var(--accent-danger);">
+                        <svg class="svg-icon" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg> Leave Server
                     </div>
                 </div>
             </div>
@@ -91,7 +98,6 @@
                     <div id="user-display" style="font-weight: bold; color: var(--text-bright);">User</div>
                     <div id="user-tag-display" style="font-size: 12px; color: var(--text-muted);">#0000</div>
                 </div>
-                <button id="logout-btn" class="small-btn">Log Out</button>
 
                 <div id="status-selector" style="display:none;">
                     <div class="status-option" data-status="online">🟢 Online</div>
@@ -168,10 +174,17 @@
                         </button>
                         <input type="file" id="image-upload" accept="image/*" style="display: none;">
                         <input type="text" id="msg-input" placeholder="Message..." disabled autocomplete="off">
+                        
+                        <button id="emoji-picker-btn" disabled title="Add Emoji" style="background: transparent; color: var(--text-muted); padding:0 10px; cursor: pointer;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
+                        </button>
+
                         <button id="send-btn" disabled title="Send">
                             <svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
                         </button>
                     </div>
+                    
+                    <div id="emoji-picker" style="display: none;"></div>
                 </div>
             </div>
 
@@ -207,13 +220,14 @@
                 
                 <div style="margin-top: 35px; background: var(--bg-main); padding: 12px; border-radius: 6px; border: 1px solid var(--border-color);">
                     <h3 id="gup-username" style="margin: 0; font-size: 20px; color: var(--text-bright);">Username</h3>
-                    <div id="gup-tag" style="color: var(--text-muted); font-size: 14px;">#0000</div>
+                    <div id="gup-tag" style="color: var(--text-muted); font-size: 14px; margin-bottom: 10px;">#0000</div>
+                    <div id="gup-roles-container" style="display: none; border-top: 1px solid var(--border-color); padding-top: 10px;"></div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div id="confirm-modal" class="modal-overlay" style="display: none; z-index: 3000;">
+    <div id="confirm-modal" class="modal-overlay" style="display: none; z-index: 6000;">
         <div class="modal-content text-center" style="width: 350px;">
             <h3 id="confirm-modal-title" style="color: var(--text-bright);">Confirm</h3>
             <p id="confirm-modal-desc" style="color: var(--text-main); margin-bottom: 20px; font-size: 14px; word-break: break-word;"></p>
@@ -224,7 +238,7 @@
         </div>
     </div>
 
-    <div id="input-modal" class="modal-overlay" style="display: none; z-index: 2500;">
+    <div id="input-modal" class="modal-overlay" style="display: none; z-index: 6000;">
         <div class="modal-content" style="width: 350px;">
             <h3 id="input-modal-title" style="color: var(--text-bright);">Title</h3>
             <p id="input-modal-desc" style="color: var(--text-main); margin-bottom: 15px; font-size: 14px; display: none;"></p>
@@ -236,7 +250,7 @@
         </div>
     </div>
 
-    <div id="alert-modal" class="modal-overlay" style="display: none; z-index: 3500;">
+    <div id="alert-modal" class="modal-overlay" style="display: none; z-index: 6000;">
         <div class="modal-content text-center" style="width: 350px;">
             <h3 id="alert-modal-title" style="color: var(--text-bright);">Notice</h3>
             <p id="alert-modal-desc" style="color: var(--text-main); margin-bottom: 20px; font-size: 14px; word-break: break-word;"></p>
@@ -244,29 +258,11 @@
         </div>
     </div>
 
-    <div id="profile-modal" class="modal-overlay" style="display: none;">
+    <div id="assign-role-modal" class="modal-overlay" style="display: none; z-index: 5500;">
         <div class="modal-content" style="width: 350px;">
-            <h3 style="color: var(--text-bright);">Edit Profile</h3>
-            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
-                <img id="profile-preview" class="avatar-large" src="https://cdn.pixabay.com/photo/2023/02/18/11/00/icon-7797704_640.png" alt="Avatar">
-                <input type="file" id="avatar-upload" accept="image/*">
-            </div>
-            <label style="color: var(--text-main);">Username</label>
-            <input type="text" id="edit-username" placeholder="Username" autocomplete="off">
-            <label style="color: var(--text-main);">Tag (4 digits)</label>
-            <input type="number" id="edit-tag" placeholder="6996" autocomplete="off">
-            <div style="margin-top: 15px; display: flex; gap: 10px;">
-                <button id="save-profile-btn" style="flex: 1;">Save Changes</button>
-                <button id="close-profile-btn" style="background-color: var(--bg-hover); flex: 1;">Cancel</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="assign-role-modal" class="modal-overlay" style="display: none;">
-        <div class="modal-content" style="width: 350px;">
-            <h3 id="assign-role-title" style="color: var(--text-bright);">Manage User</h3>
-            <label style="color: var(--text-main);">Assign Role:</label>
-            <select id="assign-role-select"></select>
+            <h3 id="assign-role-title" style="color: var(--text-bright);">Manage Roles</h3>
+            <label style="color: var(--text-main);">Select roles to assign (Hold Ctrl/Cmd to multi-select):</label>
+            <select id="assign-role-select" multiple></select>
             <div style="display: flex; gap: 10px;">
                 <button id="save-role-btn" style="flex: 1;">Save</button>
                 <button id="close-role-modal-btn" style="background-color: var(--bg-hover); flex: 1;">Cancel</button>
@@ -280,8 +276,63 @@
         <a id="download-image-btn" href="" download="image.png">⬇ Download Image</a>
     </div>
 
-    <div id="context-menu" style="display: none;">
+    <div id="context-menu" style="display: none;"></div>
+
+    <div id="user-settings-modal" class="fs-modal-overlay">
+        <div class="fs-modal-layout">
+            <div class="fs-sidebar" id="us-sidebar">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h3><span style="color: var(--text-muted); font-size: 12px; font-weight:bold; text-transform:uppercase;">User Settings</span></h3>
+                    <button id="close-user-settings-btn" class="fs-close-btn-mobile" title="Close">✖</button>
+                </div>
+                
+                <div class="fs-tab active" data-tab="account" id="tab-us-account">My Account</div>
+                <div class="fs-tab" data-tab="emojis" id="tab-us-emojis">Personal Emojis</div>
+                <div style="height: 1px; background: var(--border-color); margin: 10px 0;"></div>
+                <div class="fs-tab" id="us-logout-btn" style="color: var(--accent-danger);">Log Out</div>
+            </div>
+            
+            <div class="fs-content-area" id="us-content">
+                <div style="display: flex; align-items: center; margin-bottom: 20px;">
+                    <button class="mobile-back-btn fs-mobile-back" id="us-mobile-back">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                    </button>
+                    <h2 style="margin: 0; color: var(--text-bright);">My Account</h2>
+                </div>
+                
+                <div class="ss-pane" id="pane-us-account" style="display: block;">
+                    <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+                        <img id="profile-preview" class="avatar-large" src="https://cdn.pixabay.com/photo/2023/02/18/11/00/icon-7797704_640.png" alt="Avatar">
+                        <input type="file" id="avatar-upload" accept="image/*">
+                    </div>
+                    <label style="color: var(--text-main); font-weight: bold; margin-bottom:10px; display:block;">Username</label>
+                    <input type="text" id="edit-username" placeholder="Username" autocomplete="off" class="fs-input">
+                    <label style="color: var(--text-main); font-weight: bold; margin-bottom:10px; display:block;">Tag (4 digits)</label>
+                    <input type="number" id="edit-tag" placeholder="6996" autocomplete="off" class="fs-input">
+                    
+                    <div style="margin-top: 30px; padding-top: 15px; border-top: 1px solid var(--border-color);">
+                        <button id="save-profile-btn" style="width: auto; margin-left: 0;">Save Changes</button>
+                    </div>
+                </div>
+
+                <div class="ss-pane" id="pane-us-emojis" style="display: none;">
+                    <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">Upload custom emojis that you can use in any server or DM!</p>
+                    
+                    <div style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center;">
+                        <input type="file" id="us-emoji-file" accept="image/*" style="flex:1; max-width: 200px;">
+                        <input type="text" id="us-emoji-name" placeholder="Emoji Name (no spaces)" class="fs-input" style="flex:1; margin:0;">
+                        <button id="us-upload-emoji-btn" style="margin:0;">Upload</button>
+                    </div>
+                    
+                    <h3 style="color: var(--text-bright); border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">Your Emojis</h3>
+                    <div id="us-emojis-list" style="display: flex; flex-direction: column; gap: 5px;"></div>
+                </div>
+            </div>
+            
+            <div class="fs-close-btn desktop-only" id="close-user-settings-btn-desktop">✖</div>
         </div>
+    </div>
+
 
     <div id="server-settings-modal" class="fs-modal-overlay">
         <div class="fs-modal-layout">
@@ -294,6 +345,7 @@
                 <div class="fs-tab" data-tab="profile" id="tab-ss-profile">Server Profile</div>
                 <div class="fs-tab" data-tab="engagement" id="tab-ss-engagement">Engagement</div>
                 <div class="fs-tab" data-tab="roles" id="tab-ss-roles">Roles</div>
+                <div class="fs-tab" data-tab="emojis" id="tab-ss-emojis">Server Emojis</div>
                 <div style="height: 1px; background: var(--border-color); margin: 10px 0;"></div>
                 <div class="fs-tab" data-tab="delete" id="tab-ss-delete" style="color: var(--accent-danger);">Delete Server</div>
             </div>
@@ -398,6 +450,19 @@
                     </div>
                 </div>
 
+                <div class="ss-pane" id="pane-ss-emojis" style="display: none;">
+                    <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">Upload custom emojis that anyone in this server can use!</p>
+                    
+                    <div style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center;">
+                        <input type="file" id="ss-emoji-file" accept="image/*" style="flex:1; max-width: 200px;">
+                        <input type="text" id="ss-emoji-name" placeholder="Emoji Name (no spaces)" class="fs-input" style="flex:1; margin:0;">
+                        <button id="ss-upload-emoji-btn" style="margin:0;">Upload</button>
+                    </div>
+                    
+                    <h3 style="color: var(--text-bright); border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">Server Emojis</h3>
+                    <div id="ss-emojis-list" style="display: flex; flex-direction: column; gap: 5px;"></div>
+                </div>
+
                 <div class="ss-pane" id="pane-ss-delete">
                     <h3 style="color: var(--text-bright); margin-top: 0;">Delete Server</h3>
                     <p style="color: var(--text-main);">Are you absolutely sure you want to do this? This action cannot be undone and will permanently wipe all messages, channels, and roles.</p>
@@ -440,8 +505,39 @@
                     </div>
                 </div>
 
-                <div class="ss-pane" id="pane-cs-perms" style="display: none;">
-                    <p style="color: var(--text-muted);">Advanced channel permission overrides will appear here in a future update.</p>
+                <div class="ss-pane" id="pane-cs-perms" style="display: none; height: 100%;">
+                    <p style="color: var(--text-muted); font-size:14px; margin-bottom:20px;">Override permissions for specific roles in this channel.</p>
+                    
+                    <div style="display: flex; gap: 20px; height: calc(100% - 50px);" id="cs-roles-flex-container">
+                        <div id="cs-roles-list-left" style="width: 250px; display: flex; flex-direction: column; border-right: 1px solid var(--border-color); padding-right: 20px; overflow-y: auto;">
+                            </div>
+
+                        <div id="cs-role-edit-area" style="flex-grow: 1; display: none; overflow-y: auto; padding-right: 10px;">
+                            <button class="mobile-back-btn fs-mobile-back" id="cs-roles-pane-mobile-back" style="display:none; margin-bottom: 15px;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg> Back to Roles
+                            </button>
+                            
+                            <h3 style="color: var(--text-bright); margin-top: 0;" id="cs-editing-role-name">Role Name</h3>
+                            
+                            <label class="toggle-row">
+                                <div><strong style="color: var(--text-bright);">View Channel</strong></div>
+                                <select id="cp-viewChannels" style="padding:5px; background:var(--bg-main); color:var(--text-bright); border:1px solid var(--border-color); border-radius:4px;">
+                                    <option value="inherit">/</option><option value="allow">✔</option><option value="deny">✖</option>
+                                </select>
+                            </label>
+                            
+                            <label class="toggle-row">
+                                <div><strong style="color: var(--text-bright);">Send Messages</strong></div>
+                                <select id="cp-sendMessages" style="padding:5px; background:var(--bg-main); color:var(--text-bright); border:1px solid var(--border-color); border-radius:4px;">
+                                    <option value="inherit">/</option><option value="allow">✔</option><option value="deny">✖</option>
+                                </select>
+                            </label>
+
+                            <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--border-color);">
+                                <button id="cs-save-perms-btn" style="margin-left: 0;">Save Permissions</button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="ss-pane" id="pane-cs-delete" style="display: none;">
@@ -455,9 +551,5 @@
     </div>
 
     <script type="module" src="app.js"></script>
-    <script>
-        document.getElementById('close-server-settings-btn-desktop').onclick = () => document.getElementById('server-settings-modal').style.display = 'none';
-        document.getElementById('close-channel-settings-btn-desktop').onclick = () => document.getElementById('channel-settings-modal').style.display = 'none';
-    </script>
 </body>
 </html>
