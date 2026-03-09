@@ -57,6 +57,11 @@ let myPeer = null; let myCurrentPeerId = null; let localAudioStream = null;
 let activeCalls = {}; let currentVoiceChannel = null; let isMuted = false; let isDeafened = false;
 let currentServerVoiceRosters = {};
 
+// Global Channel Data Sync (RESTORED)
+let currentChannelsData = {}; 
+let currentCategoriesData = {};
+let dragSrcEl = null;
+
 const appContainer = document.getElementById('app-container');
 const authSection = document.getElementById('auth-section');
 const appBaseUrl = window.location.href.split('?')[0];
@@ -1708,7 +1713,7 @@ async function createMessageDOM(msgId, data, prevSender, prevTime) {
     if(data.roleId === 'system') nameColor = "var(--accent-primary)";
 
     let actionsHtml = `<div class="msg-actions">
-        <button class="msg-action-btn react" onclick="openEmojiPickerForReaction('${msgId}')">${icons.addReaction} React</button>
+        <button class="msg-action-btn react" onclick="openEmojiPickerForReaction('${msgId}', event)">${icons.addReaction} React</button>
         <button class="msg-action-btn reply">${icons.reply} Reply</button>
         ${canDelete ? `<button class="msg-action-btn del">${icons.trash} Delete</button>` : ''}
     </div>`;
@@ -1938,7 +1943,8 @@ emojiBtn.addEventListener('click', (e) => {
     toggleEmojiPicker();
 });
 
-window.openEmojiPickerForReaction = function(msgId) {
+window.openEmojiPickerForReaction = function(msgId, event) {
+    if(event) event.stopPropagation(); // Prevents document click from immediately closing it
     currentReactionMsgId = msgId;
     toggleEmojiPicker();
 };
@@ -2013,7 +2019,11 @@ function insertEmoji(idOrChar, name, isCustom) {
     emojiPicker.style.display = 'none';
 }
 
-document.addEventListener('click', (e) => { if(!e.target.closest('#emoji-picker') && !e.target.closest('#emoji-picker-btn')) emojiPicker.style.display = 'none'; });
+document.addEventListener('click', (e) => { 
+    if(!e.target.closest('#emoji-picker') && !e.target.closest('#emoji-picker-btn') && !e.target.closest('.react')) {
+        emojiPicker.style.display = 'none'; 
+    }
+});
 
 // Image / Paste Preview Logic
 document.getElementById('upload-img-btn')?.addEventListener('click', () => document.getElementById('image-upload').click());
