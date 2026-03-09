@@ -26,7 +26,7 @@ html, body {
     overflow: hidden; position: fixed;
     display: flex; justify-content: center; align-items: center; 
 }
-input { font-size: 16px !important; }
+input, textarea { font-size: 16px !important; }
 
 /* Custom Scrollbars */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -115,6 +115,10 @@ input { font-size: 16px !important; }
 #chat-header { padding: 15px; border-bottom: 1px solid var(--border-color); font-weight: bold; display: flex; align-items: center; z-index: 10; flex-shrink: 0; height: 55px; box-sizing: border-box; background: var(--bg-main); }
 #messages { flex-grow: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; scroll-behavior: auto; background: var(--bg-main); }
 
+/* Markdown & Mentions */
+.markdown-code { background: rgba(0,0,0,0.3); padding: 2px 4px; border-radius: 4px; font-family: monospace; font-size: 0.9em; border: 1px solid var(--border-color); }
+.mention-link:hover { text-decoration: underline; }
+
 /* Loading Spinner */
 .loading-spinner { animation: spin 1s linear infinite; }
 @keyframes spin { 100% { transform: rotate(360deg); } }
@@ -145,10 +149,10 @@ input { font-size: 16px !important; }
 /* Modernized Input Area */
 #message-input-area { padding: 20px; display: flex; flex-direction: column; z-index: 11; position: relative; flex-shrink: 0; background: var(--bg-main); }
 #message-input-wrapper { display: flex; align-items: center; background-color: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; width: 100%; padding: 5px 15px; box-sizing: border-box;}
-#msg-input { flex-grow: 1; background: transparent; border: none; color: var(--text-bright); padding: 12px 0; outline: none; font-size: 15px; }
-#upload-img-btn { background: var(--bg-hover); color: var(--text-main); border-radius: 50%; width: 26px; height: 26px; display: flex; justify-content: center; align-items: center; cursor: pointer; padding: 0; margin-right: 15px; margin-left: 0; border: 1px solid var(--border-color); }
+#msg-input { flex-grow: 1; background: transparent; border: none; color: var(--text-bright); padding: 12px 0; outline: none; font-size: 15px; resize: none; overflow-y: auto; max-height: 250px; font-family: inherit; line-height: 1.4;}
+#upload-img-btn { background: var(--bg-hover); color: var(--text-main); border-radius: 50%; width: 26px; height: 26px; display: flex; justify-content: center; align-items: center; cursor: pointer; padding: 0; margin-right: 15px; margin-left: 0; border: 1px solid var(--border-color); flex-shrink:0; }
 #upload-img-btn:hover:not(:disabled) { background: var(--accent-primary); color: white; border-color: var(--accent-primary); }
-#send-btn { background: transparent; color: var(--text-muted); padding: 0; margin-left: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+#send-btn { background: transparent; color: var(--text-muted); padding: 0; margin-left: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink:0;}
 #send-btn:hover:not(:disabled) { color: var(--accent-primary); background: transparent; }
 
 /* Banners inside Input Area */

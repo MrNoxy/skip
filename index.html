@@ -173,10 +173,10 @@
                             <svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg>
                         </button>
                         <input type="file" id="image-upload" accept="image/*" style="display: none;">
-                        <input type="text" id="msg-input" placeholder="Message..." disabled autocomplete="off">
+                        <textarea id="msg-input" placeholder="Message..." disabled autocomplete="off" rows="1"></textarea>
                         
                         <button id="emoji-picker-btn" disabled title="Add Emoji" style="background: transparent; color: var(--text-muted); padding:0 10px; cursor: pointer;">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
+                            <span id="ep-icon-span"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg></span>
                         </button>
 
                         <button id="send-btn" disabled title="Send">
@@ -255,18 +255,6 @@
             <h3 id="alert-modal-title" style="color: var(--text-bright);">Notice</h3>
             <p id="alert-modal-desc" style="color: var(--text-main); margin-bottom: 20px; font-size: 14px; word-break: break-word;"></p>
             <button id="alert-modal-ok" style="width: 100%;">OK</button>
-        </div>
-    </div>
-
-    <div id="assign-role-modal" class="modal-overlay" style="display: none; z-index: 5500;">
-        <div class="modal-content" style="width: 350px;">
-            <h3 id="assign-role-title" style="color: var(--text-bright);">Manage Roles</h3>
-            <label style="color: var(--text-main);">Select roles to assign (Hold Ctrl/Cmd to multi-select):</label>
-            <select id="assign-role-select" multiple></select>
-            <div style="display: flex; gap: 10px;">
-                <button id="save-role-btn" style="flex: 1;">Save</button>
-                <button id="close-role-modal-btn" style="background-color: var(--bg-hover); flex: 1;">Cancel</button>
-            </div>
         </div>
     </div>
 
@@ -527,7 +515,7 @@
                             </label>
                             
                             <label class="toggle-row">
-                                <div><strong style="color: var(--text-bright);">Send Messages</strong></div>
+                                <div><strong id="cs-send-msg-label" style="color: var(--text-bright);">Send Messages</strong></div>
                                 <select id="cp-sendMessages" style="padding:5px; background:var(--bg-main); color:var(--text-bright); border:1px solid var(--border-color); border-radius:4px;">
                                     <option value="inherit">/</option><option value="allow">✔ Allow</option><option value="deny">✖ Deny</option>
                                 </select>

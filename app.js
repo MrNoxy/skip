@@ -47,6 +47,7 @@ let serversNotifListener = null;
 
 let replyingToMessage = null; 
 let pendingAttachmentBase64 = null; 
+let pendingAttachmentOriginal = null;
 
 let notificationsActive = false; 
 const appStartTime = Date.now(); 
@@ -85,26 +86,92 @@ const icons = {
     addReaction: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line><line x1="20" y1="4" x2="24" y2="4"></line><line x1="22" y1="2" x2="22" y2="6"></line></svg>`
 };
 
-// Evaluate Permissions globally taking Overwrites into account
+// Image Compressor helper
+function compressImage(file, maxWidth, maxHeight, quality) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const originalDataUrl = e.target.result;
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let w = img.width, h = img.height;
+                if (w > maxWidth || h > maxHeight) {
+                    const ratio = Math.min(maxWidth / w, maxHeight / h);
+                    w *= ratio; h *= ratio;
+                }
+                canvas.width = w; canvas.height = h;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, w, h);
+                const compressedDataUrl = canvas.toDataURL(file.type === 'image/png' ? 'image/png' : 'image/jpeg', quality);
+                resolve({ compressed: compressedDataUrl, original: originalDataUrl });
+            };
+            img.src = originalDataUrl;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+function getCategoryPerm(categoryId, permName) {
+    if (myServerPerms.manageServerSettings || myServerRoles.includes('owner')) return true;
+    let result = !!myServerPerms[permName];
+    const catData = currentCategoriesData[categoryId];
+    if (!catData) return result;
+    const ows = catData.overwrites || {};
+    
+    let oResult = null;
+    if (ows['everyone'] && ows['everyone'][permName] !== undefined && ows['everyone'][permName] !== "inherit") {
+        oResult = ows['everyone'][permName] === "allow";
+    }
+    let roleAllowed = false; let roleDenied = false; let roleSet = false;
+    myServerRoles.forEach(rId => {
+        if (ows[rId] && ows[rId][permName] !== undefined && ows[rId][permName] !== "inherit") {
+            roleSet = true;
+            if (ows[rId][permName] === "allow") roleAllowed = true;
+            if (ows[rId][permName] === "deny") roleDenied = true;
+        }
+    });
+    if (roleAllowed) return true;
+    if (roleDenied) return false;
+    if (oResult !== null && !roleSet) return oResult;
+    return result;
+}
+
 function getChannelPerm(channelId, permName) {
     if (myServerPerms.manageServerSettings || myServerRoles.includes('owner')) return true;
     let result = !!myServerPerms[permName]; 
-    const overwrites = currentChannelsData[channelId]?.overwrites || {};
+    const channelData = currentChannelsData[channelId];
+    if(!channelData) return result;
+
+    const catId = channelData.categoryId;
+    const catOverwrites = currentCategoriesData[catId]?.overwrites || {};
+    const overwrites = channelData.overwrites || {};
     
-    if (overwrites['everyone'] && overwrites['everyone'][permName] !== undefined && overwrites['everyone'][permName] !== "inherit") {
-        result = overwrites['everyone'][permName] === "allow";
-    }
-    
-    let roleAllowed = false; let roleDenied = false;
-    myServerRoles.forEach(rId => {
-        if (overwrites[rId] && overwrites[rId][permName] !== undefined && overwrites[rId][permName] !== "inherit") {
-            if (overwrites[rId][permName] === "allow") roleAllowed = true;
-            if (overwrites[rId][permName] === "deny") roleDenied = true;
+    let evalOverwrites = (ows) => {
+        let oResult = null;
+        if (ows['everyone'] && ows['everyone'][permName] !== undefined && ows['everyone'][permName] !== "inherit") {
+            oResult = ows['everyone'][permName] === "allow";
         }
-    });
+        let roleAllowed = false; let roleDenied = false; let roleSet = false;
+        myServerRoles.forEach(rId => {
+            if (ows[rId] && ows[rId][permName] !== undefined && ows[rId][permName] !== "inherit") {
+                roleSet = true;
+                if (ows[rId][permName] === "allow") roleAllowed = true;
+                if (ows[rId][permName] === "deny") roleDenied = true;
+            }
+        });
+        if (roleAllowed) return true;
+        if (roleDenied) return false;
+        if (oResult !== null && !roleSet) return oResult;
+        return null;
+    };
     
-    if (roleAllowed) return true;
-    if (roleDenied) return false;
+    let catRes = evalOverwrites(catOverwrites);
+    if (catRes !== null) result = catRes;
+    
+    let chanRes = evalOverwrites(overwrites);
+    if (chanRes !== null) result = chanRes;
+
     return result;
 }
 
@@ -177,18 +244,26 @@ window.showGlobalUserProfile = async function(email, event) {
     removeFriendBtn.style.display = 'none';
     sendMsgBtn.style.display = 'none';
     
+    modal.style.visibility = 'hidden';
     modal.style.display = 'block'; 
     
     if(event) {
         let x = event.clientX;
         let y = event.clientY;
-        const rect = content.getBoundingClientRect();
-        if (x + 340 > window.innerWidth) x = window.innerWidth - 350;
-        if (y + rect.height > window.innerHeight) y = window.innerHeight - rect.height - 20;
-        if (x < 10) x = 10;
-        if (y < 10) y = 10;
-        content.style.left = `${x}px`;
-        content.style.top = `${y}px`;
+        setTimeout(() => {
+            const rect = content.getBoundingClientRect();
+            if (x + 340 > window.innerWidth) x = window.innerWidth - 350;
+            if (y + rect.height > window.innerHeight) y = window.innerHeight - rect.height - 20;
+            if (x < 10) x = 10;
+            if (y < 10) y = 10;
+            content.style.left = `${x}px`;
+            content.style.top = `${y}px`;
+            modal.style.visibility = 'visible';
+        }, 0);
+    } else {
+        content.style.left = `calc(50% - 170px)`;
+        content.style.top = `20%`;
+        modal.style.visibility = 'visible';
     }
     
     const uSnap = await get(child(ref(db), `users/${safeEmail}`));
@@ -217,7 +292,18 @@ window.showGlobalUserProfile = async function(email, event) {
                         const badge = document.createElement('div');
                         badge.className = 'role-badge';
                         badge.style.borderColor = rData.color;
-                        badge.innerHTML = `<span style="color:${rData.color}">●</span> ${rData.name}`;
+                        if(myServerPerms.manageRoles || myServerRoles.includes('owner')) {
+                            badge.innerHTML = `<span style="color:${rData.color}">●</span> ${rData.name} <span class="remove-role-btn" data-role="${rId}" style="margin-left:4px;cursor:pointer;opacity:0.8;">×</span>`;
+                            badge.querySelector('.remove-role-btn').onclick = async (e) => {
+                                e.stopPropagation();
+                                const newRoles = { ...memInfo.roles };
+                                delete newRoles[rId];
+                                await update(ref(db, `server_members/${currentServerId}/${safeEmail}`), { roles: newRoles });
+                                showGlobalUserProfile(safeEmail); // refresh modal
+                            };
+                        } else {
+                            badge.innerHTML = `<span style="color:${rData.color}">●</span> ${rData.name}`;
+                        }
                         roleFlex.appendChild(badge);
                     }
                 });
@@ -229,7 +315,7 @@ window.showGlobalUserProfile = async function(email, event) {
                     addRoleBtn.innerHTML = `+`;
                     addRoleBtn.onclick = (e) => {
                         e.stopPropagation();
-                        openQuickRoleAssign(safeEmail, userRoles);
+                        openQuickRoleDropdown(safeEmail, userRoles, e.target);
                     };
                     roleFlex.appendChild(addRoleBtn);
                 }
@@ -275,35 +361,86 @@ window.showGlobalUserProfile = async function(email, event) {
     }
 };
 
+window.handleMentionClick = function(username, event) {
+    event.stopPropagation();
+    let foundEmail = null;
+    // Look up in server members first for speed
+    if (currentServerId) {
+        currentServerMembersList.forEach(m => { if(m.username === username) foundEmail = m.email || Object.keys(globalUsersCache).find(k => globalUsersCache[k].username === username); });
+    }
+    // Fallback global cache
+    if (!foundEmail) {
+        Object.keys(globalUsersCache).forEach(email => { if(globalUsersCache[email].username === username) foundEmail = email; });
+    }
+    if (foundEmail) showGlobalUserProfile(foundEmail, event);
+};
+
 document.getElementById('global-user-profile-modal')?.addEventListener('click', (e) => { 
-    if(e.target.id === 'global-user-profile-modal') e.target.style.display = 'none'; 
+    if(e.target.id === 'global-user-profile-modal') {
+        e.target.style.display = 'none'; 
+        const drp = document.getElementById('role-quick-dropdown');
+        if(drp) drp.remove();
+    }
 });
 
-function openQuickRoleAssign(targetEmail, currentRolesArray) {
-    const list = document.getElementById('assign-role-select');
-    list.innerHTML = '';
-    list.multiple = true;
-    list.style.height = '150px';
-    
+function openQuickRoleDropdown(targetEmail, currentRolesArray, anchorEl) {
+    let existing = document.getElementById('role-quick-dropdown');
+    if (existing) existing.remove();
+
+    const dropdown = document.createElement('div');
+    dropdown.id = 'role-quick-dropdown';
+    dropdown.style.position = 'absolute';
+    dropdown.style.background = 'var(--bg-tertiary)';
+    dropdown.style.border = '1px solid var(--border-color)';
+    dropdown.style.borderRadius = '4px';
+    dropdown.style.padding = '5px';
+    dropdown.style.boxShadow = '0 4px 12px rgba(0,0,0,0.5)';
+    dropdown.style.zIndex = '5000';
+    dropdown.style.maxHeight = '150px';
+    dropdown.style.overflowY = 'auto';
+
+    let hasOpts = false;
     Object.keys(serverRolesCache).forEach(rId => {
-        if(rId === 'everyone') return;
-        const opt = document.createElement('option');
-        opt.value = rId;
-        opt.text = serverRolesCache[rId].name;
-        if(currentRolesArray.includes(rId)) opt.selected = true;
-        list.appendChild(opt);
+        if(rId === 'everyone' || currentRolesArray.includes(rId)) return;
+        hasOpts = true;
+        const opt = document.createElement('div');
+        opt.style.padding = '5px 8px';
+        opt.style.cursor = 'pointer';
+        opt.style.borderRadius = '3px';
+        opt.style.color = 'var(--text-bright)';
+        opt.style.fontSize = '12px';
+        opt.innerText = serverRolesCache[rId].name;
+        opt.onmouseover = () => opt.style.background = 'var(--accent-primary)';
+        opt.onmouseout = () => opt.style.background = 'transparent';
+        opt.onclick = async (e) => {
+            e.stopPropagation();
+            let newRoles = {};
+            currentRolesArray.forEach(r => newRoles[r] = true);
+            newRoles[rId] = true;
+            await update(ref(db, `server_members/${currentServerId}/${targetEmail}`), { roles: newRoles });
+            dropdown.remove();
+            showGlobalUserProfile(targetEmail);
+        };
+        dropdown.appendChild(opt);
     });
-    
-    document.getElementById('assign-role-modal').style.display = 'flex';
-    document.getElementById('save-role-btn').onclick = () => {
-        const selected = Array.from(list.selectedOptions).map(o => o.value);
-        let rolesObj = {};
-        selected.forEach(r => rolesObj[r] = true);
-        
-        update(ref(db, `server_members/${currentServerId}/${targetEmail}`), { roles: rolesObj });
-        document.getElementById('assign-role-modal').style.display = 'none';
-        document.getElementById('global-user-profile-modal').style.display = 'none';
-    };
+
+    if(!hasOpts) {
+        dropdown.innerHTML = '<div style="font-size:12px;color:var(--text-muted);padding:5px;">No roles available</div>';
+    }
+
+    document.body.appendChild(dropdown);
+    const rect = anchorEl.getBoundingClientRect();
+    dropdown.style.left = `${rect.left}px`;
+    dropdown.style.top = `${rect.bottom + 5}px`;
+
+    setTimeout(() => {
+        document.addEventListener('click', function closeDrp(e) {
+            if(!dropdown.contains(e.target)) {
+                dropdown.remove();
+                document.removeEventListener('click', closeDrp);
+            }
+        });
+    }, 10);
 }
 
 
@@ -317,10 +454,17 @@ function showContextMenu(e, type, id) {
     e.preventDefault();
     
     let html = '';
-    if (type === 'channel' || type === 'category') {
+    if (type === 'channel') {
         if (!myServerPerms.manageChannels && !myServerPerms.manageServerSettings && !myServerRoles.includes('owner')) return; 
-        if(type === 'channel') html += `<div class="context-item" id="ctx-edit">${icons.gear} Edit Channel</div>`;
-        html += `<div class="context-item" id="ctx-delete" style="color: var(--accent-danger);">${icons.trash} Delete ${type}</div>`;
+        html += `<div class="context-item" id="ctx-edit">${icons.gear} Edit Channel</div>`;
+        html += `<div class="context-item" id="ctx-delete" style="color: var(--accent-danger);">${icons.trash} Delete Channel</div>`;
+    } else if (type === 'category') {
+        if (!myServerPerms.manageChannels && !myServerPerms.manageServerSettings && !myServerRoles.includes('owner')) return;
+        html += `<div class="context-item" id="ctx-cat-add-text">${icons.textChannel} Add Text Channel</div>`;
+        html += `<div class="context-item" id="ctx-cat-add-voice">${icons.voiceChannel} Add Voice Channel</div>`;
+        html += `<div style="height:1px; background:var(--border-color); margin:5px 0;"></div>`;
+        html += `<div class="context-item" id="ctx-edit">${icons.gear} Edit Category</div>`;
+        html += `<div class="context-item" id="ctx-delete" style="color: var(--accent-danger);">${icons.trash} Delete Category</div>`;
     } else if (type === 'dm') {
         html = `<div class="context-item" id="ctx-delete" style="color: var(--accent-danger);">${icons.closeDM} Close DM</div>`;
     } else if (type === 'friend') {
@@ -352,6 +496,8 @@ document.addEventListener('click', (e) => {
     const ctxDel = e.target.closest('#ctx-delete');
     const ctxEdit = e.target.closest('#ctx-edit');
     const ctxSaveEmoji = e.target.closest('#ctx-save-emoji');
+    const ctxAddText = e.target.closest('#ctx-cat-add-text');
+    const ctxAddVoice = e.target.closest('#ctx-cat-add-voice');
 
     if(ctxDel && contextTarget) {
         if(contextTarget.type === 'dm') {
@@ -372,8 +518,19 @@ document.addEventListener('click', (e) => {
             });
         }
         ctxMenu.style.display = 'none';
-    } else if (ctxEdit && contextTarget && contextTarget.type === 'channel') {
-        openChannelSettings(contextTarget.id);
+    } else if (ctxEdit && contextTarget) {
+        if (contextTarget.type === 'channel') openChannelSettings(contextTarget.id, 'channel');
+        else if (contextTarget.type === 'category') openChannelSettings(contextTarget.id, 'category');
+        ctxMenu.style.display = 'none';
+    } else if (ctxAddText && contextTarget && contextTarget.type === 'category') {
+        openInputModal("Add Text Channel", "channel-name", "", (name) => { 
+            if (name && currentServerId) push(ref(db, `channels/${currentServerId}`), { name: name.toLowerCase(), type: "text", categoryId: contextTarget.id, order: Date.now() }); 
+        });
+        ctxMenu.style.display = 'none';
+    } else if (ctxAddVoice && contextTarget && contextTarget.type === 'category') {
+        openInputModal("Add Voice Channel", "Lounge", "", (name) => { 
+            if (name && currentServerId) push(ref(db, `channels/${currentServerId}`), { name: name, type: "voice", categoryId: contextTarget.id, order: Date.now() }); 
+        });
         ctxMenu.style.display = 'none';
     } else if (ctxSaveEmoji && contextTarget && contextTarget.type === 'emoji') {
         const targetEmoji = globalEmojisCache[contextTarget.id];
@@ -398,7 +555,7 @@ document.getElementById('register-btn')?.addEventListener('click', async () => {
         const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
         const safeEmail = sanitizeEmail(email); const baseName = email.split('@')[0];
         const randomTag = Math.floor(1000 + Math.random() * 9000).toString(); 
-        const defaultAvatar = `https://ui-avatars.com/api/?name=${baseName.charAt(0)}&background=4d78cc&color=fff&size=150`;
+        const defaultAvatar = `https://ui-avatars.com/api/?name=${baseName.charAt(0)}&background=4d78cc&color=fff&size=256`;
 
         await set(ref(db, `users/${safeEmail}`), { email, uid: userCredential.user.uid, username: baseName, tag: randomTag, avatar: defaultAvatar, status: 'online', saved_status: 'online' });
         await set(ref(db, `user_tags/${baseName}_${randomTag}`), safeEmail);
@@ -495,7 +652,15 @@ document.getElementById('us-logout-btn')?.addEventListener('click', () => {
     leaveVoiceChannel(); if (currentUserSafeEmail) set(ref(db, `users/${currentUserSafeEmail}/status`), 'offline'); signOut(auth);
 });
 
-document.getElementById('avatar-upload')?.addEventListener('change', (e) => { const file = e.target.files[0]; if (file) { const reader = new FileReader(); reader.onloadend = () => { tempBase64Avatar = reader.result; document.getElementById('profile-preview').src = tempBase64Avatar; }; reader.readAsDataURL(file); } });
+document.getElementById('avatar-upload')?.addEventListener('change', async (e) => { 
+    const file = e.target.files[0]; 
+    if (file) { 
+        const result = await compressImage(file, 256, 256, 0.85);
+        tempBase64Avatar = result.compressed; 
+        document.getElementById('profile-preview').src = tempBase64Avatar; 
+    } 
+});
+
 document.getElementById('save-profile-btn')?.addEventListener('click', async () => {
     const newUsername = document.getElementById('edit-username').value.trim(); const newTag = document.getElementById('edit-tag').value.trim();
     if(!newUsername || !newTag) return customAlert("Fields cannot be empty", "Error");
@@ -527,21 +692,18 @@ function loadPersonalEmojis() {
     });
 }
 
-document.getElementById('us-upload-emoji-btn')?.addEventListener('click', () => {
+document.getElementById('us-upload-emoji-btn')?.addEventListener('click', async () => {
     const file = document.getElementById('us-emoji-file').files[0];
     const name = document.getElementById('us-emoji-name').value.trim().replace(/[^a-zA-Z0-9_]/g, '');
     if(!file || !name) return customAlert("Please select an image and enter a valid name.");
-    if(file.size > 1024 * 1024) return customAlert("Emoji must be under 1MB.");
     
-    const reader = new FileReader();
-    reader.onloadend = async () => {
-        const emojiId = push(ref(db, 'emojis')).key;
-        await set(ref(db, `emojis/${emojiId}`), { name: name, url: reader.result });
-        await set(ref(db, `users/${currentUserSafeEmail}/emojis/${emojiId}`), true);
-        document.getElementById('us-emoji-file').value = "";
-        document.getElementById('us-emoji-name').value = "";
-    };
-    reader.readAsDataURL(file);
+    const result = await compressImage(file, 128, 128, 0.9);
+    const emojiId = push(ref(db, 'emojis')).key;
+    await set(ref(db, `emojis/${emojiId}`), { name: name, url: result.compressed });
+    await set(ref(db, `users/${currentUserSafeEmail}/emojis/${emojiId}`), true);
+    
+    document.getElementById('us-emoji-file').value = "";
+    document.getElementById('us-emoji-name').value = "";
 });
 
 // Status Dropdown
@@ -1082,8 +1244,22 @@ document.getElementById('menu-server-settings')?.addEventListener('click', async
 
 document.getElementById('close-server-settings-btn')?.addEventListener('click', () => document.getElementById('server-settings-modal').style.display = 'none');
 
-document.getElementById('ss-icon-upload')?.addEventListener('change', (e) => { const file = e.target.files[0]; if (file) { const reader = new FileReader(); reader.onloadend = () => { tempServerIcon = reader.result; document.getElementById('ss-icon-preview').style.backgroundImage = `url(${tempServerIcon})`; document.getElementById('ss-icon-preview').innerText = ""; }; reader.readAsDataURL(file); } });
-document.getElementById('ss-banner-upload')?.addEventListener('change', (e) => { const file = e.target.files[0]; if (file) { const reader = new FileReader(); reader.onloadend = () => { tempServerBanner = reader.result; document.getElementById('ss-banner-preview').style.backgroundImage = `url(${tempServerBanner})`; }; reader.readAsDataURL(file); } });
+document.getElementById('ss-icon-upload')?.addEventListener('change', async (e) => { 
+    const file = e.target.files[0]; 
+    if (file) { 
+        const result = await compressImage(file, 256, 256, 0.85);
+        tempServerIcon = result.compressed;
+        document.getElementById('ss-icon-preview').style.backgroundImage = `url(${tempServerIcon})`; document.getElementById('ss-icon-preview').innerText = ""; 
+    } 
+});
+document.getElementById('ss-banner-upload')?.addEventListener('change', async (e) => { 
+    const file = e.target.files[0]; 
+    if (file) { 
+        const result = await compressImage(file, 960, 540, 0.85);
+        tempServerBanner = result.compressed; 
+        document.getElementById('ss-banner-preview').style.backgroundImage = `url(${tempServerBanner})`; 
+    } 
+});
 
 document.getElementById('ss-save-profile-btn')?.addEventListener('click', () => { 
     const newName = document.getElementById('ss-server-name').value.trim(); 
@@ -1261,34 +1437,40 @@ function loadServerEmojis() {
     });
 }
 
-document.getElementById('ss-upload-emoji-btn')?.addEventListener('click', () => {
+document.getElementById('ss-upload-emoji-btn')?.addEventListener('click', async () => {
     const file = document.getElementById('ss-emoji-file').files[0];
     const name = document.getElementById('ss-emoji-name').value.trim().replace(/[^a-zA-Z0-9_]/g, '');
     if(!file || !name) return customAlert("Please select an image and enter a valid name (no spaces).");
-    if(file.size > 1024 * 1024) return customAlert("Emoji must be under 1MB.");
     
-    const reader = new FileReader();
-    reader.onloadend = async () => {
-        const emojiId = push(ref(db, 'emojis')).key;
-        await set(ref(db, `emojis/${emojiId}`), { name: name, url: reader.result });
-        await set(ref(db, `servers/${currentServerId}/emojis/${emojiId}`), true);
-        document.getElementById('ss-emoji-file').value = "";
-        document.getElementById('ss-emoji-name').value = "";
-    };
-    reader.readAsDataURL(file);
+    const result = await compressImage(file, 128, 128, 0.9);
+    const emojiId = push(ref(db, 'emojis')).key;
+    await set(ref(db, `emojis/${emojiId}`), { name: name, url: result.compressed });
+    await set(ref(db, `servers/${currentServerId}/emojis/${emojiId}`), true);
+    
+    document.getElementById('ss-emoji-file').value = "";
+    document.getElementById('ss-emoji-name').value = "";
 });
 
-// Channel Settings Full Screen Logic
+// Channel & Category Settings Full Screen Logic
 let currentEditingChannelId = null;
+let currentEditingChannelType = null;
 
-function openChannelSettings(channelId) {
+function openChannelSettings(channelId, type = 'channel') {
     currentEditingChannelId = channelId;
-    const cData = currentChannelsData[channelId];
-    if(!cData) return;
+    currentEditingChannelType = type;
     
-    document.getElementById('cs-header-name').innerText = `# ${cData.name}`;
-    document.getElementById('cs-channel-name').value = cData.name;
+    let targetData = type === 'channel' ? currentChannelsData[channelId] : currentCategoriesData[channelId];
+    if(!targetData) return;
     
+    document.getElementById('cs-header-name').innerText = type === 'channel' ? `# ${targetData.name}` : `Category: ${targetData.name}`;
+    document.getElementById('cs-channel-name').value = targetData.name;
+    
+    if (type === 'channel' && targetData.type === 'voice') {
+        document.getElementById('cs-send-msg-label').innerText = "Connect (Voice)";
+    } else {
+        document.getElementById('cs-send-msg-label').innerText = "Send Messages";
+    }
+
     document.querySelectorAll('#channel-settings-modal .fs-tab').forEach(t => t.classList.remove('active'));
     document.getElementById('tab-cs-overview').classList.add('active');
     document.querySelectorAll('#channel-settings-modal .ss-pane').forEach(p => p.style.display = 'none');
@@ -1302,17 +1484,17 @@ function openChannelSettings(channelId) {
     sortedRoles.forEach((r, idx) => {
         const div = document.createElement('div'); div.className = 'role-list-item'; div.id = `cs-role-${r.id}`;
         div.innerHTML = `<span style="color: ${r.color};">●</span> ${r.name}`;
-        div.onclick = () => editChannelPerms(r.id, channelId);
+        div.onclick = () => editChannelPerms(r.id, channelId, type);
         permList.appendChild(div);
     });
     
     document.getElementById('channel-settings-modal').style.display = 'flex';
     document.querySelector('#channel-settings-modal .fs-modal-layout').classList.remove('mobile-viewing-content');
     
-    editChannelPerms('everyone', channelId);
+    editChannelPerms('everyone', channelId, type);
 }
 
-function editChannelPerms(roleId, channelId) {
+function editChannelPerms(roleId, channelId, type) {
     document.querySelectorAll('#cs-roles-list-left .role-list-item').forEach(el => el.classList.remove('active'));
     const activeEl = document.getElementById(`cs-role-${roleId}`);
     if(activeEl) activeEl.classList.add('active');
@@ -1322,16 +1504,18 @@ function editChannelPerms(roleId, channelId) {
     const rData = serverRolesCache[roleId];
     document.getElementById('cs-editing-role-name').innerText = `Role: ${rData.name}`;
     
-    const overwrites = currentChannelsData[channelId]?.overwrites?.[roleId] || {};
+    let targetData = type === 'channel' ? currentChannelsData[channelId] : currentCategoriesData[channelId];
+    const overwrites = targetData?.overwrites?.[roleId] || {};
     document.getElementById('cp-viewChannels').value = overwrites.viewChannels || "inherit";
     document.getElementById('cp-sendMessages').value = overwrites.sendMessages || "inherit";
     
     document.getElementById('cs-save-perms-btn').onclick = () => {
-        update(ref(db, `channels/${currentServerId}/${channelId}/overwrites/${roleId}`), {
+        const dbPath = type === 'channel' ? `channels/${currentServerId}/${channelId}/overwrites/${roleId}` : `categories/${currentServerId}/${channelId}/overwrites/${roleId}`;
+        update(ref(db, dbPath), {
             viewChannels: document.getElementById('cp-viewChannels').value,
             sendMessages: document.getElementById('cp-sendMessages').value
         });
-        customAlert("Channel permissions saved.");
+        customAlert("Permissions saved.");
     };
     
     if(window.innerWidth <= 768) {
@@ -1369,17 +1553,22 @@ document.getElementById('close-channel-settings-btn')?.addEventListener('click',
 document.getElementById('cs-save-overview-btn')?.addEventListener('click', () => {
     const newName = document.getElementById('cs-channel-name').value.trim();
     if(newName && currentServerId && currentEditingChannelId) {
-        update(ref(db, `channels/${currentServerId}/${currentEditingChannelId}`), { name: newName.toLowerCase() });
-        customAlert("Channel updated!");
-        document.getElementById('cs-header-name').innerText = `# ${newName.toLowerCase()}`;
+        const dbPath = currentEditingChannelType === 'channel' ? `channels/${currentServerId}/${currentEditingChannelId}` : `categories/${currentServerId}/${currentEditingChannelId}`;
+        update(ref(db, dbPath), { name: currentEditingChannelType === 'channel' ? newName.toLowerCase() : newName.toUpperCase() });
+        customAlert("Settings updated!");
+        document.getElementById('cs-header-name').innerText = currentEditingChannelType === 'channel' ? `# ${newName.toLowerCase()}` : `Category: ${newName.toUpperCase()}`;
     }
 });
 document.getElementById('tab-cs-delete')?.addEventListener('click', () => {
     if(currentServerId && currentEditingChannelId) {
-        customConfirm("Delete this channel forever?", "Delete Channel", async (yes) => {
+        customConfirm("Delete this forever?", "Confirm Delete", async (yes) => {
             if(yes) {
-                await remove(ref(db, `channels/${currentServerId}/${currentEditingChannelId}`));
-                await remove(ref(db, `messages/${currentEditingChannelId}`));
+                if (currentEditingChannelType === 'channel') {
+                    await remove(ref(db, `channels/${currentServerId}/${currentEditingChannelId}`));
+                    await remove(ref(db, `messages/${currentEditingChannelId}`));
+                } else {
+                    await remove(ref(db, `categories/${currentServerId}/${currentEditingChannelId}`));
+                }
                 document.getElementById('channel-settings-modal').style.display = 'none';
             }
         });
@@ -1404,6 +1593,7 @@ function loadMemberList(serverId) {
             const p = get(child(ref(db), `users/${memberEmail}`)).then(uSnap => {
                 if (uSnap.exists()) {
                     const uData = uSnap.val(); const status = uData.status || 'offline'; 
+                    uData.email = memberEmail;
                     currentServerMembersList.push(uData); globalUsersCache[memberEmail] = uData;
                     
                     if(status !== 'offline' && status !== 'invisible') onlineCount++;
@@ -1486,7 +1676,7 @@ function renderChannels(serverId) {
         const c = currentChannelsData[cId]; c.id = cId; 
         const cid = c.categoryId && categories[c.categoryId] ? c.categoryId : "uncategorized"; 
         
-        // Evaluate View Channels Perm
+        // Evaluate View Channels Perm dynamically checking category overwrites
         if(getChannelPerm(cId, 'viewChannels')) {
             grouped[cid].push(c); 
         }
@@ -1496,7 +1686,10 @@ function renderChannels(serverId) {
     channelList.innerHTML = '';
     
     sortedCats.forEach(catId => {
+        // If category itself isn't viewable, skip it
+        if (!getCategoryPerm(catId, 'viewChannels') && catId !== "uncategorized") return;
         if(grouped[catId].length === 0 && catId === "uncategorized") return;
+        
         if(catId !== "uncategorized") {
             const catDiv = document.createElement('div'); catDiv.className = 'channel-category'; catDiv.innerText = `⌄ ${categories[catId].name}`; catDiv.id = `category-${catId}`;
             catDiv.addEventListener('contextmenu', (e) => showContextMenu(e, 'category', catId));
@@ -1577,6 +1770,7 @@ function initVoiceChat() {
 
 async function joinVoiceChannel(serverId, channelId) { 
     if (currentVoiceChannel === channelId) return; 
+    if (!getChannelPerm(channelId, 'sendMessages')) return customAlert("You do not have permission to connect to this channel.", "Permission Denied");
     if (!myCurrentPeerId) return customAlert("Voice server connecting..."); 
     leaveVoiceChannel(); 
     try { 
@@ -1659,7 +1853,17 @@ function processMentionsAndText(text) {
     
     if(myProfile.username && text.includes('@' + myProfile.username)) isMentioned = true;
     myServerRoles.forEach(role => { if(serverRolesCache[role] && text.includes('@' + serverRolesCache[role].name)) isMentioned = true; });
-    processed = processed.replace(/@([a-zA-Z0-9_]+)/g, `<strong style="color: var(--accent-warning); background: rgba(229, 192, 123, 0.1); padding: 0 3px; border-radius: 3px;">@$1</strong>`);
+    
+    // Markdown
+    processed = processed.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    processed = processed.replace(/\*(.*?)\*/g, '<em>$1</em>');
+    processed = processed.replace(/~~(.*?)~~/g, '<del>$1</del>');
+    processed = processed.replace(/__(.*?)__/g, '<u>$1</u>');
+    processed = processed.replace(/`(.*?)`/g, '<code class="markdown-code">$1</code>');
+    processed = processed.replace(/\n/g, '<br>');
+
+    // Mentions link
+    processed = processed.replace(/@([a-zA-Z0-9_]+)/g, `<strong class="mention-link" style="color: var(--accent-warning); background: rgba(229, 192, 123, 0.1); padding: 0 3px; border-radius: 3px; cursor: pointer;" onclick="handleMentionClick('$1', event)">@$1</strong>`);
     
     // Parse Emojis [:name:id]
     processed = processed.replace(/\[:([^:]+):([^\]]+)\]/g, (match, name, id) => {
@@ -1674,7 +1878,8 @@ function processMentionsAndText(text) {
 
 async function buildMessageHtml(data) {
     const mentionData = processMentionsAndText(data.text);
-    let contentHtml = `<div style="margin-left: 42px; word-break: break-word; color: var(--text-main);">${mentionData.html}</div>`;
+    let editedHtml = data.edited ? `<span style="font-size:10px; color:var(--text-muted); margin-left:5px;">(edited)</span>` : ``;
+    let contentHtml = `<div style="margin-left: 42px; word-break: break-word; color: var(--text-main);">${mentionData.html}${editedHtml}</div>`;
     
     const inviteRegex = new RegExp(`${appBaseUrl.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\?invite=([a-zA-Z0-9]+)`, 'g');
     let match; let tempEmbeds = [];
@@ -1685,7 +1890,9 @@ async function buildMessageHtml(data) {
         tempEmbeds.push({ code: iCode, id: placeholderId });
     }
 
-    if (data.imageUrl) { contentHtml += `<img src="${data.imageUrl}" class="message-image" style="margin-left: 42px;">`; }
+    if (data.imageUrl) { 
+        contentHtml += `<img src="${data.imageUrl}" data-original="${data.originalImageUrl || data.imageUrl}" class="message-image" style="margin-left: 42px;">`; 
+    }
     return { html: contentHtml, isMentioned: mentionData.isMentioned, embeds: tempEmbeds };
 }
 
@@ -1767,7 +1974,8 @@ async function createMessageDOM(msgId, data, prevSender, prevTime) {
     const buildRes = await buildMessageHtml(data);
     if(buildRes.isMentioned && data.sender !== auth.currentUser.email) msgElement.classList.add('mentioned');
 
-    let canDelete = (data.sender === auth.currentUser.email || (chatType === 'server' && (myServerPerms.admin || myServerPerms.manageMessages)));
+    let canEdit = (data.sender === auth.currentUser.email);
+    let canDelete = (canEdit || (chatType === 'server' && (myServerPerms.admin || myServerPerms.manageMessages)));
     let nameColor = "var(--text-bright)";
     if(chatType === 'server' && data.roleId && data.roleId !== 'member' && data.roleId !== 'owner') { const rSnap = await get(ref(db, `servers/${currentServerId}/roles/${data.roleId}`)); if(rSnap.exists()) nameColor = rSnap.val().color; }
     if(data.roleId === 'system') nameColor = "var(--accent-primary)";
@@ -1775,6 +1983,7 @@ async function createMessageDOM(msgId, data, prevSender, prevTime) {
     let actionsHtml = `<div class="msg-actions">
         <button class="msg-action-btn react" onclick="openEmojiPickerForReaction('${msgId}', event)">${icons.addReaction} React</button>
         <button class="msg-action-btn reply">${icons.reply} Reply</button>
+        ${canEdit ? `<button class="msg-action-btn edit-msg">${icons.gear} Edit</button>` : ''}
         ${canDelete ? `<button class="msg-action-btn del">${icons.trash} Delete</button>` : ''}
     </div>`;
     
@@ -1804,6 +2013,7 @@ async function createMessageDOM(msgId, data, prevSender, prevTime) {
         }
     });
 
+    // Message Actions listeners
     const delBtn = msgElement.querySelector('.msg-action-btn.del'); 
     if (delBtn) {
         delBtn.addEventListener('click', () => { 
@@ -1813,9 +2023,49 @@ async function createMessageDOM(msgId, data, prevSender, prevTime) {
         }); 
     }
 
+    const editBtn = msgElement.querySelector('.msg-action-btn.edit-msg');
+    if (editBtn) {
+        editBtn.addEventListener('click', () => {
+            const contentWrapper = msgElement.querySelector('.msg-content-wrapper');
+            const originalHtml = contentWrapper.innerHTML;
+            const rawText = data.text || '';
+            contentWrapper.innerHTML = `
+                <div style="margin-left: 42px;">
+                    <textarea class="edit-msg-input" style="width:100%; background:var(--bg-tertiary); color:white; border:1px solid var(--border-color); border-radius:4px; padding:8px; margin-top:5px; resize:vertical; font-family:inherit;">${rawText.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</textarea>
+                    <div style="display:flex; gap:10px; margin-top:5px; font-size:12px;">
+                        <button class="save-edit-btn small-btn">Save</button>
+                        <button class="cancel-edit-btn small-btn" style="background:transparent; border:1px solid var(--text-muted); color:var(--text-muted);">Cancel</button>
+                    </div>
+                </div>
+            `;
+            const ta = contentWrapper.querySelector('.edit-msg-input');
+            ta.style.height = ta.scrollHeight + 'px';
+            ta.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = (this.scrollHeight) + 'px'; });
+            ta.addEventListener('keypress', (e) => {
+                if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); contentWrapper.querySelector('.save-edit-btn').click(); }
+            });
+            ta.focus();
+            
+            contentWrapper.querySelector('.cancel-edit-btn').onclick = () => { contentWrapper.innerHTML = originalHtml; };
+            contentWrapper.querySelector('.save-edit-btn').onclick = () => {
+                const newText = ta.value.trim();
+                if(newText && newText !== rawText) {
+                    update(ref(db, `${chatType === 'server' ? 'messages' : 'dms'}/${currentChatId}/${msgId}`), { text: newText, edited: true });
+                } else {
+                    contentWrapper.innerHTML = originalHtml;
+                }
+            };
+        });
+    }
+
     const replyBtn = msgElement.querySelector('.msg-action-btn.reply'); if (replyBtn) replyBtn.addEventListener('click', () => triggerReply(msgId, data.username, data.text || "Attachment..."));
-    msgElement.addEventListener('dblclick', () => triggerReply(msgId, data.username, data.text || "Attachment..."));
-    const imgEl = msgElement.querySelector('.message-image'); if (imgEl) imgEl.addEventListener('click', () => { document.getElementById('enlarged-image').src = data.imageUrl; document.getElementById('download-image-btn').href = data.imageUrl; document.getElementById('image-modal').style.display = 'flex'; });
+    
+    const imgEl = msgElement.querySelector('.message-image'); 
+    if (imgEl) imgEl.addEventListener('click', () => { 
+        document.getElementById('enlarged-image').src = imgEl.getAttribute('data-original'); 
+        document.getElementById('download-image-btn').href = imgEl.getAttribute('data-original'); 
+        document.getElementById('image-modal').style.display = 'flex'; 
+    });
     
     return msgElement;
 }
@@ -1910,22 +2160,39 @@ async function loadMessages(dbPath, chatNameLabel) {
         const data = childSnap.val();
         if(data.timestamp > highestTimestamp) {
             const el = await createMessageDOM(childSnap.key, data, lastMsgSender, lastMsgTime);
-            messagesDiv.appendChild(el);
-            lastMsgSender = data.sender; lastMsgTime = data.timestamp;
             
-            if (!insertedDivider || (messagesDiv.scrollHeight - messagesDiv.scrollTop < messagesDiv.clientHeight + 150)) {
-                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            // Check if it's an edited message pushing through onChildAdded. 
+            // Better to handle edits with onValue or clear up re-renders, 
+            // but standard Firebase push won't trigger added for edits.
+            const existing = document.getElementById(`msg-${childSnap.key}`);
+            if(!existing) {
+                messagesDiv.appendChild(el);
+                lastMsgSender = data.sender; lastMsgTime = data.timestamp;
+                if (!insertedDivider || (messagesDiv.scrollHeight - messagesDiv.scrollTop < messagesDiv.clientHeight + 150)) {
+                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                }
             }
         }
     });
 
     unsubscribeMessagesRemoved = onChildRemoved(ref(db, dbPath), (snapshot) => { const msgEl = document.getElementById(`msg-${snapshot.key}`); if(msgEl) msgEl.remove(); });
     
-    // Live update reactions - explicitly send empty {} if reactions are deleted to clear the DOM
-    onValue(ref(db, dbPath), (snap) => {
+    // Live update reactions & edits
+    onValue(ref(db, dbPath), async (snap) => {
         snap.forEach(msgSnap => {
             const mData = msgSnap.val();
             renderReactions(msgSnap.key, mData.reactions || {});
+            
+            // Re-render edited content dynamically if it changed.
+            const msgEl = document.getElementById(`msg-${msgSnap.key}`);
+            if (msgEl && mData.edited) {
+                buildMessageHtml(mData).then(res => {
+                    const contentWrapper = msgEl.querySelector('.msg-content-wrapper');
+                    if(contentWrapper && !contentWrapper.querySelector('.edit-msg-input')) {
+                        contentWrapper.innerHTML = res.html;
+                    }
+                });
+            }
         });
     });
 
@@ -1945,8 +2212,12 @@ const msgInput = document.getElementById('msg-input');
 const mentionMenu = document.getElementById('mention-menu');
 let mentionStartIndex = -1; let mentionSearchTerm = null;
 
-msgInput?.addEventListener('input', () => {
-    const val = msgInput.value; const cursorPos = msgInput.selectionStart;
+// Textarea auto-resize
+msgInput?.addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = (this.scrollHeight) + 'px';
+    
+    const val = this.value; const cursorPos = this.selectionStart;
     const textBeforeCursor = val.substring(0, cursorPos);
     const match = textBeforeCursor.match(/@(\w*)$/);
     if (match) { mentionStartIndex = match.index; mentionSearchTerm = match[1].toLowerCase(); showMentionMenu(mentionSearchTerm); } 
@@ -1982,6 +2253,7 @@ function showMentionMenu(term) {
 // Emojis & Reactions Logic
 const emojiPicker = document.getElementById('emoji-picker');
 const emojiBtn = document.getElementById('emoji-picker-btn');
+const epIconSpan = document.getElementById('ep-icon-span');
 let emojiHoverInterval = null;
 let currentReactionMsgId = null;
 
@@ -1990,13 +2262,13 @@ const standardEmojis = ['😀','😂','😍','😭','😎','👍','🙏','🔥',
 emojiBtn.addEventListener('mouseenter', () => {
     let i = 0;
     emojiHoverInterval = setInterval(() => {
-        emojiBtn.innerHTML = `<span style="font-size:20px; line-height:1;">${standardEmojis[i % standardEmojis.length]}</span>`;
+        epIconSpan.innerHTML = `<span style="font-size:20px; line-height:1;">${standardEmojis[i % standardEmojis.length]}</span>`;
         i++;
     }, 200);
 });
 emojiBtn.addEventListener('mouseleave', () => {
     clearInterval(emojiHoverInterval);
-    emojiBtn.innerHTML = icons.smile;
+    epIconSpan.innerHTML = icons.smile;
 });
 
 emojiBtn.addEventListener('click', (e) => {
@@ -2006,7 +2278,7 @@ emojiBtn.addEventListener('click', (e) => {
 });
 
 window.openEmojiPickerForReaction = function(msgId, event) {
-    if(event) event.stopPropagation(); // Prevents document click from immediately closing it
+    if(event) event.stopPropagation();
     currentReactionMsgId = msgId;
     toggleEmojiPicker();
 };
@@ -2089,19 +2361,30 @@ document.addEventListener('click', (e) => {
 
 // Image / Paste Preview Logic
 document.getElementById('upload-img-btn')?.addEventListener('click', () => document.getElementById('image-upload').click());
-document.getElementById('image-upload')?.addEventListener('change', (e) => {
+document.getElementById('image-upload')?.addEventListener('change', async (e) => {
     const file = e.target.files[0]; if (!file || !currentChatId) return;
     if (file.size > 2 * 1024 * 1024) return customAlert("File too large. Please select an image under 2MB.", "Error");
-    const reader = new FileReader(); reader.onloadend = () => { pendingAttachmentBase64 = reader.result; document.getElementById('attachment-preview-img').src = pendingAttachmentBase64; document.getElementById('attachment-preview-area').style.display = 'flex'; document.getElementById('image-upload').value = ""; }; reader.readAsDataURL(file);
+    
+    const result = await compressImage(file, 800, 800, 0.85); // Compress for display
+    pendingAttachmentBase64 = result.compressed; 
+    pendingAttachmentOriginal = result.original; // Keep high-res for download
+    document.getElementById('attachment-preview-img').src = pendingAttachmentBase64; 
+    document.getElementById('attachment-preview-area').style.display = 'flex'; 
+    document.getElementById('image-upload').value = "";
 });
-document.getElementById('remove-attachment-btn')?.addEventListener('click', () => { pendingAttachmentBase64 = null; document.getElementById('attachment-preview-area').style.display = 'none'; });
+document.getElementById('remove-attachment-btn')?.addEventListener('click', () => { pendingAttachmentBase64 = null; pendingAttachmentOriginal = null; document.getElementById('attachment-preview-area').style.display = 'none'; });
 document.getElementById('msg-input')?.addEventListener('paste', (e) => {
     const items = (e.clipboardData || e.originalEvent.clipboardData).items;
     for (let index in items) {
         const item = items[index];
         if (item.kind === 'file' && item.type.startsWith('image/')) {
             const blob = item.getAsFile(); if (blob.size > 2 * 1024 * 1024) return customAlert("Pasted image is too large (max 2MB).");
-            const reader = new FileReader(); reader.onloadend = () => { pendingAttachmentBase64 = reader.result; document.getElementById('attachment-preview-img').src = pendingAttachmentBase64; document.getElementById('attachment-preview-area').style.display = 'flex'; }; reader.readAsDataURL(blob);
+            compressImage(blob, 800, 800, 0.85).then(result => {
+                pendingAttachmentBase64 = result.compressed; 
+                pendingAttachmentOriginal = result.original;
+                document.getElementById('attachment-preview-img').src = pendingAttachmentBase64; 
+                document.getElementById('attachment-preview-area').style.display = 'flex'; 
+            });
         }
     }
 });
@@ -2116,10 +2399,17 @@ async function sendMessage() {
         let msgPayload = { sender: auth.currentUser.email, username: myProfile.username, avatar: myProfile.avatar, text: text, timestamp: Date.now(), roleId: roleId };
         
         if (replyingToMessage) { msgPayload.replyTo = replyingToMessage; replyingToMessage = null; document.getElementById('reply-banner').style.display = 'none'; }
-        if (pendingAttachmentBase64) { msgPayload.imageUrl = pendingAttachmentBase64; pendingAttachmentBase64 = null; document.getElementById('attachment-preview-area').style.display = 'none'; }
+        if (pendingAttachmentBase64) { 
+            msgPayload.imageUrl = pendingAttachmentBase64; 
+            msgPayload.originalImageUrl = pendingAttachmentOriginal;
+            pendingAttachmentBase64 = null; 
+            pendingAttachmentOriginal = null;
+            document.getElementById('attachment-preview-area').style.display = 'none'; 
+        }
 
         push(ref(db, path), msgPayload);
         input.value = "";
+        input.style.height = 'auto'; // Reset height
         mentionMenu.style.display = 'none';
         
         if(chatType === 'dm') {
@@ -2132,7 +2422,12 @@ async function sendMessage() {
 }
 
 document.getElementById('send-btn')?.addEventListener('click', sendMessage);
-document.getElementById('msg-input')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
+document.getElementById('msg-input')?.addEventListener('keypress', (e) => { 
+    if (e.key === 'Enter' && !e.shiftKey) { 
+        e.preventDefault(); 
+        sendMessage(); 
+    } 
+});
 
 function startNotificationListeners() {
     if(dmsNotifListener) dmsNotifListener();
