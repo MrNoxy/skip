@@ -57,7 +57,7 @@ let myPeer = null; let myCurrentPeerId = null; let localAudioStream = null;
 let activeCalls = {}; let currentVoiceChannel = null; let isMuted = false; let isDeafened = false;
 let currentServerVoiceRosters = {};
 
-// Global Channel Data Sync (RESTORED)
+// Global Channel Data Sync
 let currentChannelsData = {}; 
 let currentCategoriesData = {};
 let dragSrcEl = null;
@@ -1416,6 +1416,25 @@ function loadMemberList(serverId) {
 }
 
 // Global Sync for Channels AND Categories
+function initChannelSync(serverId) {
+    if(unsubscribeChannels) unsubscribeChannels(); 
+    if(unsubscribeCategories) unsubscribeCategories();
+    if(unsubscribeVoiceRosters) unsubscribeVoiceRosters();
+    
+    unsubscribeVoiceRosters = onValue(ref(db, `voice_rosters/${serverId}`), (snap) => {
+        currentServerVoiceRosters = snap.val() || {};
+        renderChannels(serverId);
+    });
+    unsubscribeChannels = onValue(ref(db, `channels/${serverId}`), (snap) => { 
+        currentChannelsData = snap.val() || {}; 
+        renderChannels(serverId); 
+    });
+    unsubscribeCategories = onValue(ref(db, `categories/${serverId}`), (snap) => { 
+        currentCategoriesData = snap.val() || {}; 
+        renderChannels(serverId); 
+    });
+}
+
 function renderChannels(serverId) {
     const channelList = document.getElementById('channel-list');
     let categories = { "uncategorized": { name: "UNCATEGORIZED", order: -1 } };
