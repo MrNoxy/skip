@@ -572,6 +572,8 @@ function switchToHomeView() {
     document.getElementById('chat-area').style.display = 'none';
     document.getElementById('home-area').style.display = 'flex';
     document.getElementById('server-dropdown').style.display = 'none';
+    document.getElementById('toggle-members-btn').style.display = 'none';
+    document.getElementById('member-sidebar').style.display = 'none';
     
     if(unsubscribeMembers) { unsubscribeMembers(); unsubscribeMembers = null; }
     if(unsubscribeChannels) { unsubscribeChannels(); unsubscribeChannels = null; }
@@ -787,6 +789,8 @@ function openDM(dmId, friendEmail) {
     document.getElementById('chat-title').style.cursor = "pointer";
     document.getElementById('chat-title').onclick = (e) => showGlobalUserProfile(friendEmail, e);
     
+    document.getElementById('toggle-members-btn').style.display = 'inline-block';
+    
     document.body.classList.remove('mobile-home-active');
     document.body.classList.add('mobile-chat-active');
     
@@ -796,11 +800,44 @@ function openDM(dmId, friendEmail) {
     if(activeDmEl) activeDmEl.classList.add('active');
 
     enableChat(); loadMessages(`dms/${currentChatId}`, `@${uData.username}`);
+    loadDMMemberList(friendEmail);
+}
+
+function loadDMMemberList(friendEmail) {
+    const listContent = document.getElementById('member-list-content');
+    listContent.innerHTML = '';
+    
+    const catDiv = document.createElement('div');
+    catDiv.className = 'member-category';
+    catDiv.innerText = `IN THIS CONVERSATION — 2`;
+    listContent.appendChild(catDiv);
+    
+    const users = [myProfile, globalUsersCache[friendEmail]];
+    users.forEach(u => {
+        if (!u) return;
+        const mDiv = document.createElement('div'); 
+        mDiv.className = 'member-item';
+        mDiv.innerHTML = `<div class="avatar-container"><img src="${u.avatar}" class="avatar-small"><div class="status-indicator status-${u.status || 'offline'}"></div></div><div class="member-username" style="color: var(--text-main); pointer-events:none;">${u.username}</div>`;
+        const safeE = (u.username === myProfile.username && u.tag === myProfile.tag) ? currentUserSafeEmail : friendEmail;
+        mDiv.addEventListener('click', (e) => showGlobalUserProfile(safeE, e));
+        listContent.appendChild(mDiv);
+    });
 }
 
 // ==========================================
 // --- SERVERS, CHANNELS, SETTINGS & MEMBERS ---
 // ==========================================
+
+// Global Event Listeners for Member List Toggle
+document.getElementById('toggle-members-btn')?.addEventListener('click', () => {
+    const sidebar = document.getElementById('member-sidebar');
+    sidebar.style.display = sidebar.style.display === 'none' || sidebar.style.display === '' ? 'flex' : 'none';
+});
+
+document.getElementById('close-members-mobile-btn')?.addEventListener('click', () => {
+    document.getElementById('member-sidebar').style.display = 'none';
+});
+
 document.getElementById('create-server-btn')?.addEventListener('click', () => {
     openInputModal("Create Server", "Server Name", "Give your server a name:", (serverName) => {
         if (serverName) {
@@ -1366,7 +1403,7 @@ function loadMemberList(serverId) {
             totalCount++;
             const p = get(child(ref(db), `users/${memberEmail}`)).then(uSnap => {
                 if (uSnap.exists()) {
-                    const uData = uSnap.val(); const status = uData.status || 'offline'; let targetGroup = 'offline';
+                    const uData = uSnap.val(); const status = uData.status || 'offline'; 
                     currentServerMembersList.push(uData); globalUsersCache[memberEmail] = uData;
                     
                     if(status !== 'offline' && status !== 'invisible') onlineCount++;
@@ -1381,9 +1418,13 @@ function loadMemberList(serverId) {
                         }
                     });
                     
-                    if (memberInfo.role === 'owner') targetGroup = 'owner';
-                    else if (highestRole && highestRole !== 'everyone') targetGroup = highestRole;
-                    else if (status !== 'offline' && status !== 'invisible') targetGroup = 'online';
+                    let targetGroup = 'offline';
+                    // Force strictly offline ordering for users who are offline
+                    if (status !== 'offline' && status !== 'invisible') {
+                        if (memberInfo.role === 'owner') targetGroup = 'owner';
+                        else if (highestRole && highestRole !== 'everyone') targetGroup = highestRole;
+                        else targetGroup = 'online';
+                    }
                     
                     groups[targetGroup].members.push({ email: memberEmail, data: uData, status: status });
                 }
@@ -1784,6 +1825,8 @@ function renderReactions(msgId, reactionsObj) {
     if(!container) return;
     container.innerHTML = '';
     
+    if(!reactionsObj) return;
+
     Object.keys(reactionsObj).forEach(emojiKey => {
         const users = reactionsObj[emojiKey].users || {};
         const count = Object.keys(users).length;
@@ -1878,11 +1921,11 @@ async function loadMessages(dbPath, chatNameLabel) {
 
     unsubscribeMessagesRemoved = onChildRemoved(ref(db, dbPath), (snapshot) => { const msgEl = document.getElementById(`msg-${snapshot.key}`); if(msgEl) msgEl.remove(); });
     
-    // Live update reactions
+    // Live update reactions - explicitly send empty {} if reactions are deleted to clear the DOM
     onValue(ref(db, dbPath), (snap) => {
         snap.forEach(msgSnap => {
             const mData = msgSnap.val();
-            if(mData.reactions) renderReactions(msgSnap.key, mData.reactions);
+            renderReactions(msgSnap.key, mData.reactions || {});
         });
     });
 
