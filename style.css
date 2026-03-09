@@ -51,7 +51,7 @@ input { font-size: 16px !important; }
 
 /* --- Middle: Channel Sidebar --- */
 #channel-sidebar { width: 240px; background-color: var(--bg-secondary); display: flex; flex-direction: column; flex-shrink: 0; height: 100%; border-right: 1px solid var(--border-color); }
-#sidebar-header { padding: 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); position: relative; height: 55px; box-sizing: border-box; transition: background 0.3s; }
+#sidebar-header { padding: 10px; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); position: relative; height: 110px; box-sizing: border-box; transition: background 0.3s; }
 #server-header-clickable { display: flex; align-items: center; cursor: pointer; flex-grow: 1; border-radius: 4px; padding: 4px 6px; margin-left: -6px; transition: 0.2s; color: var(--text-bright); text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
 #server-header-clickable:hover { background-color: rgba(255, 255, 255, 0.1); }
 #server-name-display { margin: 0; font-size: 15px; font-weight: bold; margin-right: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
