@@ -1398,7 +1398,8 @@ let currentEditingRoleId = null;
 let rolesArrayCache = [];
 
 function loadRolesAdvanced() {
-    const list = document.getElementById('ss-roles-list-left');
+    // FIX: Target the inner list container, NOT the whole left panel!
+    const list = document.getElementById('ss-roles-list'); 
     onValue(ref(db, `servers/${currentServerId}/roles`), (snap) => {
         list.innerHTML = ''; rolesArrayCache = [];
         let rolesData = snap.val() || {};
