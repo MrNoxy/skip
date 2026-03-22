@@ -359,26 +359,34 @@ window.showGlobalUserProfile = async function(email, event) {
                 if(roleFlex.children.length > 0) rolesContainer.appendChild(roleFlex);
                 else rolesContainer.style.display = 'none';
 
-                // Moderation Checks
+                // Moderation Checks (Timeout, Kick, Ban)
                 if (safeEmail !== currentUserSafeEmail && (myServerRoles.includes('owner') || myServerPerms.kickMembers || myServerPerms.banMembers || myServerPerms.timeoutMembers)) {
                     modContainer.style.display = 'flex';
                     modContainer.style.flexDirection = 'column';
                     modContainer.style.gap = '5px';
                     
                     if(myServerRoles.includes('owner') || myServerPerms.timeoutMembers) {
+                        const isTimedOut = memInfo.timeoutUntil && memInfo.timeoutUntil > Date.now();
                         const timeoutBtn = document.createElement('button');
-                        timeoutBtn.innerHTML = `${icons.timeout} Timeout Member`;
+                        timeoutBtn.innerHTML = isTimedOut ? `${icons.timeout} Remove Timeout` : `${icons.timeout} Timeout Member`;
                         timeoutBtn.className = 'mod-action-btn';
                         timeoutBtn.style.cssText = 'background: transparent; border: 1px solid var(--border-color); color: var(--text-bright); margin: 0; display:flex; gap:8px; align-items:center;';
                         timeoutBtn.onclick = () => {
-                            openInputModal("Timeout User", "Duration in minutes (e.g. 10)", "How many minutes?", async (mins) => {
-                                const m = parseInt(mins);
-                                if(m && m > 0) {
-                                    const until = Date.now() + (m * 60 * 1000);
-                                    await update(ref(db, `server_members/${currentServerId}/${safeEmail}`), { timeoutUntil: until });
-                                    customAlert(`${uData.username} timed out for ${m} minutes.`, "Timeout Applied");
-                                }
-                            });
+                            if (isTimedOut) {
+                                update(ref(db, `server_members/${currentServerId}/${safeEmail}`), { timeoutUntil: null });
+                                customAlert(`${uData.username}'s timeout was removed.`, "Timeout Removed");
+                                modal.style.display = 'none';
+                            } else {
+                                openInputModal("Timeout User", "Duration in minutes (e.g. 10)", "How many minutes?", async (mins) => {
+                                    const m = parseInt(mins);
+                                    if(m && m > 0) {
+                                        const until = Date.now() + (m * 60 * 1000);
+                                        await update(ref(db, `server_members/${currentServerId}/${safeEmail}`), { timeoutUntil: until });
+                                        customAlert(`${uData.username} timed out for ${m} minutes.`, "Timeout Applied");
+                                        modal.style.display = 'none';
+                                    }
+                                });
+                            }
                         };
                         modContainer.appendChild(timeoutBtn);
                     }
@@ -1103,7 +1111,7 @@ document.getElementById('create-server-btn')?.addEventListener('click', () => {
             const everyonePerms = { viewChannels: true, sendMessages: true, manageChannels: false, manageServerSettings: false, manageServerProfile: false, manageServerOverview: false, manageRoles: false, manageMessages: false, kickMembers: false, banMembers: false, timeoutMembers: false };
             
             set(ref(db, `servers/${serverId}`), { name: serverName, owner: auth.currentUser.email });
-            set(ref(db, `servers/${serverId}/roles/everyone`), { name: '@everyone', color: '#abb2bf', order: -1, mentionable: true, perms: everyonePerms });
+            set(ref(db, `servers/${serverId}/roles/everyone`), { name: '@everyone', color: '#abb2bf', order: -1, hoist: false, mentionable: true, perms: everyonePerms });
             
             set(ref(db, `server_members/${serverId}/${currentUserSafeEmail}`), { role: 'owner' });
             set(ref(db, `users/${currentUserSafeEmail}/servers/${serverId}`), { order: Date.now() });
@@ -1272,6 +1280,31 @@ document.getElementById('menu-leave-server')?.addEventListener('click', () => {
     }
 });
 
+function loadServerBans() {
+    const list = document.getElementById('ss-bans-list');
+    onValue(ref(db, `servers/${currentServerId}/bans`), async (snap) => {
+        if (!list) return;
+        list.innerHTML = '';
+        if (!snap.exists()) { list.innerHTML = '<p style="color:var(--text-muted); font-size:12px;">No banned users.</p>'; return; }
+        
+        for (let email of Object.keys(snap.val())) {
+            const uSnap = await get(child(ref(db), `users/${email}`));
+            const uData = uSnap.exists() ? uSnap.val() : { username: "Unknown User", avatar: "https://cdn.pixabay.com/photo/2023/02/18/11/00/icon-7797704_640.png" };
+            
+            const d = document.createElement('div');
+            d.className = 'role-list-item';
+            d.style.display = 'flex'; d.style.justifyContent = 'space-between'; d.style.alignItems = 'center';
+            d.innerHTML = `<div><img src="${uData.avatar}" class="avatar-small" style="vertical-align:middle; margin-right:10px;"> ${uData.username}</div>
+                           <button class="small-btn" style="background:transparent; border:1px solid var(--accent-success); color:var(--accent-success);">Unban</button>`;
+            d.querySelector('button').onclick = () => { 
+                remove(ref(db, `servers/${currentServerId}/bans/${email}`)); 
+                customAlert(`${uData.username} has been unbanned.`);
+            };
+            list.appendChild(d);
+        }
+    });
+}
+
 // ==========================================
 // --- FULL SCREEN SETTINGS MENUS ---
 // ==========================================
@@ -1288,7 +1321,8 @@ function setupServerSettingsTabs() {
             e.target.classList.add('active');
             
             document.querySelectorAll('#server-settings-modal .ss-pane').forEach(p => p.style.display = 'none');
-            document.getElementById(`pane-ss-${tabName}`).style.display = 'block';
+            const targetPane = document.getElementById(`pane-ss-${tabName}`);
+            if (targetPane) targetPane.style.display = 'block';
             
             if(window.innerWidth <= 768) {
                 document.querySelector('#server-settings-modal .fs-modal-layout').classList.add('mobile-viewing-content');
@@ -1311,6 +1345,8 @@ document.getElementById('menu-server-settings')?.addEventListener('click', async
     document.getElementById('tab-ss-engagement').style.display = (myServerPerms.manageServerSettings || myServerPerms.manageServerOverview) ? 'block' : 'none';
     document.getElementById('tab-ss-roles').style.display = (myServerPerms.manageServerSettings || myServerPerms.manageRoles) ? 'block' : 'none';
     document.getElementById('tab-ss-emojis').style.display = (myServerPerms.manageServerSettings || myServerPerms.manageServerOverview) ? 'block' : 'none';
+    const tabBans = document.getElementById('tab-ss-bans');
+    if(tabBans) tabBans.style.display = (myServerPerms.manageServerSettings || myServerPerms.banMembers || sData.owner === auth.currentUser.email) ? 'block' : 'none';
     document.getElementById('tab-ss-delete').style.display = (myServerPerms.manageServerSettings || sData.owner === auth.currentUser.email) ? 'block' : 'none';
     
     document.getElementById('ss-header-name').innerText = sData.name;
@@ -1347,6 +1383,7 @@ document.getElementById('menu-server-settings')?.addEventListener('click', async
     
     loadRolesAdvanced();
     loadServerEmojis();
+    loadServerBans();
 });
 
 document.getElementById('close-server-settings-btn')?.addEventListener('click', () => document.getElementById('server-settings-modal').style.display = 'none');
@@ -1398,14 +1435,15 @@ let currentEditingRoleId = null;
 let rolesArrayCache = [];
 
 function loadRolesAdvanced() {
-    // FIX: Target the inner list container, NOT the whole left panel!
-    const list = document.getElementById('ss-roles-list'); 
+    const list = document.getElementById('ss-roles-list');
+    if (!list) return;
+
     onValue(ref(db, `servers/${currentServerId}/roles`), (snap) => {
         list.innerHTML = ''; rolesArrayCache = [];
         let rolesData = snap.val() || {};
         
         if(!rolesData['everyone']) {
-            rolesData['everyone'] = { name: '@everyone', color: '#abb2bf', order: -999, mentionable: true, perms: { viewChannels: true, sendMessages: true } };
+            rolesData['everyone'] = { name: '@everyone', color: '#abb2bf', order: -999, hoist: false, mentionable: true, perms: { viewChannels: true, sendMessages: true } };
         }
         
         Object.keys(rolesData).forEach(k => { let data = rolesData[k]; data.id = k; rolesArrayCache.push(data); });
@@ -1457,6 +1495,8 @@ function editRole(roleId, noSwitch = false) {
     document.getElementById('er-name').value = rData.name;
     document.getElementById('er-name').disabled = roleId === 'everyone';
     document.getElementById('er-color').value = rData.color || '#abb2bf';
+    
+    document.getElementById('er-hoist').checked = !!rData.hoist;
     document.getElementById('er-mentionable').checked = !!rData.mentionable;
     
     const p = rData.perms || {};
@@ -1488,7 +1528,7 @@ document.getElementById('ss-roles-pane-mobile-back')?.addEventListener('click', 
 });
 
 document.getElementById('ss-create-role-btn')?.addEventListener('click', () => { 
-    if(currentServerId) { push(ref(db, `servers/${currentServerId}/roles`), { name: 'New Role', color: '#abb2bf', order: Date.now(), mentionable: true, perms: {viewChannels:true, sendMessages:true} }); } 
+    if(currentServerId) { push(ref(db, `servers/${currentServerId}/roles`), { name: 'New Role', color: '#abb2bf', order: Date.now(), hoist: false, mentionable: false, perms: {viewChannels:true, sendMessages:true} }); } 
 });
 
 document.getElementById('save-role-settings-btn')?.addEventListener('click', () => {
@@ -1499,6 +1539,7 @@ document.getElementById('save-role-settings-btn')?.addEventListener('click', () 
 
         const payload = {
             color: document.getElementById('er-color').value,
+            hoist: document.getElementById('er-hoist').checked,
             mentionable: document.getElementById('er-mentionable').checked,
             perms: {
                 viewChannels: document.getElementById('p-viewChannels').checked,
@@ -1700,8 +1741,14 @@ function loadMemberList(serverId) {
     const listContent = document.getElementById('member-list-content');
     
     unsubscribeMembers = onValue(ref(db, `server_members/${serverId}`), async (membersSnap) => {
-        let groups = { owner: { name: "Server Owner", order: -9999, members: [] }, online: { name: "Online", order: 9998, members: [] }, offline: { name: "Offline", order: 9999, members: [] } };
-        Object.keys(serverRolesCache).forEach(rId => { groups[rId] = { name: serverRolesCache[rId].name, order: serverRolesCache[rId].order || 0, color: serverRolesCache[rId].color, members: [] }; });
+        let groups = { online: { name: "Online", order: 9998, members: [] }, offline: { name: "Offline", order: 9999, members: [] } };
+        
+        // Only hoisted roles become categories
+        Object.keys(serverRolesCache).forEach(rId => { 
+            if(serverRolesCache[rId].hoist) {
+                groups[rId] = { name: serverRolesCache[rId].name, order: serverRolesCache[rId].order || 0, color: serverRolesCache[rId].color, members: [] }; 
+            }
+        });
         
         const memberPromises = []; currentServerMembersList = [];
         let onlineCount = 0; let totalCount = 0;
@@ -1717,26 +1764,25 @@ function loadMemberList(serverId) {
                     
                     if(status !== 'offline' && status !== 'invisible') onlineCount++;
                     
-                    let highestRole = null; let highestOrder = 9999;
+                    let highestHoistRole = null; let highestHoistOrder = 9999;
                     let userRoles = memberInfo.roles ? Object.keys(memberInfo.roles) : (memberInfo.role && memberInfo.role !== 'member' ? [memberInfo.role] : []);
                     
-                    // Find the highest hoisted (mentionable) role
+                    // Find the highest HOISTED role for sorting them into a group
                     userRoles.forEach(rId => {
-                        if(serverRolesCache[rId] && serverRolesCache[rId].mentionable && serverRolesCache[rId].order < highestOrder) {
-                            highestOrder = serverRolesCache[rId].order;
-                            highestRole = rId;
+                        if(serverRolesCache[rId] && serverRolesCache[rId].hoist && serverRolesCache[rId].order < highestHoistOrder) {
+                            highestHoistOrder = serverRolesCache[rId].order;
+                            highestHoistRole = rId;
                         }
                     });
                     
                     let targetGroup = 'offline';
-                    // Force strictly offline ordering for users who are offline, like Discord
+                    // Offline users always go to the offline list. Online users go to their highest hoisted role, or default "Online"
                     if (status !== 'offline' && status !== 'invisible') {
-                        if (memberInfo.role === 'owner') targetGroup = 'owner';
-                        else if (highestRole && highestRole !== 'everyone') targetGroup = highestRole;
+                        if (highestHoistRole && highestHoistRole !== 'everyone') targetGroup = highestHoistRole;
                         else targetGroup = 'online';
                     }
                     
-                    // Assign correct color purely based on role (even if offline)
+                    // Assign correct color purely based on the highest role (even if not hoisted)
                     let nameColor = "var(--text-main)";
                     let colorOrder = 9999;
                     userRoles.forEach(rId => {

@@ -336,6 +336,7 @@
                 <div class="fs-tab" data-tab="engagement" id="tab-ss-engagement">Engagement</div>
                 <div class="fs-tab" data-tab="roles" id="tab-ss-roles">Roles</div>
                 <div class="fs-tab" data-tab="emojis" id="tab-ss-emojis">Server Emojis</div>
+                <div class="fs-tab" data-tab="bans" id="tab-ss-bans">Bans</div>
                 <div style="height: 1px; background: var(--border-color); margin: 10px 0;"></div>
                 <div class="fs-tab" data-tab="delete" id="tab-ss-delete" style="color: var(--accent-danger);">Delete Server</div>
             </div>
@@ -413,6 +414,14 @@
                             <label class="toggle-row">
                                 <div>
                                     <strong style="color: var(--text-bright);">Display role separately</strong>
+                                    <span style="color: var(--text-muted); font-size: 12px; display:block;">Display members with this role separately from online members</span>
+                                </div>
+                                <input type="checkbox" id="er-hoist">
+                            </label>
+                            
+                            <label class="toggle-row">
+                                <div>
+                                    <strong style="color: var(--text-bright);">Allow @mentions</strong>
                                     <span style="color: var(--text-muted); font-size: 12px; display:block;">Allow anyone to @mention this role</span>
                                 </div>
                                 <input type="checkbox" id="er-mentionable">
@@ -459,7 +468,12 @@
                     <div id="ss-emojis-list" style="display: flex; flex-direction: column; gap: 5px;"></div>
                 </div>
 
-                <div class="ss-pane" id="pane-ss-delete">
+                <div class="ss-pane" id="pane-ss-bans" style="display: none;">
+                    <h3 style="color: var(--text-bright); border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-top:0;">Banned Users</h3>
+                    <div id="ss-bans-list" style="display: flex; flex-direction: column; gap: 5px;"></div>
+                </div>
+
+                <div class="ss-pane" id="pane-ss-delete" style="display: none;">
                     <h3 style="color: var(--text-bright); margin-top: 0;">Delete Server</h3>
                     <p style="color: var(--text-main);">Are you absolutely sure you want to do this? This action cannot be undone and will permanently wipe all messages, channels, and roles.</p>
                     <button id="delete-server-btn" style="background-color: var(--accent-danger); margin-left: 0; margin-top: 15px;">Yes, Delete Server</button>
