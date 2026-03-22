@@ -259,9 +259,11 @@
     </div>
 
     <div id="image-modal" style="display: none;">
-        <div id="close-image-modal">&times;</div>
+        <div id="close-image-modal" title="Close">✖</div>
+        <a id="download-image-btn" href="" download="image.png" title="Download Image">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+        </a>
         <img id="enlarged-image" src="" alt="Enlarged">
-        <a id="download-image-btn" href="" download="image.png">⬇ Download Image</a>
     </div>
 
     <div id="context-menu" style="display: none;"></div>
@@ -421,6 +423,12 @@
                             <label class="toggle-row"><div><strong style="color: var(--text-bright);">View Channels</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to view channels by default.</span></div><input type="checkbox" id="p-viewChannels"></label>
                             <label class="toggle-row"><div><strong style="color: var(--text-bright);">Send Messages</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to send text messages.</span></div><input type="checkbox" id="p-sendMessages"></label>
                             
+                            <h4 style="color: var(--text-muted); text-transform: uppercase; font-size: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px; margin-top: 30px;">Moderation Permissions</h4>
+                            
+                            <label class="toggle-row"><div><strong style="color: var(--text-bright);">Kick Members</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to remove other users from the server.</span></div><input type="checkbox" id="p-kickMembers"></label>
+                            <label class="toggle-row"><div><strong style="color: var(--text-bright);">Ban Members</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to permanently ban other users.</span></div><input type="checkbox" id="p-banMembers"></label>
+                            <label class="toggle-row"><div><strong style="color: var(--text-bright);">Timeout Members</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to temporarily restrict users from sending messages.</span></div><input type="checkbox" id="p-timeoutMembers"></label>
+
                             <h4 style="color: var(--text-muted); text-transform: uppercase; font-size: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px; margin-top: 30px;">Advanced Permissions</h4>
 
                             <label class="toggle-row"><div><strong style="color: var(--text-bright);">Manage Channels</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to create, edit, or delete channels/categories.</span></div><input type="checkbox" id="p-manageChannels"></label>

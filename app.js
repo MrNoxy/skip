@@ -24,8 +24,9 @@ let chatType = 'home';
 let currentHomeTab = 'friends'; 
 let currentUserSafeEmail = null;
 let myProfile = {}; 
-let myServerPerms = { viewChannels: true, sendMessages: true, manageChannels: false, manageServerSettings: false, manageServerProfile: false, manageServerOverview: false, manageRoles: false, manageMessages: false };
+let myServerPerms = { viewChannels: true, sendMessages: true, manageChannels: false, manageServerSettings: false, manageServerProfile: false, manageServerOverview: false, manageRoles: false, manageMessages: false, kickMembers: false, banMembers: false, timeoutMembers: false };
 let myServerRoles = []; 
+let myServerMemberData = {}; // Tracks timeouts
 
 // Mention & Global Caching
 let currentServerMembersList = [];
@@ -42,6 +43,7 @@ let unsubscribeMembers = null;
 let unsubscribeChannels = null;
 let unsubscribeCategories = null;
 let unsubscribeVoiceRosters = null;
+let unsubscribeMyMemberData = null;
 let dmsNotifListener = null;
 let serversNotifListener = null;
 
@@ -83,7 +85,11 @@ const icons = {
     reply: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>`,
     leave: `<svg class="svg-icon" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>`,
     smile: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>`,
-    addReaction: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line><line x1="20" y1="4" x2="24" y2="4"></line><line x1="22" y1="2" x2="22" y2="6"></line></svg>`
+    addReaction: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line><line x1="20" y1="4" x2="24" y2="4"></line><line x1="22" y1="2" x2="22" y2="6"></line></svg>`,
+    download: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>`,
+    ban: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>`,
+    kick: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>`,
+    timeout: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`
 };
 
 // Image Compressor helper
@@ -214,8 +220,24 @@ document.getElementById('input-modal-submit')?.addEventListener('click', () => {
 document.getElementById('input-modal-cancel')?.addEventListener('click', () => { document.getElementById('input-modal').style.display = 'none'; });
 document.getElementById('input-modal-field')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('input-modal-submit').click(); });
 
+// Image Fullscreen Logic
+document.getElementById('image-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'image-modal' || e.target.id === 'close-image-modal') {
+        document.getElementById('image-modal').style.display = 'none';
+    }
+});
+
+function bindImageClick(imgEl) {
+    if (!imgEl) return;
+    imgEl.addEventListener('click', () => { 
+        document.getElementById('enlarged-image').src = imgEl.getAttribute('data-original'); 
+        document.getElementById('download-image-btn').href = imgEl.getAttribute('data-original'); 
+        document.getElementById('image-modal').style.display = 'flex'; 
+    });
+}
+
 // ==========================================
-// --- USER PROFILES ---
+// --- USER PROFILES & MODERATION ---
 // ==========================================
 window.showGlobalUserProfile = async function(email, event) {
     if (event) event.stopPropagation();
@@ -230,6 +252,20 @@ window.showGlobalUserProfile = async function(email, event) {
     const bannerEl = document.getElementById('gup-banner');
     const rolesContainer = document.getElementById('gup-roles-container');
     
+    // Moderation Actions Container
+    let modContainer = document.getElementById('gup-mod-actions');
+    if(!modContainer) {
+        modContainer = document.createElement('div');
+        modContainer.id = 'gup-mod-actions';
+        modContainer.style.display = 'none';
+        modContainer.style.marginTop = '15px';
+        modContainer.style.paddingTop = '10px';
+        modContainer.style.borderTop = '1px solid var(--border-color)';
+        document.getElementById('gup-username').parentElement.appendChild(modContainer);
+    }
+    modContainer.innerHTML = '';
+    modContainer.style.display = 'none';
+
     const addFriendBtn = document.getElementById('gup-add-friend');
     const removeFriendBtn = document.getElementById('gup-remove-friend');
     const sendMsgBtn = document.getElementById('gup-send-message');
@@ -322,6 +358,66 @@ window.showGlobalUserProfile = async function(email, event) {
                 
                 if(roleFlex.children.length > 0) rolesContainer.appendChild(roleFlex);
                 else rolesContainer.style.display = 'none';
+
+                // Moderation Checks
+                if (safeEmail !== currentUserSafeEmail && (myServerRoles.includes('owner') || myServerPerms.kickMembers || myServerPerms.banMembers || myServerPerms.timeoutMembers)) {
+                    modContainer.style.display = 'flex';
+                    modContainer.style.flexDirection = 'column';
+                    modContainer.style.gap = '5px';
+                    
+                    if(myServerRoles.includes('owner') || myServerPerms.timeoutMembers) {
+                        const timeoutBtn = document.createElement('button');
+                        timeoutBtn.innerHTML = `${icons.timeout} Timeout Member`;
+                        timeoutBtn.className = 'mod-action-btn';
+                        timeoutBtn.style.cssText = 'background: transparent; border: 1px solid var(--border-color); color: var(--text-bright); margin: 0; display:flex; gap:8px; align-items:center;';
+                        timeoutBtn.onclick = () => {
+                            openInputModal("Timeout User", "Duration in minutes (e.g. 10)", "How many minutes?", async (mins) => {
+                                const m = parseInt(mins);
+                                if(m && m > 0) {
+                                    const until = Date.now() + (m * 60 * 1000);
+                                    await update(ref(db, `server_members/${currentServerId}/${safeEmail}`), { timeoutUntil: until });
+                                    customAlert(`${uData.username} timed out for ${m} minutes.`, "Timeout Applied");
+                                }
+                            });
+                        };
+                        modContainer.appendChild(timeoutBtn);
+                    }
+                    if(myServerRoles.includes('owner') || myServerPerms.kickMembers) {
+                        const kickBtn = document.createElement('button');
+                        kickBtn.innerHTML = `${icons.kick} Kick Member`;
+                        kickBtn.className = 'mod-action-btn';
+                        kickBtn.style.cssText = 'background: transparent; border: 1px solid var(--accent-warning); color: var(--accent-warning); margin: 0; display:flex; gap:8px; align-items:center;';
+                        kickBtn.onclick = () => {
+                            customConfirm(`Are you sure you want to kick ${uData.username}?`, "Kick Member", async (yes) => {
+                                if(yes) {
+                                    await remove(ref(db, `server_members/${currentServerId}/${safeEmail}`));
+                                    await remove(ref(db, `users/${safeEmail}/servers/${currentServerId}`));
+                                    modal.style.display = 'none';
+                                    customAlert(`${uData.username} was kicked.`, "Kicked");
+                                }
+                            });
+                        };
+                        modContainer.appendChild(kickBtn);
+                    }
+                    if(myServerRoles.includes('owner') || myServerPerms.banMembers) {
+                        const banBtn = document.createElement('button');
+                        banBtn.innerHTML = `${icons.ban} Ban Member`;
+                        banBtn.className = 'mod-action-btn';
+                        banBtn.style.cssText = 'background: transparent; border: 1px solid var(--accent-danger); color: var(--accent-danger); margin: 0; display:flex; gap:8px; align-items:center;';
+                        banBtn.onclick = () => {
+                            customConfirm(`Are you sure you want to BAN ${uData.username}? They won't be able to rejoin.`, "Ban Member", async (yes) => {
+                                if(yes) {
+                                    await set(ref(db, `servers/${currentServerId}/bans/${safeEmail}`), { timestamp: Date.now(), by: currentUserSafeEmail });
+                                    await remove(ref(db, `server_members/${currentServerId}/${safeEmail}`));
+                                    await remove(ref(db, `users/${safeEmail}/servers/${currentServerId}`));
+                                    modal.style.display = 'none';
+                                    customAlert(`${uData.username} was permanently banned.`, "Banned");
+                                }
+                            });
+                        };
+                        modContainer.appendChild(banBtn);
+                    }
+                }
             }
         }
         
@@ -364,11 +460,9 @@ window.showGlobalUserProfile = async function(email, event) {
 window.handleMentionClick = function(username, event) {
     event.stopPropagation();
     let foundEmail = null;
-    // Look up in server members first for speed
     if (currentServerId) {
         currentServerMembersList.forEach(m => { if(m.username === username) foundEmail = m.email || Object.keys(globalUsersCache).find(k => globalUsersCache[k].username === username); });
     }
-    // Fallback global cache
     if (!foundEmail) {
         Object.keys(globalUsersCache).forEach(email => { if(globalUsersCache[email].username === username) foundEmail = email; });
     }
@@ -741,6 +835,7 @@ function switchToHomeView() {
     if(unsubscribeChannels) { unsubscribeChannels(); unsubscribeChannels = null; }
     if(unsubscribeCategories) { unsubscribeCategories(); unsubscribeCategories = null; }
     if(unsubscribeVoiceRosters) { unsubscribeVoiceRosters(); unsubscribeVoiceRosters = null; }
+    if(unsubscribeMyMemberData) { unsubscribeMyMemberData(); unsubscribeMyMemberData = null; }
     document.getElementById('voice-controls-area').style.display = currentVoiceChannel ? 'flex' : 'none';
     
     document.querySelectorAll('.channel-item').forEach(el => el.classList.remove('active'));
@@ -942,6 +1037,7 @@ function openDM(dmId, friendEmail) {
     const uData = globalUsersCache[friendEmail];
     currentDMOtherUser = uData;
     myServerPerms = { viewChannels: true, sendMessages: true, manageMessages: false }; 
+    myServerMemberData = {}; // clear timeouts
     
     update(ref(db, `users/${currentUserSafeEmail}/friends/${friendEmail}`), { hidden: false });
     
@@ -1004,7 +1100,7 @@ document.getElementById('create-server-btn')?.addEventListener('click', () => {
     openInputModal("Create Server", "Server Name", "Give your server a name:", (serverName) => {
         if (serverName) {
             const serverId = generateCode();
-            const everyonePerms = { viewChannels: true, sendMessages: true, manageChannels: false, manageServerSettings: false, manageServerProfile: false, manageServerOverview: false, manageRoles: false, manageMessages: false };
+            const everyonePerms = { viewChannels: true, sendMessages: true, manageChannels: false, manageServerSettings: false, manageServerProfile: false, manageServerOverview: false, manageRoles: false, manageMessages: false, kickMembers: false, banMembers: false, timeoutMembers: false };
             
             set(ref(db, `servers/${serverId}`), { name: serverName, owner: auth.currentUser.email });
             set(ref(db, `servers/${serverId}/roles/everyone`), { name: '@everyone', color: '#abb2bf', order: -1, mentionable: true, perms: everyonePerms });
@@ -1021,6 +1117,11 @@ document.getElementById('create-server-btn')?.addEventListener('click', () => {
 });
 
 async function joinServerByCode(codeToJoin) {
+    const banSnap = await get(ref(db, `servers/${codeToJoin}/bans/${currentUserSafeEmail}`));
+    if (banSnap.exists()) {
+        return customAlert("You are banned from this server.", "Access Denied");
+    }
+
     const snapshot = await get(child(ref(db), `servers/${codeToJoin}`));
     if (snapshot.exists()) {
         const sData = snapshot.val();
@@ -1084,9 +1185,15 @@ function loadMyServers() {
                     div.classList.add('active');
                     document.getElementById('home-btn').classList.remove('active');
 
+                    // Set up Live Timeout Tracking
+                    if(unsubscribeMyMemberData) unsubscribeMyMemberData();
+                    unsubscribeMyMemberData = onValue(ref(db, `server_members/${serverId}/${currentUserSafeEmail}`), (memLiveSnap) => {
+                        myServerMemberData = memLiveSnap.val() || {};
+                        enableChat();
+                    });
+
                     // Resolve Advanced Permissions
-                    const myRoleSnap = await get(ref(db, `server_members/${serverId}/${currentUserSafeEmail}`));
-                    const memberInfo = myRoleSnap.val() || {};
+                    const memberInfo = myServerMemberData;
                     let userRoles = memberInfo.roles ? Object.keys(memberInfo.roles) : (memberInfo.role && memberInfo.role !== 'member' ? [memberInfo.role] : []);
                     myServerRoles = ['everyone', ...userRoles];
                     
@@ -1104,7 +1211,7 @@ function loadMyServers() {
                     
                     if (sData.owner === auth.currentUser.email || myServerRoles.includes('owner') || resolvedPerms.manageServerSettings) { 
                         if(!myServerRoles.includes('owner')) myServerRoles.push('owner');
-                        resolvedPerms = { viewChannels: true, sendMessages: true, manageChannels: true, manageServerSettings: true, manageServerProfile: true, manageServerOverview: true, manageRoles: true, manageMessages: true }; 
+                        resolvedPerms = { viewChannels: true, sendMessages: true, manageChannels: true, manageServerSettings: true, manageServerProfile: true, manageServerOverview: true, manageRoles: true, manageMessages: true, kickMembers: true, banMembers: true, timeoutMembers: true }; 
                     } 
                     
                     myServerPerms = resolvedPerms;
@@ -1361,6 +1468,10 @@ function editRole(roleId, noSwitch = false) {
     document.getElementById('p-manageRoles').checked = !!p.manageRoles;
     document.getElementById('p-manageMessages').checked = !!p.manageMessages;
     
+    const kickP = document.getElementById('p-kickMembers'); if(kickP) kickP.checked = !!p.kickMembers;
+    const banP = document.getElementById('p-banMembers'); if(banP) banP.checked = !!p.banMembers;
+    const timeoutP = document.getElementById('p-timeoutMembers'); if(timeoutP) timeoutP.checked = !!p.timeoutMembers;
+
     document.getElementById('delete-role-btn').style.display = roleId === 'everyone' ? 'none' : 'block';
     
     if(!noSwitch && window.innerWidth <= 768) {
@@ -1381,6 +1492,10 @@ document.getElementById('ss-create-role-btn')?.addEventListener('click', () => {
 
 document.getElementById('save-role-settings-btn')?.addEventListener('click', () => {
     if(currentServerId && currentEditingRoleId) {
+        const kickP = document.getElementById('p-kickMembers');
+        const banP = document.getElementById('p-banMembers');
+        const timeoutP = document.getElementById('p-timeoutMembers');
+
         const payload = {
             color: document.getElementById('er-color').value,
             mentionable: document.getElementById('er-mentionable').checked,
@@ -1392,7 +1507,10 @@ document.getElementById('save-role-settings-btn')?.addEventListener('click', () 
                 manageServerProfile: document.getElementById('p-manageServerProfile').checked,
                 manageServerOverview: document.getElementById('p-manageServerOverview').checked,
                 manageRoles: document.getElementById('p-manageRoles').checked,
-                manageMessages: document.getElementById('p-manageMessages').checked
+                manageMessages: document.getElementById('p-manageMessages').checked,
+                kickMembers: kickP ? kickP.checked : false,
+                banMembers: banP ? banP.checked : false,
+                timeoutMembers: timeoutP ? timeoutP.checked : false
             }
         };
         if(currentEditingRoleId !== 'everyone') payload.name = document.getElementById('er-name').value.trim();
@@ -1581,7 +1699,7 @@ function loadMemberList(serverId) {
     const listContent = document.getElementById('member-list-content');
     
     unsubscribeMembers = onValue(ref(db, `server_members/${serverId}`), async (membersSnap) => {
-        let groups = { owner: { name: "Server Owner", order: -2, members: [] }, online: { name: "Online", order: 9998, members: [] }, offline: { name: "Offline", order: 9999, members: [] } };
+        let groups = { owner: { name: "Server Owner", order: -9999, members: [] }, online: { name: "Online", order: 9998, members: [] }, offline: { name: "Offline", order: 9999, members: [] } };
         Object.keys(serverRolesCache).forEach(rId => { groups[rId] = { name: serverRolesCache[rId].name, order: serverRolesCache[rId].order || 0, color: serverRolesCache[rId].color, members: [] }; });
         
         const memberPromises = []; currentServerMembersList = [];
@@ -1601,22 +1719,33 @@ function loadMemberList(serverId) {
                     let highestRole = null; let highestOrder = 9999;
                     let userRoles = memberInfo.roles ? Object.keys(memberInfo.roles) : (memberInfo.role && memberInfo.role !== 'member' ? [memberInfo.role] : []);
                     
+                    // Find the highest hoisted (mentionable) role
                     userRoles.forEach(rId => {
-                        if(serverRolesCache[rId] && serverRolesCache[rId].order < highestOrder) {
+                        if(serverRolesCache[rId] && serverRolesCache[rId].mentionable && serverRolesCache[rId].order < highestOrder) {
                             highestOrder = serverRolesCache[rId].order;
                             highestRole = rId;
                         }
                     });
                     
                     let targetGroup = 'offline';
-                    // Force strictly offline ordering for users who are offline
+                    // Force strictly offline ordering for users who are offline, like Discord
                     if (status !== 'offline' && status !== 'invisible') {
                         if (memberInfo.role === 'owner') targetGroup = 'owner';
                         else if (highestRole && highestRole !== 'everyone') targetGroup = highestRole;
                         else targetGroup = 'online';
                     }
                     
-                    groups[targetGroup].members.push({ email: memberEmail, data: uData, status: status });
+                    // Assign correct color purely based on role (even if offline)
+                    let nameColor = "var(--text-main)";
+                    let colorOrder = 9999;
+                    userRoles.forEach(rId => {
+                        if(serverRolesCache[rId] && serverRolesCache[rId].color !== '#abb2bf' && serverRolesCache[rId].order < colorOrder) {
+                            colorOrder = serverRolesCache[rId].order;
+                            nameColor = serverRolesCache[rId].color;
+                        }
+                    });
+                    
+                    groups[targetGroup].members.push({ email: memberEmail, data: uData, status: status, nameColor: nameColor });
                 }
             });
             memberPromises.push(p);
@@ -1630,13 +1759,15 @@ function loadMemberList(serverId) {
         const sortedGroupKeys = Object.keys(groups).sort((a,b) => groups[a].order - groups[b].order);
         sortedGroupKeys.forEach(gKey => {
             const group = groups[gKey]; if (group.members.length === 0) return;
+            // Sort members within group alphabetically
+            group.members.sort((a,b) => a.data.username.localeCompare(b.data.username));
+            
             const catDiv = document.createElement('div'); catDiv.className = 'member-category'; catDiv.innerText = `${group.name} — ${group.members.length}`;
             listContent.appendChild(catDiv);
 
             group.members.forEach(m => {
                 const mDiv = document.createElement('div'); mDiv.className = 'member-item';
-                let nameColor = group.color || "var(--text-main)"; if(gKey === 'owner' || gKey === 'online' || gKey === 'offline') nameColor = "var(--text-main)";
-                mDiv.innerHTML = `<div class="avatar-container"><img src="${m.data.avatar}" class="avatar-small"><div class="status-indicator status-${m.status}"></div></div><div class="member-username" style="color: ${nameColor}; pointer-events:none;">${m.data.username}</div>`;
+                mDiv.innerHTML = `<div class="avatar-container"><img src="${m.data.avatar}" class="avatar-small"><div class="status-indicator status-${m.status}"></div></div><div class="member-username" style="color: ${m.nameColor}; pointer-events:none;">${m.data.username}</div>`;
                 mDiv.addEventListener('click', (e) => {
                     showGlobalUserProfile(m.email, e);
                 });
@@ -1701,7 +1832,7 @@ function renderChannels(serverId) {
         }
 
         grouped[catId].sort((a,b) => (a.order||0) - (b.order||0)).forEach((channelData, index, arr) => {
-            const div = document.createElement('div'); div.classList.add('channel-item'); div.id = `channel-${channelData.id}`; div.draggable = myServerPerms.admin || myServerPerms.manageChannels;
+            const div = document.createElement('div'); div.classList.add('channel-item'); div.id = `channel-${channelData.id}`; div.draggable = myServerPerms.manageChannels;
             
             div.innerHTML = channelData.type === "voice" ? `<span class="c-icon">${icons.voiceChannel}</span> <span class="c-name">${channelData.name}</span>` : `<span class="c-icon">${icons.textChannel}</span> <span class="c-name">${channelData.name}</span>`;
             
@@ -1838,9 +1969,17 @@ function removeHiddenAudio(peerEmail) {
 // --- MESSAGES, EMBEDS & NOTIFICATIONS ---
 // ==========================================
 function enableChat() { 
-    const canSend = chatType === 'dm' ? true : getChannelPerm(currentChatId, 'sendMessages');
+    let canSend = chatType === 'dm' ? true : getChannelPerm(currentChatId, 'sendMessages');
+    
+    // Process Timeout Restrictions
+    if (chatType === 'server' && myServerMemberData && myServerMemberData.timeoutUntil && myServerMemberData.timeoutUntil > Date.now()) {
+        canSend = false;
+        document.getElementById('msg-input').placeholder = "You are timed out and cannot send messages.";
+    } else {
+        document.getElementById('msg-input').placeholder = canSend ? "Message..." : "You do not have permission to send messages here.";
+    }
+
     document.getElementById('msg-input').disabled = !canSend; 
-    document.getElementById('msg-input').placeholder = canSend ? "Message..." : "You do not have permission to send messages here.";
     document.getElementById('send-btn').disabled = !canSend; 
     document.getElementById('upload-img-btn').disabled = !canSend; 
     document.getElementById('emoji-picker-btn').disabled = !canSend; 
@@ -1975,7 +2114,7 @@ async function createMessageDOM(msgId, data, prevSender, prevTime) {
     if(buildRes.isMentioned && data.sender !== auth.currentUser.email) msgElement.classList.add('mentioned');
 
     let canEdit = (data.sender === auth.currentUser.email);
-    let canDelete = (canEdit || (chatType === 'server' && (myServerPerms.admin || myServerPerms.manageMessages)));
+    let canDelete = (canEdit || (chatType === 'server' && (myServerPerms.manageServerSettings || myServerPerms.manageMessages)));
     let nameColor = "var(--text-bright)";
     if(chatType === 'server' && data.roleId && data.roleId !== 'member' && data.roleId !== 'owner') { const rSnap = await get(ref(db, `servers/${currentServerId}/roles/${data.roleId}`)); if(rSnap.exists()) nameColor = rSnap.val().color; }
     if(data.roleId === 'system') nameColor = "var(--accent-primary)";
@@ -2052,7 +2191,7 @@ async function createMessageDOM(msgId, data, prevSender, prevTime) {
             });
             ta.focus();
             
-            contentWrapper.querySelector('.cancel-edit-btn').onclick = () => { contentWrapper.innerHTML = originalHtml; };
+            contentWrapper.querySelector('.cancel-edit-btn').onclick = () => { contentWrapper.innerHTML = originalHtml; bindImageClick(contentWrapper.querySelector('.message-image')); };
             contentWrapper.querySelector('.save-edit-btn').onclick = () => {
                 const newText = ta.value.trim();
                 if(newText && newText !== rawText) {
@@ -2061,11 +2200,13 @@ async function createMessageDOM(msgId, data, prevSender, prevTime) {
                     data.edited = true;
                     buildMessageHtml(data).then(res => {
                         contentWrapper.innerHTML = res.html;
+                        bindImageClick(contentWrapper.querySelector('.message-image'));
                     });
                     // Push update to DB for others
                     update(ref(db, `${chatType === 'server' ? 'messages' : 'dms'}/${currentChatId}/${msgId}`), { text: newText, edited: true });
                 } else {
                     contentWrapper.innerHTML = originalHtml;
+                    bindImageClick(contentWrapper.querySelector('.message-image'));
                 }
             };
         });
@@ -2073,12 +2214,7 @@ async function createMessageDOM(msgId, data, prevSender, prevTime) {
 
     const replyBtn = msgElement.querySelector('.msg-action-btn.reply'); if (replyBtn) replyBtn.addEventListener('click', () => triggerReply(msgId, data.username, data.text || "Attachment..."));
     
-    const imgEl = msgElement.querySelector('.message-image'); 
-    if (imgEl) imgEl.addEventListener('click', () => { 
-        document.getElementById('enlarged-image').src = imgEl.getAttribute('data-original'); 
-        document.getElementById('download-image-btn').href = imgEl.getAttribute('data-original'); 
-        document.getElementById('image-modal').style.display = 'flex'; 
-    });
+    bindImageClick(msgElement.querySelector('.message-image'));
     
     return msgElement;
 }
@@ -2203,6 +2339,7 @@ async function loadMessages(dbPath, chatNameLabel) {
                     const contentWrapper = msgEl.querySelector('.msg-content-wrapper');
                     if(contentWrapper && !contentWrapper.querySelector('.edit-msg-input')) {
                         contentWrapper.innerHTML = res.html;
+                        bindImageClick(contentWrapper.querySelector('.message-image'));
                     }
                 });
             }
