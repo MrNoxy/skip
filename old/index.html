@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Skip | Retro</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+</head>
+<body>
+    <div id="auth-section">
+        <h2 style="color: var(--text-bright);">Skip</h2>
+        <input type="email" id="email" placeholder="Email">
+        <input type="password" id="password" placeholder="Password">
+        <button id="login-btn">Log In</button>
+        <button id="register-btn" class="secondary-btn">Sign Up</button>
+    </div>
+
+    <div id="app-container" style="display: none;">
+        <div id="server-sidebar">
+            <div class="server-icon active" id="home-btn" title="Direct Messages">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-2.67 0-8 1.34-8 4v3h16v-3c0-2.66-5.33-4-8-4z"/></svg>
+            </div>
+            <div id="server-list"></div>
+            <div class="server-icon" id="create-server-btn" title="Create Server">+</div>
+            <div class="server-icon" id="join-server-btn" title="Join Server">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+            </div>
+        </div>
+
+        <div id="channel-sidebar">
+            <div id="sidebar-header">
+                <div style="flex-grow: 1; display:flex; flex-direction:column; justify-content:center; width: 100%;">
+                    <div id="server-header-clickable">
+                        <h3 id="server-name-display">Friends & DMs</h3>
+                        <span id="server-dropdown-arrow" style="display: none;">▼</span>
+                    </div>
+                    <div id="server-stats-display" style="display:none; font-size:11px; color:var(--text-muted); margin-top:2px; text-align: center;"></div>
+                </div>
+                
+                <div id="server-dropdown" style="display: none;">
+                    <div class="dropdown-item" id="menu-server-settings" style="display: none;">Server Settings</div>
+                    <div class="dropdown-item" id="menu-add-category" style="display: none;">Add Category</div>
+                    <div class="dropdown-item" id="menu-add-text" style="display: none;">Add Text Channel</div>
+                    <div class="dropdown-item" id="menu-add-voice" style="display: none;">Add Voice Channel</div>
+                    <div class="dropdown-item invite-item" id="menu-invite">Invite People</div>
+                    <div style="height:1px; background:var(--border-color); margin:0;"></div>
+                    <div class="dropdown-item" id="menu-leave-server" style="display: none; color: var(--accent-danger);">Leave Server</div>
+                </div>
+            </div>
+            
+            <div id="home-sidebar-content">
+                <div class="home-nav-item active" id="nav-friends-btn">
+                    <span>Friends</span>
+                </div>
+                <div class="home-nav-item" id="nav-requests-btn">
+                    <span>Requests</span>
+                    <div id="fr-badge" class="unread-indicator pill" style="display: none; margin-left: auto;"></div>
+                </div>
+                <div class="channel-category" style="margin-top: 25px;">Direct Messages</div>
+                <div id="dm-list"></div>
+            </div>
+
+            <div id="channel-list" style="display: none;"></div>
+            
+            <div id="voice-controls-area" style="display: none;">
+                <div id="voice-status">Voice Connected</div>
+                <div id="voice-controls">
+                    <button id="mute-btn" class="vc-btn" title="Toggle Mute">Mute</button>
+                    <button id="deafen-btn" class="vc-btn" title="Toggle Deafen">Deafen</button>
+                    <button id="disconnect-vc-btn" class="vc-btn" title="Disconnect" style="color: var(--accent-danger);">Disconnect</button>
+                </div>
+            </div>
+
+            <div id="user-controls" title="Click to edit profile">
+                <div class="avatar-container">
+                    <img id="my-avatar" class="avatar-small" src="" alt="Me">
+                    <div id="my-status-indicator" class="status-indicator status-online" title="Change Status"></div>
+                </div>
+                <div id="user-info">
+                    <div id="user-display" style="font-weight: 500; color: var(--text-bright);">User</div>
+                    <div id="user-tag-display" style="font-size: 12px; color: var(--text-muted);">#0000</div>
+                </div>
+                <div id="status-selector" style="display:none;">
+                    <div class="status-option" data-status="online">Online</div>
+                    <div class="status-option" data-status="idle">Idle</div>
+                    <div class="status-option" data-status="dnd">Do Not Disturb</div>
+                    <div class="status-option" data-status="offline">Invisible</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="main-view-container" style="flex-grow: 1; display: flex; position: relative;">
+            
+            <div id="home-area" style="display: flex; flex-direction: column; width: 100%;">
+                <div id="home-header">
+                    <button id="mobile-back-btn-home" class="mobile-back-btn" title="Back">❮ Back</button>
+                    <div id="home-header-friends" style="display: flex; align-items: center; justify-content: center; width: 100%;">
+                        <span style="font-weight: bold; font-size: 17px; color: var(--text-bright);">Friends</span>
+                    </div>
+                    <div id="home-header-requests" style="display: none; align-items: center; justify-content: center; width: 100%;">
+                        <span style="font-weight: bold; font-size: 17px; color: var(--text-bright);">Requests</span>
+                    </div>
+                    <button id="add-friend-btn-green" class="header-action-btn">Add</button>
+                </div>
+                <div id="home-content" style="flex-grow: 1; overflow-y: auto; background: var(--bg-main);"></div>
+            </div>
+
+            <div id="chat-area" style="display: none; flex-direction: column; width: 100%;">
+                <div id="chat-header">
+                    <button id="mobile-back-btn" class="mobile-back-btn" title="Back">❮ Back</button>
+                    <span id="chat-title" style="color: var(--text-bright); font-weight: 600;">Chat</span>
+                    <span id="invite-code-display" style="display: none;"></span>
+                    <button id="toggle-members-btn" class="header-action-btn" style="display: none;">Members</button>
+                </div>
+                
+                <div id="chat-loading-spinner" style="display:none; text-align:center; padding: 10px; color: var(--text-muted); font-size: 12px;">
+                    Loading older messages...
+                </div>
+
+                <div id="messages"></div>
+                <div id="scroll-bottom-btn"><div class="arrow-down"></div></div>
+                
+                <div id="message-input-area">
+                    <div id="reply-banner" style="display: none;">
+                        <span id="reply-banner-text">Replying...</span>
+                        <button id="cancel-reply-btn">✖</button>
+                    </div>
+                    <div id="attachment-preview-area" style="display: none;">
+                        <div class="attachment-preview-wrapper">
+                            <img id="attachment-preview-img" src="">
+                            <button id="remove-attachment-btn">✖</button>
+                        </div>
+                    </div>
+                    <div id="mention-menu" style="display: none;"></div>
+                    <div id="message-input-wrapper">
+                        <button id="upload-img-btn" disabled>+</button>
+                        <input type="file" id="image-upload" accept="image/*" style="display: none;">
+                        <textarea id="msg-input" placeholder="iMessage..." disabled autocomplete="off" rows="1"></textarea>
+                        <button id="emoji-picker-btn" disabled>☺</button>
+                        <button id="send-btn" disabled>Send</button>
+                    </div>
+                    <div id="emoji-picker" style="display: none;"></div>
+                </div>
+            </div>
+
+            <div id="member-sidebar" style="display: none;">
+                <div id="mobile-member-close-area">
+                    <h3 style="margin:0; font-size:17px; font-weight:600;">Members</h3>
+                    <button id="close-members-mobile-btn" class="header-action-btn">Done</button>
+                </div>
+                <div id="member-list-content"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="hidden-audio-container" style="display:none;"></div>
+
+    <div id="global-user-profile-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.4); z-index: 4000;">
+        <div class="modal-content profile-popout" style="padding: 0; width: 300px; margin: auto; overflow: hidden; background: var(--bg-secondary); position: relative; border-radius: 12px;">
+            <div id="gup-banner" style="height: 60px; width: 100%; background: var(--bg-tertiary);"></div>
+            <div style="padding: 15px; text-align: center;">
+                <img id="gup-avatar" src="" style="width: 70px; height: 70px; border-radius: 50%; border: 3px solid var(--bg-secondary); margin-top: -50px; object-fit: cover;">
+                <h3 id="gup-username" style="margin: 10px 0 0 0; font-size: 20px;">User</h3>
+                <div id="gup-tag" style="color: var(--text-muted); font-size: 14px; margin-bottom: 15px;">#0000</div>
+                
+                <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 15px;">
+                    <button id="gup-send-message" style="display: none;">Message</button>
+                    <button id="gup-add-friend" style="display: none;">Add Friend</button>
+                    <button id="gup-remove-friend" style="display: none; color: var(--accent-danger); border: 1px solid var(--accent-danger); background: transparent;">Remove Friend</button>
+                </div>
+                <div id="gup-roles-container" style="display: none; border-top: 1px solid var(--border-color); padding-top: 10px; text-align: left;"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="confirm-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content action-sheet">
+            <h3 id="confirm-modal-title">Confirm</h3>
+            <p id="confirm-modal-desc"></p>
+            <div class="action-sheet-buttons">
+                <button id="confirm-modal-yes" style="color: var(--accent-danger);">Yes</button>
+                <button id="confirm-modal-no" style="font-weight: bold;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="input-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content action-sheet">
+            <h3 id="input-modal-title">Title</h3>
+            <p id="input-modal-desc" style="display: none;"></p>
+            <input type="text" id="input-modal-field" placeholder="..." autocomplete="off">
+            <div class="action-sheet-buttons">
+                <button id="input-modal-submit">Submit</button>
+                <button id="input-modal-cancel" style="font-weight: bold;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="alert-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content action-sheet">
+            <h3 id="alert-modal-title">Notice</h3>
+            <p id="alert-modal-desc"></p>
+            <div class="action-sheet-buttons">
+                <button id="alert-modal-ok" style="font-weight: bold; width: 100%;">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="image-modal" style="display: none;">
+        <div id="close-image-modal">Done</div>
+        <a id="download-image-btn" href="" download="image.png">Save</a>
+        <img id="enlarged-image" src="" alt="Enlarged">
+    </div>
+
+    <div id="context-menu" style="display: none;"></div>
+
+    <div id="user-settings-modal" class="fs-modal-overlay">
+        <div class="fs-modal-layout">
+            <div class="fs-sidebar" id="us-sidebar">
+                <div class="ios-nav-bar">
+                    <button id="close-user-settings-btn" class="mobile-back-btn">Done</button>
+                    <h3>Settings</h3>
+                    <div style="width: 50px;"></div>
+                </div>
+                <div class="ios-table-view">
+                    <div class="fs-tab active" data-tab="account" id="tab-us-account">My Account</div>
+                    <div class="fs-tab" data-tab="emojis" id="tab-us-emojis">Personal Emojis</div>
+                    <div class="fs-tab" id="us-logout-btn" style="color: var(--accent-danger); text-align: center;">Log Out</div>
+                </div>
+            </div>
+            
+            <div class="fs-content-area" id="us-content">
+                <div class="ios-nav-bar">
+                    <button class="mobile-back-btn fs-mobile-back" id="us-mobile-back">❮ Settings</button>
+                    <h3 style="margin: 0;">Account</h3>
+                    <button id="save-profile-btn" class="header-action-btn">Save</button>
+                </div>
+                
+                <div class="ss-pane" id="pane-us-account" style="display: block;">
+                    <div class="ios-table-view" style="margin-top: 20px;">
+                        <div style="display: flex; justify-content: center; padding: 20px;">
+                            <img id="profile-preview" class="avatar-large" src="" alt="Avatar">
+                            <input type="file" id="avatar-upload" accept="image/*" style="display: none;">
+                        </div>
+                        <input type="text" id="edit-username" placeholder="Username" autocomplete="off" class="fs-input">
+                        <input type="number" id="edit-tag" placeholder="Tag" autocomplete="off" class="fs-input">
+                    </div>
+                </div>
+                <div class="ss-pane" id="pane-us-emojis" style="display: none;">
+                    <div class="ios-table-view" style="margin-top: 20px; padding: 10px;">
+                        <input type="file" id="us-emoji-file" accept="image/*">
+                        <input type="text" id="us-emoji-name" placeholder="Name" class="fs-input">
+                        <button id="us-upload-emoji-btn" style="width: 100%; margin-top: 10px;">Upload Emoji</button>
+                    </div>
+                    <div id="us-emojis-list" class="ios-table-view" style="margin-top: 20px;"></div>
+                </div>
+            </div>
+            <div class="fs-close-btn desktop-only" id="close-user-settings-btn-desktop">Done</div>
+        </div>
+    </div>
+
+    <div id="server-settings-modal" class="fs-modal-overlay">
+        <div class="fs-modal-layout">
+            <div class="fs-sidebar" id="ss-sidebar">
+                <div class="ios-nav-bar">
+                    <button id="close-server-settings-btn" class="mobile-back-btn">Done</button>
+                    <h3 id="ss-header-name">Server Settings</h3>
+                    <div style="width: 50px;"></div>
+                </div>
+                
+                <div class="ios-table-view">
+                    <div class="fs-tab" data-tab="profile" id="tab-ss-profile">Overview</div>
+                    <div class="fs-tab" data-tab="engagement" id="tab-ss-engagement">Engagement</div>
+                    <div class="fs-tab" data-tab="roles" id="tab-ss-roles">Roles</div>
+                    <div class="fs-tab" data-tab="emojis" id="tab-ss-emojis">Emojis</div>
+                    <div class="fs-tab" data-tab="bans" id="tab-ss-bans">Bans</div>
+                    <div class="fs-tab" data-tab="delete" id="tab-ss-delete" style="color: var(--accent-danger); text-align: center;">Delete Server</div>
+                </div>
+            </div>
+            
+            <div class="fs-content-area" id="ss-content">
+                <div class="ios-nav-bar">
+                    <button class="mobile-back-btn fs-mobile-back" id="ss-mobile-back">❮ Server</button>
+                    <h3>Settings</h3>
+                    <button id="ss-save-profile-btn" class="header-action-btn">Save</button>
+                </div>
+                
+                <div class="ss-pane" id="pane-ss-profile">
+                    <div class="ios-table-view" style="margin-top: 20px; padding: 15px;">
+                        <input type="text" id="ss-server-name" placeholder="Server Name" class="fs-input">
+                        <input type="file" id="ss-icon-upload" accept="image/*" style="margin-top: 10px;">
+                        <div id="ss-icon-preview" class="avatar-large" style="margin: 10px auto; border: 1px solid var(--border-color);"></div>
+                        <input type="file" id="ss-banner-upload" accept="image/*" style="margin-top: 10px;">
+                        <div id="ss-banner-preview" style="height: 100px; border: 1px dashed var(--border-color); margin-top: 10px;"></div>
+                    </div>
+                </div>
+                
+                <div class="ss-pane" id="pane-ss-engagement" style="display:none; padding:15px;">
+                    <select id="ss-join-channel" class="fs-input"></select><select id="ss-leave-channel" class="fs-input"></select>
+                    <button id="ss-save-engagement-btn">Save Engagement</button>
+                </div>
+                <div class="ss-pane" id="pane-ss-roles" style="display:none;">
+                    <div id="ss-roles-list-left" style="padding: 15px;">
+                        <button id="ss-create-role-btn">+ Create Role</button>
+                        <div id="ss-roles-list" class="ios-table-view" style="margin-top:15px;"></div>
+                    </div>
+                    <div id="ss-role-edit-area" style="display: none; padding: 15px;">
+                        <button id="ss-roles-pane-mobile-back" class="mobile-back-btn" style="display:block; margin-bottom:15px;">❮ Roles</button>
+                        <input type="text" id="er-name" class="fs-input"><input type="color" id="er-color" style="margin-bottom:15px;">
+                        <label class="toggle-row">Display Separate <input type="checkbox" id="er-hoist"></label>
+                        <label class="toggle-row">Mentionable <input type="checkbox" id="er-mentionable"></label>
+                        <div style="display:none;">
+                            <input type="checkbox" id="p-viewChannels"><input type="checkbox" id="p-sendMessages">
+                            <input type="checkbox" id="p-kickMembers"><input type="checkbox" id="p-banMembers"><input type="checkbox" id="p-timeoutMembers">
+                            <input type="checkbox" id="p-manageChannels"><input type="checkbox" id="p-manageRoles"><input type="checkbox" id="p-manageMessages">
+                            <input type="checkbox" id="p-manageServerProfile"><input type="checkbox" id="p-manageServerOverview"><input type="checkbox" id="p-manageServerSettings">
+                        </div>
+                        <button id="save-role-settings-btn" style="margin-top:15px;">Save Role</button>
+                        <button id="delete-role-btn" style="margin-top:15px; background:var(--accent-danger);">Delete</button>
+                    </div>
+                </div>
+                <div class="ss-pane" id="pane-ss-emojis" style="display:none; padding:15px;">
+                    <input type="file" id="ss-emoji-file" accept="image/*"><input type="text" id="ss-emoji-name" class="fs-input" placeholder="Name">
+                    <button id="ss-upload-emoji-btn">Upload</button>
+                    <div id="ss-emojis-list" class="ios-table-view" style="margin-top:15px;"></div>
+                </div>
+                <div class="ss-pane" id="pane-ss-bans" style="display:none; padding:15px;"><div id="ss-bans-list" class="ios-table-view"></div></div>
+                <div class="ss-pane" id="pane-ss-delete" style="display:none; padding:15px;"><button id="delete-server-btn" style="background:var(--accent-danger);">Delete Server</button></div>
+            </div>
+            <div class="fs-close-btn desktop-only" id="close-server-settings-btn-desktop">Done</div>
+        </div>
+    </div>
+
+    <div id="channel-settings-modal" class="fs-modal-overlay">
+        <div class="fs-modal-layout">
+            <div class="fs-sidebar" id="cs-sidebar">
+                <div class="ios-nav-bar">
+                    <button id="close-channel-settings-btn" class="mobile-back-btn">Done</button>
+                    <h3 id="cs-header-name">Channel</h3>
+                    <div style="width: 50px;"></div>
+                </div>
+                <div class="ios-table-view">
+                    <div class="fs-tab active" data-tab="overview" id="tab-cs-overview">Overview</div>
+                    <div class="fs-tab" data-tab="perms" id="tab-cs-perms">Permissions</div>
+                    <div class="fs-tab" data-tab="delete" id="tab-cs-delete" style="color: var(--accent-danger); text-align: center;">Delete</div>
+                </div>
+            </div>
+            <div class="fs-content-area" id="cs-content">
+                <div class="ios-nav-bar">
+                    <button class="mobile-back-btn fs-mobile-back" id="cs-mobile-back">❮ Channel</button>
+                    <h3>Settings</h3>
+                    <button id="cs-save-overview-btn" class="header-action-btn">Save</button>
+                </div>
+                <div class="ss-pane" id="pane-cs-overview" style="display: block; padding: 15px;">
+                    <input type="text" id="cs-channel-name" class="fs-input">
+                </div>
+                <div class="ss-pane" id="pane-cs-perms" style="display: none; padding: 15px;">
+                    <div id="cs-roles-list-left" class="ios-table-view"></div>
+                    <div id="cs-role-edit-area" style="display:none;">
+                        <button id="cs-roles-pane-mobile-back" class="mobile-back-btn" style="display:block; margin-bottom:15px;">❮ Roles</button>
+                        <h3 id="cs-editing-role-name">Role</h3>
+                        <label class="toggle-row">View <select id="cp-viewChannels"><option value="inherit">/</option><option value="allow">Allow</option><option value="deny">Deny</option></select></label>
+                        <label class="toggle-row"><span id="cs-send-msg-label">Send</span> <select id="cp-sendMessages"><option value="inherit">/</option><option value="allow">Allow</option><option value="deny">Deny</option></select></label>
+                        <button id="cs-save-perms-btn" style="margin-top: 15px;">Save</button>
+                    </div>
+                </div>
+                <div class="ss-pane" id="pane-cs-delete" style="display:none; padding:15px;">
+                    <p>Permanently remove channel.</p>
+                </div>
+            </div>
+            <div class="fs-close-btn desktop-only" id="close-channel-settings-btn-desktop">Done</div>
+        </div>
+    </div>
+
+    <script type="module" src="app.js"></script>
+    <script>
+        document.getElementById('close-user-settings-btn-desktop').onclick = () => document.getElementById('user-settings-modal').style.display = 'none';
+        document.getElementById('close-server-settings-btn-desktop').onclick = () => document.getElementById('server-settings-modal').style.display = 'none';
+        document.getElementById('close-channel-settings-btn-desktop').onclick = () => document.getElementById('channel-settings-modal').style.display = 'none';
+        // iOS Safari fix for active states
+        document.addEventListener("touchstart", function(){}, true);
+    </script>
+</body>
+</html>
