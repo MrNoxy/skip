@@ -60,6 +60,46 @@ input, textarea { font-size: 16px !important; }
 #server-name-display { margin: 0; font-size: 15px; font-weight: bold; margin-right: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
 #server-dropdown-arrow { font-size: 10px; color: var(--text-bright); }
 
+/* Smooth transitions for sidebars and hovers */
+.channel-item, .server-icon, .member-item, .friend-card {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.server-icon:active {
+    transform: translateY(2px);
+}
+
+/* Better Mobile Drawer Feel */
+@media (max-width: 768px) {
+    #main-view-container {
+        transition: transform 0.3s ease;
+        transform: translateX(100%);
+    }
+    body.mobile-chat-active #main-view-container {
+        transform: translateX(0);
+    }
+}
+
+/* Typing Indicator Animation */
+.typing-dots span {
+    animation: typing 1.4s infinite;
+    display: inline-block;
+    margin-right: 2px;
+}
+.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typing {
+    0%, 60%, 100% { transform: translateY(0); }
+    30% { transform: translateY(-4px); }
+}
+
+/* Glassmorphism for Modals */
+.modal-content {
+    backdrop-filter: blur(10px);
+    background: rgba(24, 26, 31, 0.9);
+}
+
 /* Home Sidebar Items */
 #home-sidebar-content { flex-grow: 1; padding: 10px; overflow-y: auto; }
 .home-nav-item { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 4px; cursor: pointer; color: var(--text-main); margin-bottom: 2px; transition: 0.2s; }

@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, updatePassword } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 import { getDatabase, ref, push, onChildAdded, onChildRemoved, onValue, set, get, child, remove, onDisconnect, query, limitToLast, update, orderByChild, startAt, endAt } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { getStorage, ref as sRef, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-storage.js";
 
 // !!! PASTE YOUR FIREBASE CONFIG HERE !!!
 const firebaseConfig = {
@@ -16,6 +17,30 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getDatabase(app);
+const storage = getStorage(app);
+
+
+// --- STORAGE & FILE SYSTEM ---
+async function uploadToStorage(file, folder) {
+    const fileName = `${Date.now()}_${file.name}`;
+    const storageRef = sRef(storage, `${folder}/${fileName}`);
+    const uploadTask = uploadBytesResumable(storageRef, file);
+
+    return new Promise((resolve, reject) => {
+        uploadTask.on('state_changed',
+            (snapshot) => {
+                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                document.getElementById('msg-input').placeholder = `Uploading: ${Math.round(progress)}%...`;
+            },
+            (error) => { customAlert("Upload failed: " + error.message); reject(error); },
+            async () => {
+                const url = await getDownloadURL(uploadTask.snapshot.ref);
+                document.getElementById('msg-input').placeholder = "Message...";
+                resolve(url);
+            }
+        );
+    });
+}
 
 // State Tracking
 let currentServerId = null;
