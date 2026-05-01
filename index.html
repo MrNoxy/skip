@@ -259,7 +259,7 @@
                 </div>
             </div>
             <div style="padding: 15px; position: relative;">
-                <img id="gup-avatar" src="" style="width: 80px; height: 80px; border-radius: 50%; border: 5px solid var(--bg-secondary); position: absolute; top: -50px; left: 15px; background: var(--bg-secondary); object-fit: cover;">
+                <div id="gup-avatar-wrapper" style="position: absolute; top: -50px; left: 15px; z-index: 10;"><img id="gup-avatar" src="" style="width: 80px; height: 80px; border-radius: 50%; border: 5px solid var(--bg-secondary); background: var(--bg-secondary); object-fit: cover;"></div>
                 <div style="margin-top: 35px; background: var(--bg-main); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
                     <h3 id="gup-username" style="margin: 0; font-size: 18px; color: var(--text-bright); font-weight:700;">Username</h3>
                     <div id="gup-tag" style="color: var(--text-muted); font-size: 13px; margin-bottom: 10px;">#0000</div>
@@ -325,11 +325,19 @@
                 <div class="fs-tab active" data-tab="account" id="tab-us-account">My Account</div>
                 <div class="fs-tab" data-tab="security" id="tab-us-security">Security</div>
                 <div class="fs-tab" data-tab="emojis" id="tab-us-emojis">Personal Emojis</div>
+		<div class="fs-tab" data-tab="decorations" id="tab-us-decorations">Avatar Decorations</div>
                 <div style="height: 1px; background: var(--border-color); margin: 10px 0;"></div>
                 <div class="fs-tab" id="us-logout-btn" style="color: var(--accent-danger);">Log Out</div>
             </div>
             
             <div class="fs-content-area" id="us-content">
+		<div class="ss-pane" id="pane-us-decorations" style="display: none;">
+    			<h3 style="color:var(--text-muted); font-size:11px; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:15px;">Shop / Inventory</h3>
+    			<p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">Equip an animated avatar decoration to show off in chat and profiles.</p>
+    
+    			<div id="us-decorations-grid" style="display: flex; flex-wrap: wrap; gap: 15px;">
+        		</div>
+		</div>
                 <div style="display: flex; align-items: center; margin-bottom: 20px;">
                     <button class="mobile-back-btn fs-mobile-back" id="us-mobile-back">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>

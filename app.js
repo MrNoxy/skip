@@ -43,6 +43,7 @@ let serverRolesCache = {};
 let globalUsersCache = {};
 let activeFriendsData = [];
 let globalEmojisCache = {};
+let globalDecorationsCache = {};
 
 let unsubscribeMessages = null;
 let unsubscribeMessagesRemoved = null;
@@ -316,7 +317,25 @@ window.showGlobalUserProfile = async function (email, event) {
 
         nameEl.innerText = uData.username;
         tagEl.innerText = `#${uData.tag}`;
-        avatarEl.src = uData.avatar;
+        
+        // --- NEW DECORATION CODE ---
+        // Instead of just setting the image source, we inject the whole avatar container
+        const avatarContainerWrapper = avatarEl.parentElement;
+        // Make sure the wrapper isn't creating duplicate containers
+        avatarContainerWrapper.innerHTML = getAvatarHTML(uData, 'avatar-large');
+        
+        // We need to re-apply the specific positioning that the popout uses
+        const newAvatarContainer = avatarContainerWrapper.querySelector('.avatar-container');
+        if(newAvatarContainer) {
+            newAvatarContainer.style.position = 'absolute';
+            newAvatarContainer.style.top = '-50px';
+            newAvatarContainer.style.left = '15px';
+            newAvatarContainer.style.border = '5px solid var(--bg-secondary)';
+            newAvatarContainer.style.borderRadius = '50%';
+            newAvatarContainer.style.background = 'var(--bg-secondary)';
+        }
+        // ---------------------------
+        
         bannerEl.style.backgroundImage = 'none';
 
         if (currentServerId) {
@@ -601,6 +620,7 @@ onAuthStateChanged(auth, async (user) => {
         });
 
         onValue(ref(db, 'emojis'), snap => { globalEmojisCache = snap.val() || {}; });
+	onValue(ref(db, 'decorations'), snap => { globalDecorationsCache = snap.val() || {}; loadDecorationsUI(); });
 
         const connectedRef = ref(db, '.info/connected');
         onValue(connectedRef, (snap) => {
@@ -738,6 +758,7 @@ function loadPersonalEmojis() {
         }
     });
 }
+
 
 document.getElementById('us-emoji-file')?.addEventListener('change', (e) => {
     const file = e.target.files[0];
@@ -885,6 +906,78 @@ document.getElementById('add-friend-btn-green')?.addEventListener('click', () =>
             showToast(`Friend request sent to ${inputTag}!`, 'success');
         } else { customAlert("User not found.", "Error"); }
     });
+});
+
+function getAvatarHTML(user, sizeClass = 'avatar-small') {
+    if (!user) return '';
+    let decHtml = '';
+    
+    if (user.decorationId && globalDecorationsCache[user.decorationId]) {
+        const dec = globalDecorationsCache[user.decorationId];
+        if (dec.layers) {
+            dec.layers.forEach(layer => {
+                const animStyle = layer.anim !== 'none' 
+                    ? `animation: dec-${layer.anim} ${layer.duration}s infinite ${layer.anim==='spin'?'linear':'ease-in-out'};` 
+                    : '';
+                decHtml += `
+                <div class="avatar-decoration-wrapper" style="transform: translate(${layer.x}px, ${layer.y}px) scale(${layer.scale});">
+                    <img src="${layer.url}" class="avatar-decoration" style="${animStyle}">
+                </div>`;
+            });
+        }
+    }
+    
+    const status = user.status || 'offline';
+    const avatarUrl = user.avatar || 'https://ui-avatars.com/api/?name=U';
+    
+    return `
+    <div class="avatar-container" style="position:relative; width: ${sizeClass === 'avatar-large' ? '64px' : '32px'}; height: ${sizeClass === 'avatar-large' ? '64px' : '32px'};">
+        <img src="${avatarUrl}" class="${sizeClass}" style="object-fit:cover; width:100%; height:100%;">
+        ${decHtml}
+        <div class="status-indicator status-${status}" style="z-index: 3;"></div>
+    </div>`;
+}
+
+function loadDecorationsUI() {
+    const grid = document.getElementById('us-decorations-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    
+    // Add a "None" option
+    const noneDiv = document.createElement('div');
+    noneDiv.style.cssText = `padding: 10px; border-radius: 8px; border: 2px solid ${!myProfile.decorationId ? 'var(--accent-primary)' : 'var(--border-color)'}; background: var(--bg-main); cursor: pointer; text-align: center; width: 100px;`;
+    noneDiv.innerHTML = `<div style="width: 64px; height: 64px; margin: 0 auto 10px; border-radius: 50%; background: var(--bg-tertiary);"></div><div style="font-size: 12px; color: var(--text-bright);">None</div>`;
+    noneDiv.onclick = () => {
+        update(ref(db, `users/${currentUserSafeEmail}`), { decorationId: null });
+        showToast('Decoration removed.', 'info');
+    };
+    grid.appendChild(noneDiv);
+
+    // Loop through database decorations
+    Object.entries(globalDecorationsCache).forEach(([decId, decData]) => {
+        const isActive = myProfile.decorationId === decId;
+        const div = document.createElement('div');
+        div.style.cssText = `padding: 10px; border-radius: 8px; border: 2px solid ${isActive ? 'var(--accent-primary)' : 'var(--border-color)'}; background: var(--bg-main); cursor: pointer; text-align: center; width: 100px; transition: 0.2s;`;
+        
+        // Use our helper to render a preview using the user's current avatar
+        div.innerHTML = `
+            <div style="display:flex; justify-content:center; margin-bottom: 10px;">
+                ${getAvatarHTML({ ...myProfile, decorationId: decId, status: 'offline' }, 'avatar-large')}
+            </div>
+            <div style="font-size: 12px; color: var(--text-bright);">${decData.name || 'Decoration'}</div>
+        `;
+        
+        div.onclick = () => {
+            update(ref(db, `users/${currentUserSafeEmail}`), { decorationId: decId });
+            showToast('Decoration equipped!', 'success');
+        };
+        grid.appendChild(div);
+    });
+}
+
+// Make sure to call loadDecorationsUI when the user clicks the decorations tab
+document.querySelector('.fs-tab[data-tab="decorations"]')?.addEventListener('click', () => {
+    loadDecorationsUI();
 });
 
 function loadFriendsList() {
@@ -1491,7 +1584,14 @@ function loadMemberList(serverId) {
             listContent.appendChild(catDiv);
             group.members.forEach(m => {
                 const mDiv = document.createElement('div'); mDiv.className = 'member-item';
-                mDiv.innerHTML = `<div class="avatar-container"><img src="${m.data.avatar}" class="avatar-small" style="object-fit:cover;"><div class="status-indicator status-${m.status}"></div></div><div class="member-username" style="color:${m.nameColor};">${m.data.username}</div>`;
+                
+                // --- NEW DECORATION CODE ---
+                // We merge m.data and m.status so the helper function gets everything it needs
+                const userObjForAvatar = { ...m.data, status: m.status };
+                
+                mDiv.innerHTML = `${getAvatarHTML(userObjForAvatar, 'avatar-small')}<div class="member-username" style="color:${m.nameColor};">${m.data.username}</div>`;
+                // ---------------------------
+
                 mDiv.addEventListener('click', (e) => showGlobalUserProfile(m.email, e));
                 listContent.appendChild(mDiv);
             });
@@ -1823,10 +1923,22 @@ async function createMessageDOM(msgId, data, prevSender, prevTime) {
 
     if (!isConsecutive) {
         const replyHtml = data.replyTo ? `<div class="reply-context"><strong>@${data.replyTo.username}</strong> ${data.replyTo.text}</div>` : "";
-        const headerHtml = `${replyHtml}<div class="message-header"><img src="${data.avatar}" class="avatar-small" style="cursor:pointer;object-fit:cover;" onclick="showGlobalUserProfile('${data.sender}',event)"><span class="message-sender" style="color:${nameColor};cursor:pointer;" onclick="showGlobalUserProfile('${data.sender}',event)">${data.username}</span><span class="message-time" title="${fullTime}">${timeStr}</span></div>`;
+        
+        // --- NEW DECORATION CODE ---
+        // We fetch the user's data from the cache to see if they have a decoration equipped
+        const userCacheObj = globalUsersCache[data.sender] || { avatar: data.avatar, status: 'offline' };
+        const avatarWithDec = getAvatarHTML(userCacheObj, 'avatar-small');
+        
+        // We wrap the new avatar in a div that keeps the click event to open the profile
+        const headerHtml = `${replyHtml}<div class="message-header">
+            <div style="cursor:pointer;" onclick="showGlobalUserProfile('${data.sender}',event)">${avatarWithDec}</div>
+            <span class="message-sender" style="color:${nameColor};cursor:pointer;" onclick="showGlobalUserProfile('${data.sender}',event)">${data.username}</span>
+            <span class="message-time" title="${fullTime}">${timeStr}</span>
+        </div>`;
+        // ---------------------------
+
         msgElement.innerHTML = `${actionsHtml}${headerHtml}<div class="msg-content-wrapper">${buildRes.html}</div>`;
-    } else {
-        msgElement.innerHTML = `${actionsHtml}<div class="msg-content-wrapper">${buildRes.html}</div>`;
+    } else {        msgElement.innerHTML = `${actionsHtml}<div class="msg-content-wrapper">${buildRes.html}</div>`;
     }
 
     const reactionsDiv = document.createElement('div'); reactionsDiv.className = 'reactions-container'; reactionsDiv.id = `reactions-${msgId}`;
