@@ -612,10 +612,24 @@ onAuthStateChanged(auth, async (user) => {
         onValue(ref(db, `users/${currentUserSafeEmail}`), (snapshot) => {
             if (snapshot.exists()) {
                 myProfile = snapshot.val();
+                
+                // 1. ADD YOURSELF TO THE CACHE (Fixes the "when I send a message" bug!)
+                globalUsersCache[currentUserSafeEmail] = myProfile;
+
+                // 2. Update the text
                 document.getElementById('user-display').innerText = myProfile.username;
                 document.getElementById('user-tag-display').innerText = `#${myProfile.tag}`;
-                document.getElementById('my-avatar').src = myProfile.avatar;
-                document.getElementById('my-status-indicator').className = `status-indicator status-${myProfile.status || 'online'}`;
+                
+                // 3. Update the bottom-left avatar panel to use the decoration helper
+                const userControls = document.getElementById('user-controls');
+                const oldAvatar = userControls.querySelector('.avatar-container');
+                if (oldAvatar) {
+                    oldAvatar.outerHTML = getAvatarHTML(myProfile, 'avatar-small');
+                    // Re-bind the click event for the status popup since we replaced the HTML
+                    userControls.querySelector('.status-indicator').addEventListener('click', (e) => { 
+                        e.stopPropagation(); document.getElementById('status-selector').style.display = 'block'; 
+                    });
+                }
             }
         });
 
@@ -869,8 +883,11 @@ function renderHomeContent() {
             const fEmail = fData.email;
             const u = globalUsersCache[fEmail] || {};
             const div = document.createElement('div'); div.className = 'friend-card';
-            div.innerHTML = `<div class="friend-card-left"><div class="avatar-container"><img src="${u.avatar || ''}" class="avatar-small" style="background:var(--bg-tertiary);"><div class="status-indicator status-${u.status || 'offline'}"></div></div><div><div style="font-weight:600;color:var(--text-bright);">${u.username || '...'}</div><div style="font-size:12px;color:var(--text-muted);">${u.status || 'offline'}</div></div></div>
+            
+            // Replaced the hardcoded avatar container with getAvatarHTML()
+            div.innerHTML = `<div class="friend-card-left">${getAvatarHTML(u, 'avatar-small')}<div><div style="font-weight:600;color:var(--text-bright);">${u.username || '...'}</div><div style="font-size:12px;color:var(--text-muted);">${u.status || 'offline'}</div></div></div>
             <div class="friend-card-right"><div class="action-circle" title="Message" onclick="(async()=>{ const dmId='${[currentUserSafeEmail, fEmail].sort().join('_')}'; await update(ref(db,'users/${currentUserSafeEmail}/friends/${fEmail}'),{dmId,hidden:false,lastActivity:Date.now()}); openDM(dmId,'${fEmail}'); })()"><svg width='18' height='18' viewBox='0 0 24 24' fill='currentColor'><path d='M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z'/></svg></div><div class="action-circle red" title="Remove Friend" onclick="customConfirm('Remove this friend?','Remove Friend',(yes)=>{if(yes){remove(ref(db,'users/${currentUserSafeEmail}/friends/${fEmail}'));remove(ref(db,'users/${fEmail}/friends/${currentUserSafeEmail}'));}})"><svg width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2'/><circle cx='8.5' cy='7' r='4'/><line x1='18' y1='8' x2='23' y2='13'/><line x1='23' y1='8' x2='18' y2='13'/></svg></div></div>`;
+            
             div.addEventListener('contextmenu', (e) => showContextMenu(e, 'friend', fEmail));
             content.appendChild(div);
         });
@@ -1016,19 +1033,25 @@ function loadFriendsList() {
             const cachedUser = globalUsersCache[fEmail] || {};
             const div = document.createElement('div');
             div.classList.add('channel-item', 'friend-item'); div.id = `dm-${fDataStatic.dmId}`;
-            div.innerHTML = `<div class="avatar-container"><img src="${cachedUser.avatar || ''}" class="avatar-small" id="f-avatar-${fEmail}" style="background:var(--bg-tertiary);"><div class="status-indicator status-${cachedUser.status || 'offline'}" id="status-${fEmail}"></div></div><span id="f-name-${fEmail}" class="c-name">${cachedUser.username || '...'}</span>`;
+            // Use the helper to render the initial DM item
+            div.innerHTML = `${getAvatarHTML(cachedUser, 'avatar-small')}<span id="f-name-${fEmail}" class="c-name">${cachedUser.username || '...'}</span>`;
+            
             div.addEventListener('contextmenu', (e) => showContextMenu(e, 'dm', fEmail));
             let touchTimer;
             div.addEventListener('touchstart', (e) => { touchTimer = setTimeout(() => showContextMenu(e, 'dm', fEmail), 500); });
             div.addEventListener('touchend', () => clearTimeout(touchTimer));
             div.addEventListener('touchmove', () => clearTimeout(touchTimer));
             if (chatType === 'dm' && currentChatId === fDataStatic.dmId) div.classList.add('active');
+            
             onValue(ref(db, `users/${fEmail}`), (userSnap) => {
                 if (userSnap.exists()) {
                     const uData = userSnap.val(); globalUsersCache[fEmail] = uData;
-                    const img = document.getElementById(`f-avatar-${fEmail}`); if (img) img.src = uData.avatar;
+                    
+                    // Update live! Replace the whole avatar container so decorations update instantly
+                    const avatarWrapper = div.querySelector('.avatar-container');
+                    if (avatarWrapper) avatarWrapper.outerHTML = getAvatarHTML(uData, 'avatar-small');
+                    
                     const name = document.getElementById(`f-name-${fEmail}`); if (name) name.innerText = uData.username;
-                    const stat = document.getElementById(`status-${fEmail}`); if (stat) stat.className = `status-indicator status-${uData.status || 'offline'}`;
                     div.onclick = () => openDM(fDataStatic.dmId, fEmail);
                     if (chatType === 'home' && currentHomeTab === 'friends') renderHomeContent();
                 }
