@@ -4,30 +4,45 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Skip | Chat</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
 <body>
+    <div id="toast-container"></div>
+
     <div id="auth-section">
-        <h2 style="color: var(--text-bright);">Welcome to Skip</h2>
-        <input type="email" id="email" placeholder="Email">
-        <input type="password" id="password" placeholder="Password">
-        <button id="login-btn">Login</button>
-        <button id="register-btn" style="background-color: var(--bg-tertiary); margin-top:10px;">Register</button>
+        <div class="auth-logo">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            <span>Skip</span>
+        </div>
+        <h2>Welcome back</h2>
+        <p class="auth-sub">Sign in to continue</p>
+        <input type="email" id="email" placeholder="Email address" autocomplete="email">
+        <input type="password" id="password" placeholder="Password" autocomplete="current-password">
+        <button id="login-btn">Sign In</button>
+        <div class="auth-divider"><span>or</span></div>
+        <button id="register-btn" class="auth-register-btn">Create Account</button>
     </div>
 
     <div id="app-container" style="display: none;">
+        <!-- Far Left: Server Sidebar -->
         <div id="server-sidebar">
             <div class="server-icon active" id="home-btn" title="Direct Messages">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-2.67 0-8 1.34-8 4v3h16v-3c0-2.66-5.33-4-8-4z"/></svg>
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M10 3H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1zm10 0h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1zM10 13H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1zm7 0a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/></svg>
             </div>
+            <div class="server-list-separator"></div>
             <div id="server-list"></div>
-            <div class="server-icon" id="create-server-btn" title="Create Server">+</div>
+            <div class="server-icon" id="create-server-btn" title="Create Server">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </div>
             <div class="server-icon" id="join-server-btn" title="Join Server">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
             </div>
         </div>
 
+        <!-- Middle: Channel Sidebar -->
         <div id="channel-sidebar">
             <div id="sidebar-header">
                 <div style="flex-grow: 1; display:flex; flex-direction:column; justify-content:flex-start; width: 100%;">
@@ -63,11 +78,11 @@
             
             <div id="home-sidebar-content">
                 <div class="home-nav-item active" id="nav-friends-btn">
-                    <svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-2.67 0-8 1.34-8 4v3h16v-3c0-2.66-5.33-4-8-4z"/></svg>
+                    <svg width="20" height="20" viewBox="0 0 24 24"><path fill="currentColor" d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-2.67 0-8 1.34-8 4v3h16v-3c0-2.66-5.33-4-8-4z"/></svg>
                     <span>Friends</span>
                 </div>
                 <div class="home-nav-item" id="nav-requests-btn">
-                    <svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v3h16v-3c0-2.66-5.33-4-8-4z"/></svg>
+                    <svg width="20" height="20" viewBox="0 0 24 24"><path fill="currentColor" d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v3h16v-3c0-2.66-5.33-4-8-4z"/></svg>
                     <span>Requests</span>
                     <div id="fr-badge" class="unread-indicator pill" style="display: none; position: relative; top: 0; right: 0; margin-left: auto;"></div>
                 </div>
@@ -79,7 +94,7 @@
             
             <div id="voice-controls-area" style="display: none;">
                 <div id="voice-status">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-success)" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> 
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-success)" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
                     <span style="margin-left:5px;">Voice Connected</span>
                 </div>
                 <div id="voice-controls">
@@ -95,10 +110,9 @@
                     <div id="my-status-indicator" class="status-indicator status-online" title="Change Status"></div>
                 </div>
                 <div id="user-info">
-                    <div id="user-display" style="font-weight: bold; color: var(--text-bright);">User</div>
-                    <div id="user-tag-display" style="font-size: 12px; color: var(--text-muted);">#0000</div>
+                    <div id="user-display" style="font-weight: 600; color: var(--text-bright); font-size:14px;">User</div>
+                    <div id="user-tag-display" style="font-size: 11px; color: var(--text-muted);">#0000</div>
                 </div>
-
                 <div id="status-selector" style="display:none;">
                     <div class="status-option" data-status="online">🟢 Online</div>
                     <div class="status-option" data-status="idle">🌙 Idle</div>
@@ -110,26 +124,27 @@
 
         <div id="main-view-container" style="flex-grow: 1; display: flex; position: relative;">
             
+            <!-- Home / Friends View -->
             <div id="home-area" style="display: flex; flex-direction: column; width: 100%;">
                 <div id="home-header" style="padding: 15px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center;">
                     <button id="mobile-back-btn-home" class="mobile-back-btn" title="Back">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
                     </button>
                     <div id="home-header-friends" style="display: flex; align-items: center; width: 100%;">
-                        <svg width="24" height="24" viewBox="0 0 24 24" style="color: var(--text-muted);"><path fill="currentColor" d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-2.67 0-8 1.34-8 4v3h16v-3c0-2.66-5.33-4-8-4z"/></svg>
-                        <span style="font-weight: bold; margin-left: 10px; font-size: 16px; color: var(--text-bright);">Friends</span>
+                        <svg width="22" height="22" viewBox="0 0 24 24" style="color: var(--text-muted);"><path fill="currentColor" d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-2.67 0-8 1.34-8 4v3h16v-3c0-2.66-5.33-4-8-4z"/></svg>
+                        <span style="font-weight: 600; margin-left: 10px; font-size: 16px; color: var(--text-bright);">Friends</span>
                         <div class="header-divider"></div>
                         <button id="add-friend-btn-green" class="green-btn">Add Friend</button>
                     </div>
                     <div id="home-header-requests" style="display: none; align-items: center; width: 100%;">
-                        <svg width="24" height="24" viewBox="0 0 24 24" style="color: var(--text-muted);"><path fill="currentColor" d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v3h16v-3c0-2.66-5.33-4-8-4z"/></svg>
-                        <span style="font-weight: bold; margin-left: 10px; font-size: 16px; color: var(--text-bright);">Friend Requests</span>
+                        <svg width="22" height="22" viewBox="0 0 24 24" style="color: var(--text-muted);"><path fill="currentColor" d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v3h16v-3c0-2.66-5.33-4-8-4z"/></svg>
+                        <span style="font-weight: 600; margin-left: 10px; font-size: 16px; color: var(--text-bright);">Friend Requests</span>
                     </div>
                 </div>
-                <div id="home-content" style="flex-grow: 1; padding: 20px; overflow-y: auto;">
-                    </div>
+                <div id="home-content" style="flex-grow: 1; padding: 20px; overflow-y: auto;"></div>
             </div>
 
+            <!-- Chat Area -->
             <div id="chat-area" style="display: none; flex-direction: column; width: 100%;">
                 <div id="chat-header">
                     <button id="mobile-back-btn" class="mobile-back-btn" title="Back">
@@ -139,7 +154,7 @@
                     <span id="invite-code-display" style="display: none;"></span>
                     <div style="flex-grow: 1;"></div>
                     <button id="toggle-members-btn" class="small-btn" style="display: none; font-size: 16px; padding: 4px 8px; background: transparent; color: var(--text-muted);" title="Toggle Member List">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-2.67 0-8 1.34-8 4v3h16v-3c0-2.66-5.33-4-8-4z"/></svg>
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-2.67 0-8 1.34-8 4v3h16v-3c0-2.66-5.33-4-8-4z"/></svg>
                     </button>
                 </div>
                 
@@ -150,7 +165,7 @@
                 <div id="messages"></div>
 
                 <div id="scroll-bottom-btn">
-                    <div class="arrow-down"></div>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
                 </div>
                 
                 <div id="message-input-area">
@@ -161,7 +176,9 @@
 
                     <div id="attachment-preview-area" style="display: none;">
                         <div class="attachment-preview-wrapper">
-                            <img id="attachment-preview-img" src="">
+                            <img id="attachment-preview-img" src="" style="display:none;">
+                            <video id="attachment-preview-vid" controls style="display:none; max-width:200px; max-height:120px; border-radius:6px;"></video>
+                            <div id="attachment-preview-file" style="display:none;"></div>
                             <button id="remove-attachment-btn" title="Remove Attachment">✖</button>
                         </div>
                     </div>
@@ -169,25 +186,50 @@
                     <div id="mention-menu" style="display: none;"></div>
 
                     <div id="message-input-wrapper">
-                        <button id="upload-img-btn" disabled title="Add Attachment">
-                            <svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg>
+                        <!-- Attachment button -->
+                        <button id="upload-file-btn" disabled title="Add Attachment" class="input-action-btn">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
                         </button>
-                        <input type="file" id="image-upload" accept="image/*" style="display: none;">
+                        <input type="file" id="file-upload" accept="image/*,image/gif,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.rar" style="display: none;">
+
                         <textarea id="msg-input" placeholder="Message..." disabled autocomplete="off" rows="1"></textarea>
                         
-                        <button id="emoji-picker-btn" disabled title="Add Emoji" style="background: transparent; color: var(--text-muted); padding:0 10px; cursor: pointer;">
-                            <span id="ep-icon-span"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg></span>
+                        <!-- GIF button -->
+                        <button id="gif-picker-btn" disabled title="Send a GIF" class="input-action-btn gif-btn">
+                            GIF
                         </button>
 
-                        <button id="send-btn" disabled title="Send">
-                            <svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                        <!-- Emoji button -->
+                        <button id="emoji-picker-btn" disabled title="Add Emoji" class="input-action-btn">
+                            <span id="ep-icon-span"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg></span>
+                        </button>
+
+                        <button id="send-btn" disabled title="Send" class="send-btn-styled">
+                            <svg width="20" height="20" viewBox="0 0 24 24"><path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
                         </button>
                     </div>
                     
-                    <div id="emoji-picker" style="display: none;"></div>
+                    <!-- Emoji Picker -->
+                    <div id="emoji-picker" style="display: none;">
+                        <div id="emoji-picker-tabs"></div>
+                        <input type="text" id="emoji-search" placeholder="Search emojis..." autocomplete="off">
+                        <div id="emoji-picker-content"></div>
+                    </div>
+
+                    <!-- GIF Picker -->
+                    <div id="gif-picker" style="display: none;">
+                        <div id="gif-picker-header">
+                            <input type="text" id="gif-search-input" placeholder="Search GIFs (powered by KLIPY)..." autocomplete="off">
+                            <button id="gif-search-btn">🔍</button>
+                        </div>
+                        <div id="gif-grid"></div>
+                        <div id="gif-loading" style="display:none; text-align:center; padding:20px; color:var(--text-muted);">Loading GIFs...</div>
+                        <p style="font-size:10px; color:var(--text-muted); text-align:center; margin:8px 0 4px; padding: 0 8px;">Powered by KLIPY · Replace KLIPY_API_KEY in app.js</p>
+                    </div>
                 </div>
             </div>
 
+            <!-- Member Sidebar -->
             <div id="member-sidebar" style="display: none;">
                 <div id="mobile-member-close-area">
                     <h3 style="margin:0; font-size:14px; color: var(--text-bright);">Members</h3>
@@ -200,12 +242,13 @@
     
     <div id="hidden-audio-container" style="display:none;"></div>
 
+    <!-- User Profile Popout -->
     <div id="global-user-profile-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: transparent; z-index: 4000;">
-        <div class="modal-content profile-popout" style="padding: 0; width: 340px; overflow: hidden; background: var(--bg-secondary); position: absolute; box-shadow: 0 8px 16px rgba(0,0,0,0.4); border: 1px solid var(--border-color);">
-            <div id="gup-banner" style="height: 100px; width: 100%; background: var(--accent-primary); position: relative;">
+        <div class="modal-content profile-popout" style="padding: 0; width: 340px; overflow: hidden; background: var(--bg-secondary); position: absolute; box-shadow: 0 8px 24px rgba(0,0,0,0.6); border: 1px solid var(--border-color); border-radius: 10px;">
+            <div id="gup-banner" style="height: 100px; width: 100%; background: var(--accent-primary); position: relative; border-radius: 10px 10px 0 0; overflow: hidden;">
                 <div style="position: absolute; top: 10px; right: 10px; display: flex; gap: 8px; z-index: 10;">
                     <div class="action-circle message-btn" id="gup-send-message" title="Message" style="background: rgba(0,0,0,0.6); color: white; display: none; width: 32px; height: 32px;">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-2.67 0-8 1.34-8 4v3h16v-3c0-2.66-5.33-4-8-4z"/></svg>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
                     </div>
                     <div class="action-circle green" id="gup-add-friend" title="Add Friend" style="background: rgba(0,0,0,0.6); color: var(--accent-success); display: none; width: 32px; height: 32px;">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
@@ -216,19 +259,19 @@
                 </div>
             </div>
             <div style="padding: 15px; position: relative;">
-                <img id="gup-avatar" src="" style="width: 80px; height: 80px; border-radius: 50%; border: 6px solid var(--bg-secondary); position: absolute; top: -50px; left: 15px; background: var(--bg-secondary); object-fit: cover;">
-                
-                <div style="margin-top: 35px; background: var(--bg-main); padding: 12px; border-radius: 6px; border: 1px solid var(--border-color);">
-                    <h3 id="gup-username" style="margin: 0; font-size: 20px; color: var(--text-bright);">Username</h3>
-                    <div id="gup-tag" style="color: var(--text-muted); font-size: 14px; margin-bottom: 10px;">#0000</div>
+                <img id="gup-avatar" src="" style="width: 80px; height: 80px; border-radius: 50%; border: 5px solid var(--bg-secondary); position: absolute; top: -50px; left: 15px; background: var(--bg-secondary); object-fit: cover;">
+                <div style="margin-top: 35px; background: var(--bg-main); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <h3 id="gup-username" style="margin: 0; font-size: 18px; color: var(--text-bright); font-weight:700;">Username</h3>
+                    <div id="gup-tag" style="color: var(--text-muted); font-size: 13px; margin-bottom: 10px;">#0000</div>
                     <div id="gup-roles-container" style="display: none; border-top: 1px solid var(--border-color); padding-top: 10px;"></div>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- Confirm Modal -->
     <div id="confirm-modal" class="modal-overlay" style="display: none; z-index: 6000;">
-        <div class="modal-content text-center" style="width: 350px;">
+        <div class="modal-content text-center" style="width: 360px;">
             <h3 id="confirm-modal-title" style="color: var(--text-bright);">Confirm</h3>
             <p id="confirm-modal-desc" style="color: var(--text-main); margin-bottom: 20px; font-size: 14px; word-break: break-word;"></p>
             <div style="display: flex; gap: 10px;">
@@ -238,8 +281,9 @@
         </div>
     </div>
 
+    <!-- Input Modal -->
     <div id="input-modal" class="modal-overlay" style="display: none; z-index: 6000;">
-        <div class="modal-content" style="width: 350px;">
+        <div class="modal-content" style="width: 360px;">
             <h3 id="input-modal-title" style="color: var(--text-bright);">Title</h3>
             <p id="input-modal-desc" style="color: var(--text-main); margin-bottom: 15px; font-size: 14px; display: none;"></p>
             <input type="text" id="input-modal-field" placeholder="..." autocomplete="off">
@@ -250,33 +294,36 @@
         </div>
     </div>
 
+    <!-- Alert Modal -->
     <div id="alert-modal" class="modal-overlay" style="display: none; z-index: 6000;">
-        <div class="modal-content text-center" style="width: 350px;">
+        <div class="modal-content text-center" style="width: 360px;">
             <h3 id="alert-modal-title" style="color: var(--text-bright);">Notice</h3>
             <p id="alert-modal-desc" style="color: var(--text-main); margin-bottom: 20px; font-size: 14px; word-break: break-word;"></p>
             <button id="alert-modal-ok" style="width: 100%;">OK</button>
         </div>
     </div>
 
+    <!-- Image / File Viewer -->
     <div id="image-modal" style="display: none;">
         <div id="close-image-modal" title="Close">✖</div>
-        <a id="download-image-btn" href="" download="image.png" title="Download Image">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+        <a id="download-image-btn" href="" download="file" title="Download">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
         </a>
         <img id="enlarged-image" src="" alt="Enlarged">
     </div>
 
     <div id="context-menu" style="display: none;"></div>
 
+    <!-- User Settings Modal -->
     <div id="user-settings-modal" class="fs-modal-overlay">
         <div class="fs-modal-layout">
             <div class="fs-sidebar" id="us-sidebar">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <h3><span style="color: var(--text-muted); font-size: 12px; font-weight:bold; text-transform:uppercase;">User Settings</span></h3>
+                    <h3><span style="color: var(--text-muted); font-size: 11px; font-weight:bold; text-transform:uppercase; letter-spacing: 0.05em;">User Settings</span></h3>
                     <button id="close-user-settings-btn" class="fs-close-btn-mobile" title="Close">✖</button>
                 </div>
-                
                 <div class="fs-tab active" data-tab="account" id="tab-us-account">My Account</div>
+                <div class="fs-tab" data-tab="security" id="tab-us-security">Security</div>
                 <div class="fs-tab" data-tab="emojis" id="tab-us-emojis">Personal Emojis</div>
                 <div style="height: 1px; background: var(--border-color); margin: 10px 0;"></div>
                 <div class="fs-tab" id="us-logout-btn" style="color: var(--accent-danger);">Log Out</div>
@@ -287,33 +334,69 @@
                     <button class="mobile-back-btn fs-mobile-back" id="us-mobile-back">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
                     </button>
-                    <h2 style="margin: 0; color: var(--text-bright);">My Account</h2>
+                    <h2 style="margin: 0; color: var(--text-bright);">User Settings</h2>
                 </div>
                 
+                <!-- Account Tab -->
                 <div class="ss-pane" id="pane-us-account" style="display: block;">
-                    <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
-                        <img id="profile-preview" class="avatar-large" src="https://cdn.pixabay.com/photo/2023/02/18/11/00/icon-7797704_640.png" alt="Avatar">
-                        <input type="file" id="avatar-upload" accept="image/*">
+                    <h3 style="color:var(--text-muted); font-size:11px; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:15px;">Profile Picture</h3>
+                    <div style="display: flex; align-items: center; gap: 20px; margin-bottom: 25px; padding: 15px; background:var(--bg-main); border-radius:8px; border:1px solid var(--border-color);">
+                        <div style="position:relative;">
+                            <img id="profile-preview" class="avatar-large" src="https://cdn.pixabay.com/photo/2023/02/18/11/00/icon-7797704_640.png" alt="Avatar" style="object-fit:cover;">
+                            <div class="avatar-edit-badge" onclick="document.getElementById('avatar-upload').click()" title="Change Avatar">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                            </div>
+                        </div>
+                        <div>
+                            <div style="font-weight:600; color:var(--text-bright); margin-bottom:5px;">Change Avatar</div>
+                            <div style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">Supports JPG, PNG, GIF (animated!)</div>
+                            <label class="file-btn-label" for="avatar-upload">Upload Image</label>
+                            <input type="file" id="avatar-upload" accept="image/*,image/gif" style="display:none;">
+                        </div>
                     </div>
-                    <label style="color: var(--text-main); font-weight: bold; margin-bottom:10px; display:block;">Username</label>
-                    <input type="text" id="edit-username" placeholder="Username" autocomplete="off" class="fs-input">
-                    <label style="color: var(--text-main); font-weight: bold; margin-bottom:10px; display:block;">Tag (4 digits)</label>
-                    <input type="number" id="edit-tag" placeholder="6996" autocomplete="off" class="fs-input">
                     
-                    <div style="margin-top: 30px; padding-top: 15px; border-top: 1px solid var(--border-color);">
+                    <h3 style="color:var(--text-muted); font-size:11px; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:15px;">Profile Info</h3>
+                    <label class="fs-label">Username</label>
+                    <input type="text" id="edit-username" placeholder="Username" autocomplete="off" class="fs-input">
+                    <label class="fs-label">Tag (4 digits)</label>
+                    <input type="number" id="edit-tag" placeholder="6996" autocomplete="off" class="fs-input" min="1000" max="9999">
+                    
+                    <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--border-color);">
                         <button id="save-profile-btn" style="width: auto; margin-left: 0;">Save Changes</button>
                     </div>
                 </div>
 
+                <!-- Security Tab -->
+                <div class="ss-pane" id="pane-us-security" style="display: none;">
+                    <h3 style="color:var(--text-muted); font-size:11px; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:15px;">Change Password</h3>
+                    <div style="padding:15px; background:var(--bg-main); border-radius:8px; border:1px solid var(--border-color); margin-bottom:20px;">
+                        <p style="color:var(--text-muted); font-size:13px; margin:0 0 15px 0;">To change your password, you need to verify your current password first.</p>
+                        <label class="fs-label">Current Password</label>
+                        <input type="password" id="current-password" placeholder="Enter current password" class="fs-input" autocomplete="current-password">
+                        <label class="fs-label">New Password</label>
+                        <input type="password" id="new-password" placeholder="Enter new password (min. 6 chars)" class="fs-input" autocomplete="new-password">
+                        <label class="fs-label">Confirm New Password</label>
+                        <input type="password" id="confirm-new-password" placeholder="Confirm new password" class="fs-input" autocomplete="new-password">
+                        <button id="change-password-btn" style="width:auto; margin-left:0; margin-top:5px;">Update Password</button>
+                    </div>
+
+                    <h3 style="color:var(--text-muted); font-size:11px; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:15px;">Account Info</h3>
+                    <div style="padding:15px; background:var(--bg-main); border-radius:8px; border:1px solid var(--border-color);">
+                        <p style="color:var(--text-muted); font-size:13px; margin:0 0 5px 0;">Logged in as:</p>
+                        <p id="security-email-display" style="color:var(--text-bright); font-size:14px; font-weight:600; margin:0;"></p>
+                    </div>
+                </div>
+
+                <!-- Emojis Tab -->
                 <div class="ss-pane" id="pane-us-emojis" style="display: none;">
                     <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">Upload custom emojis that you can use in any server or DM!</p>
-                    
-                    <div style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center;">
-                        <input type="file" id="us-emoji-file" accept="image/*" style="flex:1; max-width: 200px;">
-                        <input type="text" id="us-emoji-name" placeholder="Emoji Name (no spaces)" class="fs-input" style="flex:1; margin:0;">
-                        <button id="us-upload-emoji-btn" style="margin:0;">Upload</button>
+                    <div style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center; flex-wrap:wrap;">
+                        <label class="file-btn-label" for="us-emoji-file" style="white-space:nowrap;">Choose Image</label>
+                        <input type="file" id="us-emoji-file" accept="image/*" style="display:none;">
+                        <input type="text" id="us-emoji-name" placeholder="Emoji name (no spaces)" class="fs-input" style="flex:1; margin:0; min-width:150px;">
+                        <button id="us-upload-emoji-btn" style="margin:0; white-space:nowrap;">Upload</button>
                     </div>
-                    
+                    <div id="us-emoji-filename" style="font-size:12px; color:var(--text-muted); margin-bottom:10px;"></div>
                     <h3 style="color: var(--text-bright); border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">Your Emojis</h3>
                     <div id="us-emojis-list" style="display: flex; flex-direction: column; gap: 5px;"></div>
                 </div>
@@ -324,6 +407,7 @@
     </div>
 
 
+    <!-- Server Settings Modal -->
     <div id="server-settings-modal" class="fs-modal-overlay">
         <div class="fs-modal-layout">
             <div class="fs-sidebar" id="ss-sidebar">
@@ -331,7 +415,6 @@
                     <h3><span id="ss-header-name">Server Name</span></h3>
                     <button id="close-server-settings-btn" class="fs-close-btn-mobile" title="Close">✖</button>
                 </div>
-                
                 <div class="fs-tab" data-tab="profile" id="tab-ss-profile">Server Profile</div>
                 <div class="fs-tab" data-tab="engagement" id="tab-ss-engagement">Engagement</div>
                 <div class="fs-tab" data-tab="roles" id="tab-ss-roles">Roles</div>
@@ -353,18 +436,17 @@
                     <label style="color: var(--text-main); font-weight: bold; margin-bottom:10px; display:block;">Server Banner</label>
                     <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
                         <div id="ss-banner-preview" style="width: 100%; height: 120px; background-color: var(--bg-tertiary); border: 1px dashed var(--border-color); border-radius: 6px; background-size: cover; background-position: center;"></div>
-                        <input type="file" id="ss-banner-upload" accept="image/*">
+                        <label class="file-btn-label" for="ss-banner-upload" style="white-space:nowrap;">Upload</label>
+                        <input type="file" id="ss-banner-upload" accept="image/*" style="display:none;">
                     </div>
-                    
                     <label style="color: var(--text-main); font-weight: bold; margin-bottom:10px; display:block;">Server Icon</label>
                     <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
                         <div id="ss-icon-preview" class="avatar-large" style="background-color: var(--bg-tertiary); display: flex; justify-content: center; align-items: center; font-size: 24px; background-size: cover; background-position: center; border: 1px solid var(--border-color);"></div>
-                        <input type="file" id="ss-icon-upload" accept="image/*">
+                        <label class="file-btn-label" for="ss-icon-upload" style="white-space:nowrap;">Upload</label>
+                        <input type="file" id="ss-icon-upload" accept="image/*" style="display:none;">
                     </div>
-                    
                     <label style="color: var(--text-main); font-weight: bold; margin-bottom:10px; display:block;">Server Name</label>
                     <input type="text" id="ss-server-name" placeholder="Server Name" autocomplete="off" class="fs-input">
-                    
                     <div style="margin-top: 30px; padding-top: 15px; border-top: 1px solid var(--border-color);">
                         <button id="ss-save-profile-btn" style="width: auto;">Save Profile Changes</button>
                     </div>
@@ -372,13 +454,10 @@
 
                 <div class="ss-pane" id="pane-ss-engagement">
                     <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">Let Skip automatically post system messages when users join or leave this server.</p>
-                    
                     <label style="color: var(--text-main); font-weight: bold; margin-bottom:10px; display:block;">System Messages Channel (Join)</label>
                     <select id="ss-join-channel" class="fs-input"></select>
-                    
                     <label style="color: var(--text-main); font-weight: bold; margin-bottom:10px; margin-top:20px; display:block;">System Messages Channel (Leave)</label>
                     <select id="ss-leave-channel" class="fs-input"></select>
-                    
                     <div style="margin-top: 30px; padding-top: 15px; border-top: 1px solid var(--border-color);">
                         <button id="ss-save-engagement-btn" style="width: auto;">Save Engagement</button>
                     </div>
@@ -386,67 +465,36 @@
 
                 <div class="ss-pane" id="pane-ss-roles" style="height: 100%;">
                     <div style="display: flex; gap: 20px; height: 100%;" id="ss-roles-flex-container">
-                        
                         <div id="ss-roles-list-left" style="width: 250px; display: flex; flex-direction: column; border-right: 1px solid var(--border-color); padding-right: 20px; overflow-y: auto;">
                             <button id="ss-create-role-btn" style="margin: 0 0 15px 0;">+ Create Role</button>
                             <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">Drag roles to reorder. @everyone is always default.</p>
                             <div id="ss-roles-list"></div>
                         </div>
-
                         <div id="ss-role-edit-area" style="flex-grow: 1; display: none; overflow-y: auto; padding-right: 10px;">
                             <button class="mobile-back-btn fs-mobile-back" id="ss-roles-pane-mobile-back" style="display:none; margin-bottom: 15px;">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg> Back to Roles
                             </button>
-                            
                             <h3 style="color: var(--text-bright); margin-top: 0;">Edit Role</h3>
-                            
                             <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-                                <div style="flex: 1;">
-                                    <label style="color: var(--text-main); font-weight: bold; margin-bottom:5px; display:block; font-size:12px;">ROLE NAME</label>
-                                    <input type="text" id="er-name" class="fs-input" style="margin: 0; width: 100%;">
-                                </div>
-                                <div>
-                                    <label style="color: var(--text-main); font-weight: bold; margin-bottom:5px; display:block; font-size:12px;">ROLE COLOR</label>
-                                    <input type="color" id="er-color" class="fs-input" style="width: 60px; height: 40px; padding: 0; cursor: pointer; border: none;">
-                                </div>
+                                <div style="flex: 1;"><label style="color: var(--text-main); font-weight: bold; margin-bottom:5px; display:block; font-size:12px;">ROLE NAME</label><input type="text" id="er-name" class="fs-input" style="margin: 0; width: 100%;"></div>
+                                <div><label style="color: var(--text-main); font-weight: bold; margin-bottom:5px; display:block; font-size:12px;">ROLE COLOR</label><input type="color" id="er-color" class="fs-input" style="width: 60px; height: 40px; padding: 0; cursor: pointer; border: none;"></div>
                             </div>
-
-                            <label class="toggle-row">
-                                <div>
-                                    <strong style="color: var(--text-bright);">Display role separately</strong>
-                                    <span style="color: var(--text-muted); font-size: 12px; display:block;">Display members with this role separately from online members</span>
-                                </div>
-                                <input type="checkbox" id="er-hoist">
-                            </label>
-                            
-                            <label class="toggle-row">
-                                <div>
-                                    <strong style="color: var(--text-bright);">Allow @mentions</strong>
-                                    <span style="color: var(--text-muted); font-size: 12px; display:block;">Allow anyone to @mention this role</span>
-                                </div>
-                                <input type="checkbox" id="er-mentionable">
-                            </label>
-
+                            <label class="toggle-row"><div><strong style="color: var(--text-bright);">Display role separately</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Display members with this role separately from online members</span></div><input type="checkbox" id="er-hoist"></label>
+                            <label class="toggle-row"><div><strong style="color: var(--text-bright);">Allow @mentions</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allow anyone to @mention this role</span></div><input type="checkbox" id="er-mentionable"></label>
                             <h4 style="color: var(--text-muted); text-transform: uppercase; font-size: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px; margin-top: 30px;">General Permissions</h4>
-                            
                             <label class="toggle-row"><div><strong style="color: var(--text-bright);">View Channels</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to view channels by default.</span></div><input type="checkbox" id="p-viewChannels"></label>
                             <label class="toggle-row"><div><strong style="color: var(--text-bright);">Send Messages</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to send text messages.</span></div><input type="checkbox" id="p-sendMessages"></label>
-                            
                             <h4 style="color: var(--text-muted); text-transform: uppercase; font-size: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px; margin-top: 30px;">Moderation Permissions</h4>
-                            
                             <label class="toggle-row"><div><strong style="color: var(--text-bright);">Kick Members</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to remove other users from the server.</span></div><input type="checkbox" id="p-kickMembers"></label>
                             <label class="toggle-row"><div><strong style="color: var(--text-bright);">Ban Members</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to permanently ban other users.</span></div><input type="checkbox" id="p-banMembers"></label>
                             <label class="toggle-row"><div><strong style="color: var(--text-bright);">Timeout Members</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to temporarily restrict users from sending messages.</span></div><input type="checkbox" id="p-timeoutMembers"></label>
-
                             <h4 style="color: var(--text-muted); text-transform: uppercase; font-size: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px; margin-top: 30px;">Advanced Permissions</h4>
-
-                            <label class="toggle-row"><div><strong style="color: var(--text-bright);">Manage Channels</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to create, edit, or delete channels/categories.</span></div><input type="checkbox" id="p-manageChannels"></label>
-                            <label class="toggle-row"><div><strong style="color: var(--text-bright);">Manage Roles</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to create, edit, or assign roles.</span></div><input type="checkbox" id="p-manageRoles"></label>
-                            <label class="toggle-row"><div><strong style="color: var(--text-bright);">Manage Messages</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to delete messages by other users.</span></div><input type="checkbox" id="p-manageMessages"></label>
-                            <label class="toggle-row"><div><strong style="color: var(--text-bright);">Manage Server Profile</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to change server name, icon, and banner.</span></div><input type="checkbox" id="p-manageServerProfile"></label>
-                            <label class="toggle-row"><div><strong style="color: var(--text-bright);">Manage Server Overview</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to modify engagement logic (join/leave channels).</span></div><input type="checkbox" id="p-manageServerOverview"></label>
-                            <label class="toggle-row" style="margin-bottom: 30px;"><div><strong style="color: var(--accent-danger);">Administrator (Manage All Settings)</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Grants all permissions and bypasses overrides.</span></div><input type="checkbox" id="p-manageServerSettings"></label>
-
+                            <label class="toggle-row"><div><strong style="color: var(--text-bright);">Manage Channels</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Create, edit, or delete channels/categories.</span></div><input type="checkbox" id="p-manageChannels"></label>
+                            <label class="toggle-row"><div><strong style="color: var(--text-bright);">Manage Roles</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Create, edit, or assign roles.</span></div><input type="checkbox" id="p-manageRoles"></label>
+                            <label class="toggle-row"><div><strong style="color: var(--text-bright);">Manage Messages</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Delete messages by other users.</span></div><input type="checkbox" id="p-manageMessages"></label>
+                            <label class="toggle-row"><div><strong style="color: var(--text-bright);">Manage Server Profile</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Change server name, icon, and banner.</span></div><input type="checkbox" id="p-manageServerProfile"></label>
+                            <label class="toggle-row"><div><strong style="color: var(--text-bright);">Manage Server Overview</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Modify engagement logic.</span></div><input type="checkbox" id="p-manageServerOverview"></label>
+                            <label class="toggle-row" style="margin-bottom: 30px;"><div><strong style="color: var(--accent-danger);">Administrator</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Grants all permissions and bypasses overrides.</span></div><input type="checkbox" id="p-manageServerSettings"></label>
                             <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--border-color);">
                                 <button id="save-role-settings-btn" style="margin-left: 0;">Save Role</button>
                                 <button id="delete-role-btn" style="background-color: transparent; border: 1px solid var(--accent-danger); color: var(--accent-danger);">Delete Role</button>
@@ -457,13 +505,12 @@
 
                 <div class="ss-pane" id="pane-ss-emojis" style="display: none;">
                     <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">Upload custom emojis that anyone in this server can use!</p>
-                    
-                    <div style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center;">
-                        <input type="file" id="ss-emoji-file" accept="image/*" style="flex:1; max-width: 200px;">
-                        <input type="text" id="ss-emoji-name" placeholder="Emoji Name (no spaces)" class="fs-input" style="flex:1; margin:0;">
+                    <div style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center; flex-wrap:wrap;">
+                        <label class="file-btn-label" for="ss-emoji-file">Choose Image</label>
+                        <input type="file" id="ss-emoji-file" accept="image/*" style="display:none;">
+                        <input type="text" id="ss-emoji-name" placeholder="Emoji Name (no spaces)" class="fs-input" style="flex:1; margin:0; min-width:150px;">
                         <button id="ss-upload-emoji-btn" style="margin:0;">Upload</button>
                     </div>
-                    
                     <h3 style="color: var(--text-bright); border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">Server Emojis</h3>
                     <div id="ss-emojis-list" style="display: flex; flex-direction: column; gap: 5px;"></div>
                 </div>
@@ -484,6 +531,7 @@
         </div>
     </div>
 
+    <!-- Channel Settings Modal -->
     <div id="channel-settings-modal" class="fs-modal-overlay">
         <div class="fs-modal-layout">
             <div class="fs-sidebar" id="cs-sidebar">
@@ -491,7 +539,6 @@
                     <h3><span id="cs-header-name"># channel</span></h3>
                     <button id="close-channel-settings-btn" class="fs-close-btn-mobile" title="Close">✖</button>
                 </div>
-                
                 <div class="fs-tab active" data-tab="overview" id="tab-cs-overview">Overview</div>
                 <div class="fs-tab" data-tab="perms" id="tab-cs-perms">Permissions</div>
                 <div style="height: 1px; background: var(--border-color); margin: 10px 0;"></div>
@@ -509,7 +556,6 @@
                 <div class="ss-pane" id="pane-cs-overview" style="display: block;">
                     <label style="color: var(--text-main); font-weight: bold; margin-bottom:10px; display:block;">Channel Name</label>
                     <input type="text" id="cs-channel-name" placeholder="new-channel" autocomplete="off" class="fs-input">
-                    
                     <div style="margin-top: 30px; padding-top: 15px; border-top: 1px solid var(--border-color);">
                         <button id="cs-save-overview-btn" style="width: auto; margin-left: 0;">Save Changes</button>
                     </div>
@@ -517,32 +563,15 @@
 
                 <div class="ss-pane" id="pane-cs-perms" style="display: none; height: 100%;">
                     <p style="color: var(--text-muted); font-size:14px; margin-bottom:20px;">Override permissions for specific roles in this channel.</p>
-                    
                     <div style="display: flex; gap: 20px; height: calc(100% - 50px);" id="cs-roles-flex-container">
-                        <div id="cs-roles-list-left" style="width: 250px; display: flex; flex-direction: column; border-right: 1px solid var(--border-color); padding-right: 20px; overflow-y: auto;">
-                            </div>
-
+                        <div id="cs-roles-list-left" style="width: 250px; display: flex; flex-direction: column; border-right: 1px solid var(--border-color); padding-right: 20px; overflow-y: auto;"></div>
                         <div id="cs-role-edit-area" style="flex-grow: 1; display: none; overflow-y: auto; padding-right: 10px;">
                             <button class="mobile-back-btn fs-mobile-back" id="cs-roles-pane-mobile-back" style="display:none; margin-bottom: 15px;">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg> Back to Roles
                             </button>
-                            
                             <h3 style="color: var(--text-bright); margin-top: 0;" id="cs-editing-role-name">Role Name</h3>
-                            
-                            <label class="toggle-row">
-                                <div><strong style="color: var(--text-bright);">View Channel</strong></div>
-                                <select id="cp-viewChannels" style="padding:5px; background:var(--bg-main); color:var(--text-bright); border:1px solid var(--border-color); border-radius:4px;">
-                                    <option value="inherit">/</option><option value="allow">✔ Allow</option><option value="deny">✖ Deny</option>
-                                </select>
-                            </label>
-                            
-                            <label class="toggle-row">
-                                <div><strong id="cs-send-msg-label" style="color: var(--text-bright);">Send Messages</strong></div>
-                                <select id="cp-sendMessages" style="padding:5px; background:var(--bg-main); color:var(--text-bright); border:1px solid var(--border-color); border-radius:4px;">
-                                    <option value="inherit">/</option><option value="allow">✔ Allow</option><option value="deny">✖ Deny</option>
-                                </select>
-                            </label>
-
+                            <label class="toggle-row"><div><strong style="color: var(--text-bright);">View Channel</strong></div><select id="cp-viewChannels" style="padding:5px; background:var(--bg-main); color:var(--text-bright); border:1px solid var(--border-color); border-radius:4px;"><option value="inherit">/</option><option value="allow">✔ Allow</option><option value="deny">✖ Deny</option></select></label>
+                            <label class="toggle-row"><div><strong id="cs-send-msg-label" style="color: var(--text-bright);">Send Messages</strong></div><select id="cp-sendMessages" style="padding:5px; background:var(--bg-main); color:var(--text-bright); border:1px solid var(--border-color); border-radius:4px;"><option value="inherit">/</option><option value="allow">✔ Allow</option><option value="deny">✖ Deny</option></select></label>
                             <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--border-color);">
                                 <button id="cs-save-perms-btn" style="margin-left: 0;">Save Permissions</button>
                             </div>
