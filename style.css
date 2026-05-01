@@ -337,7 +337,7 @@ input, textarea, select { font-family: inherit; font-size: 14px !important; }
 .input-action-btn { background: transparent; color: var(--text-muted); padding: 6px; margin: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-sm); transition: background var(--transition), color var(--transition); flex-shrink: 0; border: none; }
 .input-action-btn:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-bright); }
 .input-action-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-.gif-btn { font-size: 11px; font-weight: 800; letter-spacing: 0.03em; padding: 5px 7px; border-radius: 4px; color: var(--accent-primary); border: 1px solid rgba(79,129,214,0.4) !important; }
+.gif-btn { display:flex; align-items:center; font-size: 11px; font-weight: 800; letter-spacing: 0.03em; padding: 5px 7px; border-radius: 4px; color: var(--accent-primary); border: 1px solid rgba(79,129,214,0.4) !important; }
 .gif-btn:hover:not(:disabled) { background: rgba(79,129,214,0.15) !important; color: var(--accent-primary) !important; }
 .send-btn-styled { background: var(--accent-primary) !important; color: white !important; padding: 8px !important; margin: 0 !important; border-radius: var(--radius-sm) !important; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background var(--transition), transform 0.1s !important; }
 .send-btn-styled:hover:not(:disabled) { background: var(--accent-hover) !important; transform: scale(1.05); }
