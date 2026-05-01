@@ -633,6 +633,9 @@ onAuthStateChanged(auth, async (user) => {
             }
         });
 
+	// --- FIX: RESTORE EMOJI CACHE DOWNLOAD ---
+        onValue(ref(db, 'emojis'), snap => { globalEmojisCache = snap.val() || {}; });
+
         // --- NEW: DYNAMIC CSS INJECTOR ---
         onValue(ref(db, 'decorations'), snap => { 
             globalDecorationsCache = snap.val() || {}; 
@@ -699,7 +702,10 @@ function setupUserSettingsTabs() {
 setupUserSettingsTabs();
 
 document.getElementById('us-mobile-back')?.addEventListener('click', () => { document.querySelector('#user-settings-modal .fs-modal-layout').classList.remove('mobile-viewing-content'); });
+// Mobile Close Button
 document.getElementById('close-user-settings-btn')?.addEventListener('click', () => document.getElementById('user-settings-modal').style.display = 'none');
+// Desktop Close Button (Fixes the PC issue)
+document.getElementById('close-user-settings-btn-desktop')?.addEventListener('click', () => document.getElementById('user-settings-modal').style.display = 'none');
 
 document.getElementById('user-controls')?.addEventListener('click', (e) => {
     if (e.target.id === 'my-status-indicator' || e.target.closest('#status-selector')) return;
@@ -1967,18 +1973,16 @@ async function createMessageDOM(msgId, data, prevSender, prevTime) {
     if (!isConsecutive) {
         const replyHtml = data.replyTo ? `<div class="reply-context"><strong>@${data.replyTo.username}</strong> ${data.replyTo.text}</div>` : "";
         
-        // --- NEW DECORATION CODE ---
-        // We fetch the user's data from the cache to see if they have a decoration equipped
+        // --- FIX: Use our Decoration Engine for Chat Avatars ---
         const userCacheObj = globalUsersCache[data.sender] || { avatar: data.avatar, status: 'offline' };
         const avatarWithDec = getAvatarHTML(userCacheObj, 'avatar-small');
         
-        // We wrap the new avatar in a div that keeps the click event to open the profile
         const headerHtml = `${replyHtml}<div class="message-header">
             <div style="cursor:pointer;" onclick="showGlobalUserProfile('${data.sender}',event)">${avatarWithDec}</div>
             <span class="message-sender" style="color:${nameColor};cursor:pointer;" onclick="showGlobalUserProfile('${data.sender}',event)">${data.username}</span>
             <span class="message-time" title="${fullTime}">${timeStr}</span>
         </div>`;
-        // ---------------------------
+        // --------------------------------------------------------
 
         msgElement.innerHTML = `${actionsHtml}${headerHtml}<div class="msg-content-wrapper">${buildRes.html}</div>`;
     } else {        msgElement.innerHTML = `${actionsHtml}<div class="msg-content-wrapper">${buildRes.html}</div>`;
