@@ -619,8 +619,28 @@ onAuthStateChanged(auth, async (user) => {
             }
         });
 
-        onValue(ref(db, 'emojis'), snap => { globalEmojisCache = snap.val() || {}; });
-	onValue(ref(db, 'decorations'), snap => { globalDecorationsCache = snap.val() || {}; loadDecorationsUI(); });
+        // --- NEW: DYNAMIC CSS INJECTOR ---
+        onValue(ref(db, 'decorations'), snap => { 
+            globalDecorationsCache = snap.val() || {}; 
+            
+            // 1. Create a <style> tag if it doesn't exist
+            let styleTag = document.getElementById('dynamic-decorations-css');
+            if (!styleTag) {
+                styleTag = document.createElement('style');
+                styleTag.id = 'dynamic-decorations-css';
+                document.head.appendChild(styleTag);
+            }
+            
+            // 2. Combine all the CSS from Firebase and inject it!
+            let fullCSS = '';
+            Object.values(globalDecorationsCache).forEach(dec => {
+                if (dec.css) fullCSS += dec.css + '\n';
+            });
+            styleTag.innerHTML = fullCSS;
+
+            // 3. Update the UI
+            loadDecorationsUI(); 
+        });
 
         const connectedRef = ref(db, '.info/connected');
         onValue(connectedRef, (snap) => {
@@ -912,16 +932,16 @@ function getAvatarHTML(user, sizeClass = 'avatar-small') {
     if (!user) return '';
     let decHtml = '';
     
+    // Check if user has a decoration and it exists in our cache
     if (user.decorationId && globalDecorationsCache[user.decorationId]) {
         const dec = globalDecorationsCache[user.decorationId];
         if (dec.layers) {
-            dec.layers.forEach(layer => {
-                const animStyle = layer.anim !== 'none' 
-                    ? `animation: dec-${layer.anim} ${layer.duration}s infinite ${layer.anim==='spin'?'linear':'ease-in-out'};` 
-                    : '';
+            // Loop through the new Studio Pro layers
+            dec.layers.forEach((layer, index) => {
+                const animName = `anim_${user.decorationId}_layer_${index}`;
                 decHtml += `
-                <div class="avatar-decoration-wrapper" style="transform: translate(${layer.x}px, ${layer.y}px) scale(${layer.scale});">
-                    <img src="${layer.url}" class="avatar-decoration" style="${animStyle}">
+                <div class="avatar-decoration-wrapper">
+                    <img src="${layer.url}" class="avatar-decoration" style="animation: ${animName} ${layer.duration}s infinite linear;">
                 </div>`;
             });
         }
