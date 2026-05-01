@@ -273,7 +273,7 @@ window.showGlobalUserProfile = async function (email, event) {
 
     const nameEl = document.getElementById('gup-username');
     const tagEl = document.getElementById('gup-tag');
-    const avatarEl = document.getElementById('gup-avatar');
+    
     const bannerEl = document.getElementById('gup-banner');
     const rolesContainer = document.getElementById('gup-roles-container');
     const sendMsgBtn = document.getElementById('gup-send-message');
@@ -318,23 +318,22 @@ window.showGlobalUserProfile = async function (email, event) {
         nameEl.innerText = uData.username;
         tagEl.innerText = `#${uData.tag}`;
         
-        // --- NEW DECORATION CODE ---
-        // Instead of just setting the image source, we inject the whole avatar container
-        const avatarContainerWrapper = avatarEl.parentElement;
-        // Make sure the wrapper isn't creating duplicate containers
-        avatarContainerWrapper.innerHTML = getAvatarHTML(uData, 'avatar-large');
-        
-        // We need to re-apply the specific positioning that the popout uses
-        const newAvatarContainer = avatarContainerWrapper.querySelector('.avatar-container');
-        if(newAvatarContainer) {
-            newAvatarContainer.style.position = 'absolute';
-            newAvatarContainer.style.top = '-50px';
-            newAvatarContainer.style.left = '15px';
-            newAvatarContainer.style.border = '5px solid var(--bg-secondary)';
-            newAvatarContainer.style.borderRadius = '50%';
-            newAvatarContainer.style.background = 'var(--bg-secondary)';
+        // --- FIX: Target the wrapper directly so it doesn't crash on the 2nd click! ---
+        const avatarContainerWrapper = document.getElementById('gup-avatar-wrapper');
+        if (avatarContainerWrapper) {
+            avatarContainerWrapper.innerHTML = getAvatarHTML(uData, 'avatar-large');
+            
+            // Force the 80x80 size and centering specific to the profile popout
+            const newAvatarContainer = avatarContainerWrapper.querySelector('.avatar-container');
+            if (newAvatarContainer) {
+                newAvatarContainer.style.width = '80px';
+                newAvatarContainer.style.height = '80px';
+                newAvatarContainer.style.border = '5px solid var(--bg-secondary)';
+                newAvatarContainer.style.borderRadius = '50%';
+                newAvatarContainer.style.background = 'var(--bg-secondary)';
+            }
         }
-        // ---------------------------
+        // ----------------------------------------------------------------------------
         
         bannerEl.style.backgroundImage = 'none';
 
@@ -1595,13 +1594,18 @@ document.getElementById('tab-cs-delete')?.addEventListener('click', () => {
 function loadMemberList(serverId) {
     if (unsubscribeMembers) unsubscribeMembers();
     const listContent = document.getElementById('member-list-content');
+    
     unsubscribeMembers = onValue(ref(db, `server_members/${serverId}`), async (membersSnap) => {
-        let groups = { online: { name: "Online", order: 9998, members: [] }, offline: { name: "Offline", order: 9999, members: [] } };
+        // FIX: Give Online/Offline massive negative numbers so custom roles ALWAYS sort above them
+        let groups = { online: { name: "Online", order: -9999998, members: [] }, offline: { name: "Offline", order: -9999999, members: [] } };
+        
         Object.keys(serverRolesCache).forEach(rId => {
             if (serverRolesCache[rId].hoist) groups[rId] = { name: serverRolesCache[rId].name, order: serverRolesCache[rId].order || 0, color: serverRolesCache[rId].color, members: [] };
         });
+        
         const memberPromises = []; currentServerMembersList = [];
         let onlineCount = 0; let totalCount = 0;
+        
         membersSnap.forEach(mSnap => {
             const memberEmail = mSnap.key; const memberInfo = mSnap.val(); totalCount++;
             const p = get(child(ref(db), `users/${memberEmail}`)).then(uSnap => {
@@ -1609,45 +1613,66 @@ function loadMemberList(serverId) {
                     const uData = uSnap.val(); const status = uData.status || 'offline';
                     uData.email = memberEmail; currentServerMembersList.push(uData); globalUsersCache[memberEmail] = uData;
                     if (status !== 'offline' && status !== 'invisible') onlineCount++;
-                    let highestHoistRole = null; let highestHoistOrder = 9999;
+                    
+                    // FIX: Start at negative infinity so the highest number wins
+                    let highestHoistRole = null; let highestHoistOrder = -Infinity;
                     let userRoles = memberInfo.roles ? Object.keys(memberInfo.roles) : (memberInfo.role && memberInfo.role !== 'member' ? [memberInfo.role] : []);
-                    userRoles.forEach(rId => { if (serverRolesCache[rId]?.hoist && serverRolesCache[rId].order < highestHoistOrder) { highestHoistOrder = serverRolesCache[rId].order; highestHoistRole = rId; } });
+                    
+                    userRoles.forEach(rId => { 
+                        if (serverRolesCache[rId]?.hoist && serverRolesCache[rId].order > highestHoistOrder) { 
+                            highestHoistOrder = serverRolesCache[rId].order; 
+                            highestHoistRole = rId; 
+                        } 
+                    });
+                    
                     let targetGroup = 'offline';
-                    if (status !== 'offline' && status !== 'invisible') targetGroup = (highestHoistRole && highestHoistRole !== 'everyone') ? highestHoistRole : 'online';
-                    let nameColor = "var(--text-main)"; let colorOrder = 9999;
-                    userRoles.forEach(rId => { if (serverRolesCache[rId]?.color !== '#abb2bf' && serverRolesCache[rId]?.order < colorOrder) { colorOrder = serverRolesCache[rId].order; nameColor = serverRolesCache[rId].color; } });
+                    if (status !== 'offline' && status !== 'invisible') {
+                        targetGroup = (highestHoistRole && highestHoistRole !== 'everyone') ? highestHoistRole : 'online';
+                    }
+                    
+                    let nameColor = "var(--text-main)"; let colorOrder = -Infinity;
+                    userRoles.forEach(rId => { 
+                        if (serverRolesCache[rId]?.color !== '#abb2bf' && serverRolesCache[rId]?.order > colorOrder) { 
+                            colorOrder = serverRolesCache[rId].order; 
+                            nameColor = serverRolesCache[rId].color; 
+                        } 
+                    });
+                    
                     if (groups[targetGroup]) groups[targetGroup].members.push({ email: memberEmail, data: uData, status, nameColor });
                 }
             });
             memberPromises.push(p);
         });
+        
         await Promise.all(memberPromises);
+        
         document.getElementById('server-stats-display').innerText = `${onlineCount} Online • ${totalCount} Members`;
         document.getElementById('server-stats-display').style.display = 'block';
         listContent.innerHTML = '';
-        const sortedGroupKeys = Object.keys(groups).sort((a, b) => groups[a].order - groups[b].order);
+        
+        // Sort the categories based on hierarchy (Highest order first)
+        const sortedGroupKeys = Object.keys(groups).sort((a, b) => groups[b].order - groups[a].order);
+        
         sortedGroupKeys.forEach(gKey => {
             const group = groups[gKey]; if (group.members.length === 0) return;
+            
+            // Sort members within the category alphabetically
             group.members.sort((a, b) => a.data.username.localeCompare(b.data.username));
+            
             const catDiv = document.createElement('div'); catDiv.className = 'member-category'; catDiv.innerText = `${group.name} — ${group.members.length}`;
             listContent.appendChild(catDiv);
+            
             group.members.forEach(m => {
                 const mDiv = document.createElement('div'); mDiv.className = 'member-item';
-                
-                // --- NEW DECORATION CODE ---
-                // We merge m.data and m.status so the helper function gets everything it needs
                 const userObjForAvatar = { ...m.data, status: m.status };
                 
                 mDiv.innerHTML = `${getAvatarHTML(userObjForAvatar, 'avatar-small')}<div class="member-username" style="color:${m.nameColor};">${m.data.username}</div>`;
-                // ---------------------------
-
                 mDiv.addEventListener('click', (e) => showGlobalUserProfile(m.email, e));
                 listContent.appendChild(mDiv);
             });
         });
     });
 }
-
 // ==========================================
 // --- CHANNELS ---
 // ==========================================
@@ -1973,13 +1998,14 @@ async function createMessageDOM(msgId, data, prevSender, prevTime) {
     if (!isConsecutive) {
         const replyHtml = data.replyTo ? `<div class="reply-context"><strong>@${data.replyTo.username}</strong> ${data.replyTo.text}</div>` : "";
         
-        // --- FIX: Use our Decoration Engine for Chat Avatars ---
-        const userCacheObj = globalUsersCache[data.sender] || { avatar: data.avatar, status: 'offline' };
+        // --- FIX: Sanitize the email so we actually find the user's decorations in the cache! ---
+        const safeSender = sanitizeEmail(data.sender);
+        const userCacheObj = globalUsersCache[safeSender] || { avatar: data.avatar, status: 'offline' };
         const avatarWithDec = getAvatarHTML(userCacheObj, 'avatar-small');
         
         const headerHtml = `${replyHtml}<div class="message-header">
-            <div style="cursor:pointer;" onclick="showGlobalUserProfile('${data.sender}',event)">${avatarWithDec}</div>
-            <span class="message-sender" style="color:${nameColor};cursor:pointer;" onclick="showGlobalUserProfile('${data.sender}',event)">${data.username}</span>
+            <div style="cursor:pointer;" onclick="showGlobalUserProfile('${safeSender}',event)">${avatarWithDec}</div>
+            <span class="message-sender" style="color:${nameColor};cursor:pointer;" onclick="showGlobalUserProfile('${safeSender}',event)">${data.username}</span>
             <span class="message-time" title="${fullTime}">${timeStr}</span>
         </div>`;
         // --------------------------------------------------------
