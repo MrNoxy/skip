@@ -426,7 +426,7 @@ input, textarea, select { font-family: inherit; font-size: 14px !important; }
     transition: border-color var(--transition), box-shadow var(--transition); 
 }
 #message-input-wrapper:focus-within { 
-    border-color: rgba(79,129,214,0.5); 
+    border-color: rgba(255,255,255,0.05); 
     box-shadow: 0 4px 20px rgba(0,0,0,0.6), 0 0 0 3px rgba(79,129,214,0.1);
 }
 #msg-input { flex-grow: 1; background: transparent; border: none; color: var(--text-bright); padding: 8px 6px; outline: none; font-size: 14px; resize: none; overflow-y: auto; max-height: 200px; line-height: 1.5; min-height: 22px; }
@@ -451,9 +451,9 @@ input, textarea, select { font-family: inherit; font-size: 14px !important; }
     border: 1px solid rgba(79,129,214,0.4) !important; 
 }
 .gif-btn:hover:not(:disabled) { background: rgba(79,129,214,0.15) !important; color: var(--accent-primary) !important; }
-.send-btn-styled { background: var(--accent-primary) !important; color: white !important; padding: 8px !important; margin: 0 !important; border-radius: var(--radius-sm) !important; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background var(--transition), transform 0.1s !important; }
-.send-btn-styled:hover:not(:disabled) { background: var(--accent-hover) !important; transform: scale(1.05); }
-.send-btn-styled:disabled { background: var(--bg-hover) !important; transform: none; }
+.send-btn-styled { background: transparent !important; color: white !important; padding: 8px !important; margin: 0 !important; border-radius: var(--radius-sm) !important; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background var(--transition), transform 0.1s !important; }
+.send-btn-styled:hover:not(:disabled) { background: transparent !important; transform: scale(1.05); }
+.send-btn-styled:disabled { background: transparent !important; transform: none; }
 
 /* Reply / Attachment banners */
 #reply-banner, #attachment-preview-area { background: var(--bg-secondary); padding: 8px 14px; z-index: 10; border-radius: var(--radius-sm) var(--radius-sm) 0 0; border: 1px solid var(--border-color); border-bottom: none; display: flex; align-items: center; width: 100%; }
