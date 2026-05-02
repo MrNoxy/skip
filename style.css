@@ -596,6 +596,32 @@ button:disabled { background: var(--bg-tertiary); cursor: not-allowed; color: va
 .mobile-back-btn:hover { color: var(--text-bright); background: transparent; }
 .desktop-only { display: flex; }
 
+/* === STATUS POPUP MENU ENHANCEMENTS === */
+.status-option { 
+    padding: 8px 10px; 
+    cursor: pointer !important; /* Forces the hand pointer */
+    color: var(--text-main); 
+    font-size: 13.5px; 
+    font-weight: 500;
+    border-radius: 4px; 
+    transition: background 0.1s ease, color 0.1s ease; 
+    display: flex; 
+    align-items: center; 
+    gap: 12px; 
+    user-select: none; /* Prevents text highlighting */
+    margin-bottom: 2px;
+}
+
+.status-option:hover { 
+    background: var(--accent-primary) !important; 
+    color: white !important; 
+}
+
+/* Ensure the text is perfectly vertically centered with the icons */
+.status-option span {
+    margin-top: 1px; 
+}
+
 /* === MEDIA: MOBILE === */
 @media (max-width: 768px) {
     #channel-sidebar { width: calc(100vw - 68px); }
