@@ -104,21 +104,34 @@
                 </div>
             </div>
 
-            <div id="user-controls" title="Click to edit profile">
+            
+        </div>
+        <div id="user-controls-dock">
+            <div class="uc-profile-section" id="uc-profile-trigger" title="User Menu">
                 <div class="avatar-container">
                     <img id="my-avatar" class="avatar-small" src="" alt="Me">
-                    <div id="my-status-indicator" class="status-indicator status-online" title="Change Status"></div>
+                    <div id="my-status-indicator" class="status-indicator status-online"></div>
                 </div>
                 <div id="user-info">
                     <div id="user-display" style="font-weight: 600; color: var(--text-bright); font-size:14px;">User</div>
                     <div id="user-tag-display" style="font-size: 11px; color: var(--text-muted);">#0000</div>
                 </div>
-                <div id="status-selector" style="display:none;">
-                    <div class="status-option" data-status="online">🟢 Online</div>
-                    <div class="status-option" data-status="idle">🌙 Idle</div>
-                    <div class="status-option" data-status="dnd">🔴 Do Not Disturb</div>
-                    <div class="status-option" data-status="offline">⚪ Invisible</div>
-                </div>
+            </div>
+            
+            <div class="uc-actions">
+                <button id="open-settings-btn" class="uc-btn" title="User Settings">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+                </button>
+            </div>
+            
+            <div id="status-selector" style="display:none; position: absolute; bottom: calc(100% + 8px); left: 0; width: 220px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 5px; z-index: 200; box-shadow: 0 8px 24px rgba(0,0,0,0.6); animation: slideUp 0.15s ease;">
+                <div class="status-option" id="quick-edit-profile" style="color:var(--text-bright);">✏️ Edit Profile</div>
+                <div style="height:1px; background:var(--border-color); margin: 5px 0;"></div>
+                <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; padding: 4px 8px; font-weight: bold; letter-spacing: 0.05em;">Set Status</div>
+                <div class="status-option" data-status="online">🟢 Online</div>
+                <div class="status-option" data-status="idle">🌙 Idle</div>
+                <div class="status-option" data-status="dnd">🔴 Do Not Disturb</div>
+                <div class="status-option" data-status="offline">⚪ Invisible</div>
             </div>
         </div>
 

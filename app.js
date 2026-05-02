@@ -620,15 +620,11 @@ onAuthStateChanged(auth, async (user) => {
                 document.getElementById('user-tag-display').innerText = `#${myProfile.tag}`;
                 
                 // 3. Update the bottom-left avatar panel to use the decoration helper
-                const userControls = document.getElementById('user-controls');
-                const oldAvatar = userControls.querySelector('.avatar-container');
-                if (oldAvatar) {
-                    oldAvatar.outerHTML = getAvatarHTML(myProfile, 'avatar-small');
-                    // Re-bind the click event for the status popup since we replaced the HTML
-                    userControls.querySelector('.status-indicator').addEventListener('click', (e) => { 
-                        e.stopPropagation(); document.getElementById('status-selector').style.display = 'block'; 
-                    });
-                }
+             const userControls = document.getElementById('user-controls-dock'); // <-- UPDATED ID
+             const oldAvatar = userControls.querySelector('.avatar-container');
+             if (oldAvatar) {
+                 oldAvatar.outerHTML = getAvatarHTML(myProfile, 'avatar-small');
+             }
             }
         });
 
@@ -818,17 +814,46 @@ document.getElementById('us-upload-emoji-btn')?.addEventListener('click', async 
     showToast(`Emoji :${name}: uploaded!`, 'success');
 });
 
-// Status Dropdown
-document.getElementById('my-status-indicator')?.addEventListener('click', (e) => { e.stopPropagation(); document.getElementById('status-selector').style.display = 'block'; });
-document.querySelectorAll('.status-option').forEach(opt => {
+// ==========================================
+// --- USER DOCK & POPUP MENU ---
+// ==========================================
+document.getElementById('uc-profile-trigger')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const s = document.getElementById('status-selector');
+    s.style.display = s.style.display === 'block' ? 'none' : 'block';
+});
+
+// Update Status from Dropdown
+document.querySelectorAll('.status-option[data-status]').forEach(opt => {
     opt.addEventListener('click', (e) => {
         const s = e.target.getAttribute('data-status');
         update(ref(db, `users/${currentUserSafeEmail}`), { status: s, saved_status: s });
         document.getElementById('status-selector').style.display = 'none';
     });
 });
+
+// Settings Button Logic
+document.getElementById('open-settings-btn')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.getElementById('status-selector').style.display = 'none';
+    document.getElementById('edit-username').value = myProfile.username;
+    document.getElementById('edit-tag').value = myProfile.tag;
+    document.getElementById('profile-preview').src = myProfile.avatar;
+    tempBase64Avatar = myProfile.avatar;
+    document.getElementById('user-settings-modal').style.display = 'flex';
+    document.querySelector('#user-settings-modal .fs-modal-layout').classList.remove('mobile-viewing-content');
+    document.querySelector('#user-settings-modal .fs-tab[data-tab="account"]').click();
+    loadPersonalEmojis();
+});
+
+// Quick 'Edit Profile' button inside the new popup
+document.getElementById('quick-edit-profile')?.addEventListener('click', () => {
+    document.getElementById('open-settings-btn').click();
+});
+
+// Global click-to-close listener
 document.addEventListener('click', (e) => {
-    if (!e.target.closest('#user-controls')) { const s = document.getElementById('status-selector'); if (s) s.style.display = 'none'; }
+    if (!e.target.closest('#user-controls-dock')) { const s = document.getElementById('status-selector'); if (s) s.style.display = 'none'; }
     if (!e.target.closest('#sidebar-header') && !e.target.closest('#server-settings-modal') && !e.target.closest('#channel-settings-modal')) { const sd = document.getElementById('server-dropdown'); if (sd) sd.style.display = 'none'; }
 });
 
