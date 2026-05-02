@@ -2026,15 +2026,30 @@ function enableChat() {
 // --- MESSAGE PROCESSING ---
 // ==========================================
 function processMentionsAndText(text) {
-    if (!text) return { html: "", isMentioned: false };
+    if (!text) return { html: "", isMentioned: false, isEmojiOnly: false };
     let processed = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
     let isMentioned = false;
+
+    // NEW: Check for emoji-only message (Jumbo Emojis)
+    // This strips out all emojis and spaces. If nothing is left, it's an emoji-only message!
+    const stripped = text.replace(/\[:([^:]+):([^\]]+)\]/g, '')
+                         .replace(/\p{Extended_Pictographic}/gu, '')
+                         .replace(/\s/g, '')
+                         .replace(/[\u200B-\u200D\uFEFF]/g, '');
+    const isEmojiOnly = text.trim().length > 0 && stripped.length === 0;
 
     // FIX: Linkify raw URLs safely BEFORE we add any other HTML tags
     processed = processed.replace(/(https?:\/\/[^\s<]+)/g, `<a href="$1" target="_blank" class="chat-inline-link" style="color:var(--accent-primary); text-decoration:none;">$1</a>`);
 
+    // FIX: Accurate Mention Detection (Checks for roles that already start with @)
     if (myProfile.username && text.includes('@' + myProfile.username)) isMentioned = true;
-    myServerRoles.forEach(role => { if (serverRolesCache[role] && text.includes('@' + serverRolesCache[role].name)) isMentioned = true; });
+    myServerRoles.forEach(role => { 
+        if (serverRolesCache[role]) {
+            const rName = serverRolesCache[role].name;
+            const checkStr = rName.startsWith('@') ? rName : '@' + rName;
+            if (text.includes(checkStr)) isMentioned = true; 
+        }
+    });
 
     // Markdown
     processed = processed.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
@@ -2053,13 +2068,15 @@ function processMentionsAndText(text) {
         return `:${name}:`;
     });
 
-    return { html: processed, isMentioned };
+    return { html: processed, isMentioned, isEmojiOnly };
 }
 
 async function buildMessageHtml(data) {
     const mentionData = processMentionsAndText(data.text);
     const editedHtml = data.edited ? `<span style="font-size:10px;color:var(--text-muted);margin-left:5px;">(edited)</span>` : '';
-    let contentHtml = `<div style="margin-left:42px;word-break:break-word;color:var(--text-main);">${mentionData.html}${editedHtml}</div>`;
+    // NEW: Apply jumbo-emoji class if it's emoji-only
+    const emojiClass = mentionData.isEmojiOnly ? 'emoji-only-msg' : '';
+    let contentHtml = `<div class="${emojiClass}" style="margin-left:42px;word-break:break-word;color:var(--text-main);">${mentionData.html}${editedHtml}</div>`;
 
     const inviteRegex = new RegExp(`${appBaseUrl.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\?invite=([a-zA-Z0-9]+)`, 'g');
     let match; let tempEmbeds = [];
@@ -2169,7 +2186,8 @@ async function createMessageDOM(msgId, data, prevSender, prevTime) {
     msgElement.id = `msg-${msgId}`;
 
     const buildRes = await buildMessageHtml(data);
-    if (buildRes.isMentioned && data.sender !== auth.currentUser.email) msgElement.classList.add('mentioned');
+    // FIX: Show yellow highlight even if YOU sent it
+    if (buildRes.isMentioned) msgElement.classList.add('mentioned');
 
     let canEdit = data.sender === auth.currentUser.email;
     let canDelete = canEdit || (chatType === 'server' && (myServerPerms.manageServerSettings || myServerPerms.manageMessages));
@@ -2464,7 +2482,9 @@ function showMentionMenu(term) {
         else div.innerHTML = `<img src="${m.avatar || ''}" class="mention-avatar" style="object-fit:cover;"><span>${m.name}</span>`;
         div.addEventListener('click', () => {
             const val = msgInput.value;
-            msgInput.value = val.substring(0, mentionStartIndex) + '@' + m.name + ' ' + val.substring(msgInput.selectionStart);
+            // FIX: If the role name already has an '@', don't add another one!
+            const insertName = m.name.startsWith('@') ? m.name.substring(1) : m.name;
+            msgInput.value = val.substring(0, mentionStartIndex) + '@' + insertName + ' ' + val.substring(msgInput.selectionStart);
             mentionMenu.style.display = 'none'; msgInput.focus();
         });
         mentionMenu.appendChild(div);
