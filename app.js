@@ -2388,6 +2388,7 @@ let currentGifQuery = '';
 let gifPage = 1;
 let isFetchingGifs = false;
 let hasMoreGifs = true;
+let seenGifIds = new Set(); // Duplication Guard!
 
 async function loadTrendingGifs(loadMore = false) {
     if (isFetchingGifs || (!hasMoreGifs && loadMore)) return;
@@ -2397,11 +2398,14 @@ async function loadTrendingGifs(loadMore = false) {
         document.getElementById('gif-grid').innerHTML = '';
         gifPage = 1;
         hasMoreGifs = true;
+        seenGifIds.clear();
     }
     document.getElementById('gif-loading').style.display = 'block';
 
     try {
-        const res = await fetch(`https://api.klipy.com/v2/featured?key=${KLIPY_API_KEY}&limit=20&page=${gifPage}&media_filter=gif`);
+        // FIX: Klipy uses 'offset', calculated by page number
+        const offset = (gifPage - 1) * 20;
+        const res = await fetch(`https://api.klipy.com/v2/featured?key=${KLIPY_API_KEY}&limit=20&offset=${offset}&media_filter=gif`);
         const data = await res.json();
         document.getElementById('gif-loading').style.display = 'none';
         
@@ -2426,11 +2430,14 @@ async function searchGifs(query, loadMore = false) {
         document.getElementById('gif-grid').innerHTML = '';
         gifPage = 1;
         hasMoreGifs = true;
+        seenGifIds.clear();
     }
     document.getElementById('gif-loading').style.display = 'block';
 
     try {
-        const res = await fetch(`https://api.klipy.com/v2/search?key=${KLIPY_API_KEY}&q=${encodeURIComponent(query)}&limit=20&page=${gifPage}&media_filter=gif`);
+        // FIX: Klipy uses 'offset', calculated by page number
+        const offset = (gifPage - 1) * 20;
+        const res = await fetch(`https://api.klipy.com/v2/search?key=${KLIPY_API_KEY}&q=${encodeURIComponent(query)}&limit=20&offset=${offset}&media_filter=gif`);
         const data = await res.json();
         document.getElementById('gif-loading').style.display = 'none';
         
@@ -2452,6 +2459,11 @@ function renderGifResults(results, append = false) {
     if (!append) grid.innerHTML = '';
     
     results.forEach(gif => {
+        // FIX: Prevent identical GIFs from stacking
+        const uniqueId = gif.id || gif.url;
+        if (seenGifIds.has(uniqueId)) return;
+        seenGifIds.add(uniqueId);
+
         const item = document.createElement('div'); 
         item.className = 'gif-item';
         
@@ -2460,7 +2472,6 @@ function renderGifResults(results, append = false) {
         
         item.innerHTML = `<img src="${preview}" alt="gif" loading="lazy">`;
         
-        // --- KLIPY ADVERTISEMENT HANDLING ---
         if (gif.is_ad) {
             const adBadge = document.createElement('div');
             adBadge.innerText = 'Ad';
@@ -2469,7 +2480,6 @@ function renderGifResults(results, append = false) {
         }
 
         item.onclick = () => {
-            // Fire tracking beacon if it's a sponsored ad
             if (gif.is_ad && gif.tracking_url) {
                 navigator.sendBeacon(gif.tracking_url);
             }
