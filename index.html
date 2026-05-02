@@ -77,7 +77,11 @@
             </div>
             
             <div id="home-sidebar-content">
-                <div class="home-nav-item active" id="nav-friends-btn">
+                <div class="home-nav-item active" id="nav-news-btn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1m2 13a2 2 0 0 1-2-2V7m2 13a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/></svg>
+                    <span>News & Updates</span>
+                </div>
+                <div class="home-nav-item" id="nav-friends-btn">
                     <svg width="20" height="20" viewBox="0 0 24 24"><path fill="currentColor" d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-2.67 0-8 1.34-8 4v3h16v-3c0-2.66-5.33-4-8-4z"/></svg>
                     <span>Friends</span>
                 </div>
@@ -161,6 +165,10 @@
                     <button id="mobile-back-btn-home" class="mobile-back-btn" title="Back">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
                     </button>
+                    <div id="home-header-news" style="display: flex; align-items: center; width: 100%;">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--text-muted);"><path d="M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1m2 13a2 2 0 0 1-2-2V7m2 13a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/></svg>
+                        <span style="font-weight: 600; margin-left: 10px; font-size: 16px; color: var(--text-bright);">Skip Changelog</span>
+                    </div>
                     <div id="home-header-friends" style="display: flex; align-items: center; width: 100%;">
                         <svg width="22" height="22" viewBox="0 0 24 24" style="color: var(--text-muted);"><path fill="currentColor" d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-2.67 0-8 1.34-8 4v3h16v-3c0-2.66-5.33-4-8-4z"/></svg>
                         <span style="font-weight: 600; margin-left: 10px; font-size: 16px; color: var(--text-bright);">Friends</span>
@@ -366,7 +374,12 @@
             
             <div class="fs-content-area" id="us-content">
 
-				
+				<div style="display: flex; align-items: center; margin-bottom: 20px;">
+                    <button class="mobile-back-btn fs-mobile-back" id="us-mobile-back">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                    </button>
+                    <h2 style="margin: 0; color: var(--text-bright);">User Settings</h2>
+                </div>
 
 		<div class="ss-pane" id="pane-us-decorations" style="display: none;">
     			<h3 style="color:var(--text-muted); font-size:11px; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:15px;">Shop / Inventory</h3>

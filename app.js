@@ -30,7 +30,7 @@ const storage = getStorage(app);
 let currentServerId = null;
 let currentChatId = null;
 let chatType = 'home';
-let currentHomeTab = 'friends';
+let currentHomeTab = 'news';
 let currentUserSafeEmail = null;
 let myProfile = {};
 let myServerPerms = { viewChannels: true, sendMessages: true, manageChannels: false, manageServerSettings: false, manageServerProfile: false, manageServerOverview: false, manageRoles: false, manageMessages: false, kickMembers: false, banMembers: false, timeoutMembers: false };
@@ -887,9 +887,12 @@ function switchToHomeView() {
     renderHomeContent();
 }
 
+// === NAVIGATION ===
+
 document.getElementById('home-btn')?.addEventListener('click', switchToHomeView);
 document.getElementById('mobile-back-btn')?.addEventListener('click', () => { document.body.classList.remove('mobile-chat-active', 'mobile-home-active'); });
 document.getElementById('mobile-back-btn-home')?.addEventListener('click', () => { document.body.classList.remove('mobile-chat-active', 'mobile-home-active'); });
+document.getElementById('nav-news-btn')?.addEventListener('click', () => { currentHomeTab = 'news'; if (chatType !== 'home') switchToHomeView(); document.body.classList.add('mobile-home-active'); renderHomeContent(); });
 document.getElementById('nav-friends-btn')?.addEventListener('click', () => { currentHomeTab = 'friends'; if (chatType !== 'home') switchToHomeView(); document.body.classList.add('mobile-home-active'); renderHomeContent(); });
 document.getElementById('nav-requests-btn')?.addEventListener('click', () => { currentHomeTab = 'requests'; if (chatType !== 'home') switchToHomeView(); document.body.classList.add('mobile-home-active'); renderHomeContent(); });
 
@@ -898,11 +901,58 @@ function renderHomeContent() {
     const content = document.getElementById('home-content');
     const hFriends = document.getElementById('home-header-friends');
     const hRequests = document.getElementById('home-header-requests');
+    const hNews = document.getElementById('home-header-news'); // NEW
+    
+    // Manage active states
+    document.getElementById('nav-news-btn').classList.toggle('active', currentHomeTab === 'news');
     document.getElementById('nav-friends-btn').classList.toggle('active', currentHomeTab === 'friends');
     document.getElementById('nav-requests-btn').classList.toggle('active', currentHomeTab === 'requests');
 
-    if (currentHomeTab === 'friends') {
-        hFriends.style.display = 'flex'; hRequests.style.display = 'none';
+    // === 1. NEWS TAB (Headway Integration) ===
+    if (currentHomeTab === 'news') {
+        hNews.style.display = 'flex'; hFriends.style.display = 'none'; hRequests.style.display = 'none';
+        content.innerHTML = '<div style="text-align:center; padding: 40px; color:var(--text-muted);"><div class="loading-spinner" style="width:24px;height:24px;border:2px solid var(--border-color);border-top-color:var(--accent-primary);border-radius:50%;margin:0 auto 10px;"></div>Loading latest updates...</div>';
+        
+        // IMPORTANT: Replace 'YOUR-HEADWAY-ACCOUNT' with your actual Headway page name.
+        // Example: If your headway is https://headwayapp.co/skip-chat, put 'skip-chat' here.
+        const HEADWAY_PAGE = 'mrnoxy-github-changelog'; 
+        const RSS_URL = `https://headwayapp.co/${HEADWAY_PAGE}/rss`;
+        
+        // We use rss2json to convert the XML feed into a nice JSON format
+        fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(RSS_URL)}`)
+            .then(res => res.json())
+            .then(data => {
+                content.innerHTML = '';
+                if (!data.items || data.items.length === 0) {
+                    content.innerHTML = '<div class="news-container"><p style="color:var(--text-muted); text-align:center;">No news available at the moment.</p></div>';
+                    return;
+                }
+                
+                const container = document.createElement('div');
+                container.className = 'news-container';
+                
+                data.items.forEach(item => {
+                    // Format date nicely (e.g., "October 14, 2024")
+                    const date = new Date(item.pubDate.replace(/-/g, '/')).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+                    
+                    const card = document.createElement('div');
+                    card.className = 'news-card';
+                    card.innerHTML = `
+                        <div class="news-date">${date}</div>
+                        <h2 class="news-title">${item.title}</h2>
+                        <div class="news-content">${item.content}</div>
+                    `;
+                    container.appendChild(card);
+                });
+                content.appendChild(container);
+            })
+            .catch(err => {
+                content.innerHTML = '<div class="news-container"><p style="color:var(--accent-danger); text-align:center;">Failed to load news. Please try again later.</p></div>';
+            });
+    } 
+    // === 2. FRIENDS TAB ===
+    else if (currentHomeTab === 'friends') {
+        hFriends.style.display = 'flex'; hRequests.style.display = 'none'; if(hNews) hNews.style.display = 'none';
         content.innerHTML = '';
         if (activeFriendsData.length === 0) { content.innerHTML = '<p style="color:var(--text-muted);margin-top:20px;">No friends yet. Add someone by their Username#Tag!</p>'; return; }
         const hdr = document.createElement('div');
@@ -914,15 +964,16 @@ function renderHomeContent() {
             const u = globalUsersCache[fEmail] || {};
             const div = document.createElement('div'); div.className = 'friend-card';
             
-            // Replaced the hardcoded avatar container with getAvatarHTML()
             div.innerHTML = `<div class="friend-card-left">${getAvatarHTML(u, 'avatar-small')}<div><div style="font-weight:600;color:var(--text-bright);">${u.username || '...'}</div><div style="font-size:12px;color:var(--text-muted);">${u.status || 'offline'}</div></div></div>
             <div class="friend-card-right"><div class="action-circle" title="Message" onclick="(async()=>{ const dmId='${[currentUserSafeEmail, fEmail].sort().join('_')}'; await update(ref(db,'users/${currentUserSafeEmail}/friends/${fEmail}'),{dmId,hidden:false,lastActivity:Date.now()}); openDM(dmId,'${fEmail}'); })()"><svg width='18' height='18' viewBox='0 0 24 24' fill='currentColor'><path d='M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z'/></svg></div><div class="action-circle red" title="Remove Friend" onclick="customConfirm('Remove this friend?','Remove Friend',(yes)=>{if(yes){remove(ref(db,'users/${currentUserSafeEmail}/friends/${fEmail}'));remove(ref(db,'users/${fEmail}/friends/${currentUserSafeEmail}'));}})"><svg width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2'/><circle cx='8.5' cy='7' r='4'/><line x1='18' y1='8' x2='23' y2='13'/><line x1='23' y1='8' x2='18' y2='13'/></svg></div></div>`;
             
             div.addEventListener('contextmenu', (e) => showContextMenu(e, 'friend', fEmail));
             content.appendChild(div);
         });
-    } else {
-        hFriends.style.display = 'none'; hRequests.style.display = 'flex';
+    } 
+    // === 3. REQUESTS TAB ===
+    else {
+        hFriends.style.display = 'none'; hRequests.style.display = 'flex'; if(hNews) hNews.style.display = 'none';
         content.innerHTML = '';
         get(ref(db, `friend_requests/${currentUserSafeEmail}`)).then(snap => {
             if (!snap.exists() || Object.keys(snap.val()).length === 0) { content.innerHTML = '<p style="color:var(--text-muted);margin-top:20px;">No pending friend requests.</p>'; return; }
