@@ -2370,7 +2370,7 @@ document.addEventListener('click', (e) => {
 });
 
 // ==========================================
-// --- GIF PICKER (Tenor API) ---
+// --- GIF PICKER (KLIPY API) ---
 // ==========================================
 const gifPickerEl = document.getElementById('gif-picker');
 
@@ -2384,46 +2384,97 @@ document.getElementById('gif-picker-btn')?.addEventListener('click', (e) => {
     loadTrendingGifs();
 });
 
-async function loadTrendingGifs() {
-    const grid = document.getElementById('gif-grid');
-    const loading = document.getElementById('gif-loading');
-    grid.innerHTML = ''; loading.style.display = 'block';
-    try {
-        const res = await fetch(`https://api.klipy.com/v2/featured?key=${KLIPY_API_KEY}&limit=20&media_filter=gif`);
-        const data = await res.json();
-        loading.style.display = 'none';
-        renderGifResults(data.results || []);
-    } catch (err) {
-        loading.style.display = 'none';
-        grid.innerHTML = `<p style="color:var(--text-muted);font-size:12px;padding:10px;grid-column:span 2;">GIFs unavailable. Check your KLIPY API key in app.js</p>`;
+let currentGifQuery = '';
+let gifPage = 1;
+let isFetchingGifs = false;
+let hasMoreGifs = true;
+
+async function loadTrendingGifs(loadMore = false) {
+    if (isFetchingGifs || (!hasMoreGifs && loadMore)) return;
+    isFetchingGifs = true;
+    
+    if (!loadMore) {
+        document.getElementById('gif-grid').innerHTML = '';
+        gifPage = 1;
+        hasMoreGifs = true;
     }
+    document.getElementById('gif-loading').style.display = 'block';
+
+    try {
+        const res = await fetch(`https://api.klipy.com/v2/featured?key=${KLIPY_API_KEY}&limit=20&page=${gifPage}&media_filter=gif`);
+        const data = await res.json();
+        document.getElementById('gif-loading').style.display = 'none';
+        
+        if (data.results && data.results.length > 0) {
+            renderGifResults(data.results, loadMore);
+            gifPage++;
+        } else {
+            hasMoreGifs = false;
+        }
+    } catch (err) {
+        document.getElementById('gif-loading').style.display = 'none';
+        if (!loadMore) document.getElementById('gif-grid').innerHTML = `<p style="color:var(--text-muted); font-size:12px; padding:10px; grid-column:span 2;">GIFs unavailable. Check your KLIPY API key.</p>`;
+    }
+    isFetchingGifs = false;
 }
 
-async function searchGifs(query) {
-    const grid = document.getElementById('gif-grid');
-    const loading = document.getElementById('gif-loading');
-    grid.innerHTML = ''; loading.style.display = 'block';
-    try {
-        const res = await fetch(`https://api.klipy.com/v2/search?key=${KLIPY_API_KEY}&q=${encodeURIComponent(query)}&limit=20&media_filter=gif`);
-        const data = await res.json();
-        loading.style.display = 'none';
-        renderGifResults(data.results || []);
-    } catch (err) {
-        loading.style.display = 'none';
-        grid.innerHTML = `<p style="color:var(--text-muted);font-size:12px;padding:10px;grid-column:span 2;">Search failed. Check your KLIPY API key.</p>`;
+async function searchGifs(query, loadMore = false) {
+    if (isFetchingGifs || (!hasMoreGifs && loadMore)) return;
+    isFetchingGifs = true;
+    
+    if (!loadMore) {
+        document.getElementById('gif-grid').innerHTML = '';
+        gifPage = 1;
+        hasMoreGifs = true;
     }
+    document.getElementById('gif-loading').style.display = 'block';
+
+    try {
+        const res = await fetch(`https://api.klipy.com/v2/search?key=${KLIPY_API_KEY}&q=${encodeURIComponent(query)}&limit=20&page=${gifPage}&media_filter=gif`);
+        const data = await res.json();
+        document.getElementById('gif-loading').style.display = 'none';
+        
+        if (data.results && data.results.length > 0) {
+            renderGifResults(data.results, loadMore);
+            gifPage++;
+        } else {
+            hasMoreGifs = false;
+            if (!loadMore) document.getElementById('gif-grid').innerHTML = `<p style="color:var(--text-muted); font-size:12px; padding:10px; grid-column:span 2;">No GIFs found.</p>`;
+        }
+    } catch (err) {
+        document.getElementById('gif-loading').style.display = 'none';
+    }
+    isFetchingGifs = false;
 }
 
-function renderGifResults(results) {
+function renderGifResults(results, append = false) {
     const grid = document.getElementById('gif-grid');
-    grid.innerHTML = '';
-    if (!results.length) { grid.innerHTML = `<p style="color:var(--text-muted);font-size:12px;padding:10px;grid-column:span 2;">No GIFs found.</p>`; return; }
+    if (!append) grid.innerHTML = '';
+    
     results.forEach(gif => {
-        const item = document.createElement('div'); item.className = 'gif-item';
-        const preview = gif.media_formats?.tinygif?.url || gif.media_formats?.gif?.url;
-        const full = gif.media_formats?.gif?.url || preview;
+        const item = document.createElement('div'); 
+        item.className = 'gif-item';
+        
+        const preview = gif.media_formats?.tinygif?.url || gif.media_formats?.gif?.url || gif.url;
+        const full = gif.media_formats?.gif?.url || gif.url;
+        
         item.innerHTML = `<img src="${preview}" alt="gif" loading="lazy">`;
-        item.onclick = () => sendGif(full);
+        
+        // --- KLIPY ADVERTISEMENT HANDLING ---
+        if (gif.is_ad) {
+            const adBadge = document.createElement('div');
+            adBadge.innerText = 'Ad';
+            adBadge.style.cssText = 'position:absolute; bottom:6px; right:6px; background:rgba(0,0,0,0.7); color:white; font-size:10px; font-weight:bold; padding:2px 6px; border-radius:4px; pointer-events:none; z-index: 10;';
+            item.appendChild(adBadge);
+        }
+
+        item.onclick = () => {
+            // Fire tracking beacon if it's a sponsored ad
+            if (gif.is_ad && gif.tracking_url) {
+                navigator.sendBeacon(gif.tracking_url);
+            }
+            sendGif(full);
+        };
         grid.appendChild(item);
     });
 }
@@ -2431,15 +2482,32 @@ function renderGifResults(results) {
 let gifSearchTimeout = null;
 document.getElementById('gif-search-input')?.addEventListener('input', (e) => {
     clearTimeout(gifSearchTimeout);
-    const q = e.target.value.trim();
-    gifSearchTimeout = setTimeout(() => { if (q) searchGifs(q); else loadTrendingGifs(); }, 500);
+    currentGifQuery = e.target.value.trim();
+    gifSearchTimeout = setTimeout(() => { 
+        if (currentGifQuery) searchGifs(currentGifQuery, false); 
+        else loadTrendingGifs(false); 
+    }, 500);
 });
+
 document.getElementById('gif-search-btn')?.addEventListener('click', () => {
-    const q = document.getElementById('gif-search-input').value.trim();
-    if (q) searchGifs(q); else loadTrendingGifs();
+    if (currentGifQuery) searchGifs(currentGifQuery, false); 
+    else loadTrendingGifs(false);
 });
+
 document.getElementById('gif-search-input')?.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') { const q = e.target.value.trim(); if (q) searchGifs(q); }
+    if (e.key === 'Enter') {
+        currentGifQuery = e.target.value.trim();
+        if (currentGifQuery) searchGifs(currentGifQuery, false);
+    }
+});
+
+// Infinite Scroll Listener
+document.getElementById('gif-grid')?.addEventListener('scroll', (e) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.target;
+    if (scrollTop + clientHeight >= scrollHeight - 50) {
+        if (currentGifQuery) searchGifs(currentGifQuery, true);
+        else loadTrendingGifs(true);
+    }
 });
 
 async function sendGif(gifUrl) {
