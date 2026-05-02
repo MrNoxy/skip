@@ -54,6 +54,8 @@ let unsubscribeVoiceRosters = null;
 let unsubscribeMyMemberData = null;
 let dmsNotifListener = null;
 let serversNotifListener = null;
+let unsubscribeRoles = null;
+let newsListeners = [];
 
 let replyingToMessage = null;
 let pendingAttachment = null; // { url, type, name, size, mimeType }
@@ -352,32 +354,37 @@ window.showGlobalUserProfile = async function (email, event) {
                 const roleFlex = document.createElement('div');
                 roleFlex.style.cssText = 'display:flex; flex-wrap:wrap; gap:5px;';
 
-                userRoles.forEach(rId => {
-                    if (serverRolesCache[rId]) {
-                        const badge = document.createElement('span');
-                        badge.className = 'role-badge';
-                        badge.innerHTML = `<span style="color:${serverRolesCache[rId].color};">●</span> ${serverRolesCache[rId].name}`;
-                        if ((myServerPerms.manageRoles || myServerRoles.includes('owner')) && safeEmail !== currentUserSafeEmail) {
-                            badge.style.cursor = 'pointer';
-                            badge.title = 'Click to remove role';
-                            badge.onclick = async () => {
-                                let newRoles = {};
-                                userRoles.forEach(r => { if (r !== rId) newRoles[r] = true; });
-                                await update(ref(db, `server_members/${currentServerId}/${safeEmail}`), { roles: Object.keys(newRoles).length ? newRoles : null });
-                                showGlobalUserProfile(email);
-                            };
-                        }
-                        roleFlex.appendChild(badge);
-                    }
-                });
+                // 1. Fixing the badges (around line 369)
+userRoles.forEach(rId => {
+    if (serverRolesCache[rId]) {
+        const badge = document.createElement('span');
+        badge.className = 'role-badge';
+        badge.innerHTML = `<span style="color:${serverRolesCache[rId].color};">●</span> ${serverRolesCache[rId].name}`;
+        
+        // FIX: Removed safeEmail check here!
+        if (myServerPerms.manageRoles || myServerRoles.includes('owner')) {
+            badge.style.cursor = 'pointer';
+            badge.title = 'Click to remove role';
+            badge.onclick = async () => {
+                let newRoles = {};
+                userRoles.forEach(r => { if (r !== rId) newRoles[r] = true; });
+                await update(ref(db, `server_members/${currentServerId}/${safeEmail}`), { roles: Object.keys(newRoles).length ? newRoles : null });
+                showGlobalUserProfile(email); // refresh popup
+            };
+        }
+        roleFlex.appendChild(badge);
+    }
+});
 
-                if ((myServerPerms.manageRoles || myServerRoles.includes('owner')) && safeEmail !== currentUserSafeEmail) {
-                    const addRoleBtn = document.createElement('button');
-                    addRoleBtn.style.cssText = 'background:var(--bg-hover); border:1px dashed var(--border-color); color:var(--text-muted); padding:2px 8px; font-size:11px; margin:0; border-radius:4px;';
-                    addRoleBtn.innerText = '+ Add Role';
-                    addRoleBtn.onclick = (e) => openQuickRoleDropdown(safeEmail, userRoles, e.currentTarget);
-                    roleFlex.appendChild(addRoleBtn);
-                }
+// 2. Fixing the + Add Role button (around line 385)
+// FIX: Removed safeEmail check here too!
+if (myServerPerms.manageRoles || myServerRoles.includes('owner')) {
+    const addRoleBtn = document.createElement('button');
+    addRoleBtn.style.cssText = 'background:var(--bg-hover); border:1px dashed var(--border-color); color:var(--text-muted); padding:2px 8px; font-size:11px; margin:0; border-radius:4px;';
+    addRoleBtn.innerText = '+ Add Role';
+    addRoleBtn.onclick = (e) => openQuickRoleDropdown(safeEmail, userRoles, e.currentTarget);
+    roleFlex.appendChild(addRoleBtn);
+}
                 if (roleFlex.children.length > 0) rolesContainer.appendChild(roleFlex);
                 else rolesContainer.style.display = 'none';
 
@@ -714,10 +721,11 @@ document.getElementById('user-controls')?.addEventListener('click', (e) => {
     loadPersonalEmojis();
 });
 
+// Logout button
 document.getElementById('us-logout-btn')?.addEventListener('click', () => {
     leaveVoiceChannel();
     if (currentUserSafeEmail) set(ref(db, `users/${currentUserSafeEmail}/status`), 'offline');
-    signOut(auth);
+    signOut(auth).then(() => window.location.reload()); // FIX: Hard reload clears cache
 });
 
 // Avatar upload - supports GIFs!
@@ -919,7 +927,10 @@ function renderHomeContent() {
         const RSS_URL = `https://headwayapp.co/${HEADWAY_PAGE}/rss`;
         
         // We use rss2json to convert the XML feed into a nice JSON format
-        fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(RSS_URL)}`)
+        // FIX: Added cache bypass string to ensure immediate updates from Headway
+        const bypassCacheUrl = `${RSS_URL}?t=${Date.now()}`;
+        
+        fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(bypassCacheUrl)}&order_by=pubDate`)
             .then(res => res.json())
             .then(data => {
                 content.innerHTML = '';
@@ -931,9 +942,12 @@ function renderHomeContent() {
                 const container = document.createElement('div');
                 container.className = 'news-container';
                 
+                // Clear old reaction listeners to prevent memory leaks/disappearing UI
+                newsListeners.forEach(unsub => unsub());
+                newsListeners = [];
+                
                 data.items.forEach(item => {
                     const date = new Date(item.pubDate.replace(/-/g, '/')).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
-                    // Create a unique ID for Firebase using the Headway GUID
                     const postId = btoa(item.guid || item.title).replace(/=/g, '').substring(0, 30);
                     
                     const card = document.createElement('div');
@@ -946,14 +960,13 @@ function renderHomeContent() {
                     `;
                     container.appendChild(card);
                     
-                    // Setup Live Reactions for this specific post
-                    onValue(ref(db, `news_reactions/${postId}`), (rSnap) => {
+                    // FIX: Push listener to array so it safely stays alive
+                    const unsub = onValue(ref(db, `news_reactions/${postId}`), (rSnap) => {
                         const reactions = rSnap.val() || {};
                         const bar = document.getElementById(`news-react-${postId}`);
-                        if (!bar) return;
+                        if (!bar) return; 
                         bar.innerHTML = '';
                         
-                        // You can customize these options!
                         const emojis = ['👍','👎','❤️', '🔥', '🎉','💀'];
                         emojis.forEach(emoji => {
                             const users = reactions[emoji] || {};
@@ -970,6 +983,7 @@ function renderHomeContent() {
                             bar.appendChild(btn);
                         });
                     });
+                    newsListeners.push(unsub);
                 });
                 content.appendChild(container);
             })
@@ -1094,6 +1108,8 @@ function loadDecorationsUI() {
     noneDiv.innerHTML = `<div style="width: 64px; height: 64px; margin: 0 auto 10px; border-radius: 50%; background: var(--bg-tertiary);"></div><div style="font-size: 12px; color: var(--text-bright);">None</div>`;
     noneDiv.onclick = () => {
         update(ref(db, `users/${currentUserSafeEmail}`), { decorationId: null });
+        myProfile.decorationId = null; // FIX: Update local cache
+        loadDecorationsUI(); // FIX: Re-render UI immediately
         showToast('Decoration removed.', 'info');
     };
     grid.appendChild(noneDiv);
@@ -1114,6 +1130,8 @@ function loadDecorationsUI() {
         
         div.onclick = () => {
             update(ref(db, `users/${currentUserSafeEmail}`), { decorationId: decId });
+            myProfile.decorationId = decId; // FIX: Update local cache
+            loadDecorationsUI(); // FIX: Re-render UI immediately
             showToast('Decoration equipped!', 'success');
         };
         grid.appendChild(div);
@@ -1821,6 +1839,8 @@ function renderChannels(serverId) {
             div.addEventListener('click', () => {
                 if (channelData.type === "voice") joinVoiceChannel(serverId, channelData.id);
                 else {
+                    localStorage.setItem(`last_channel_${serverId}`, channelData.id);
+
                     chatType = 'server'; currentChatId = channelData.id;
                     document.getElementById('chat-title').innerText = `# ${channelData.name}`;
                     document.getElementById('chat-title').style.cursor = "default";
@@ -1865,6 +1885,18 @@ function renderChannels(serverId) {
             }
         });
     });
+    // FIX: Auto-load the last visited channel if we just opened the server!
+    if (chatType === 'server' && currentServerId === serverId && !currentChatId) {
+        const lastChanId = localStorage.getItem(`last_channel_${serverId}`);
+        let targetEl = null;
+        if (lastChanId && document.getElementById(`channel-${lastChanId}`)) {
+            targetEl = document.getElementById(`channel-${lastChanId}`);
+        } else {
+            // Fallback: Click the very first text channel in the list
+            targetEl = Array.from(channelList.querySelectorAll('.channel-item')).find(el => el.innerHTML.includes('textChannel') || !el.innerHTML.includes('voiceChannel'));
+        }
+        if (targetEl) targetEl.click();
+    }
 }
 
 // ==========================================
@@ -2194,6 +2226,9 @@ async function createMessageDOM(msgId, data, prevSender, prevTime) {
     bindImageClick(msgElement.querySelector('.message-image'));
     bindImageClick(msgElement.querySelector('.message-gif'));
 
+    // FIX: Save a snapshot of this message's state to detect silent embed updates
+    msgElement.dataset.raw = JSON.stringify({ text: data.text, edited: data.edited, embed: data.embed });
+
     return msgElement;
 }
 
@@ -2252,6 +2287,14 @@ async function loadMessages(dbPath, chatNameLabel) {
     });
     lastMsgSender = null; lastMsgTime = 0;
     oldestMsgTimestamp = null; isFetchingMore = false;
+
+    // FIX: Force scroll logic that waits for images/embeds
+    const scrollToBottom = () => {
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        setTimeout(() => { if (messagesDiv) messagesDiv.scrollTop = messagesDiv.scrollHeight; }, 200);
+        setTimeout(() => { if (messagesDiv) messagesDiv.scrollTop = messagesDiv.scrollHeight; }, 600);
+    };
+
     if (unsubscribeMessages) unsubscribeMessages();
     if (unsubscribeMessagesRemoved) unsubscribeMessagesRemoved();
     const lastReadSnap = await get(ref(db, `users/${currentUserSafeEmail}/lastRead/${currentChatId}`));
@@ -2277,8 +2320,12 @@ async function loadMessages(dbPath, chatNameLabel) {
     }
     if (initialMessages.length < 50) { insertWelcomeMessage(); oldestMsgTimestamp = null; }
     document.getElementById('chat-loading-spinner').style.display = 'none';
-    if (insertedDivider) { const divEl = messagesDiv.querySelector('.new-messages-divider'); if (divEl) setTimeout(() => divEl.scrollIntoView({ behavior: "smooth", block: "center" }), 100); }
-    else messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    
+    if (insertedDivider) { 
+        const divEl = messagesDiv.querySelector('.new-messages-divider'); 
+        if (divEl) setTimeout(() => divEl.scrollIntoView({ behavior: "smooth", block: "center" }), 100); 
+    }
+    else scrollToBottom(); // FIX: Calls our new safe scroll
 
     const liveRef = query(ref(db, dbPath), orderByChild('timestamp'), startAt(highestTimestamp + 1));
     unsubscribeMessages = onChildAdded(liveRef, async (childSnap) => {
@@ -2301,11 +2348,23 @@ async function loadMessages(dbPath, chatNameLabel) {
             const mData = msgSnap.val();
             renderReactions(msgSnap.key, mData.reactions || {});
             const msgEl = document.getElementById(`msg-${msgSnap.key}`);
-            if (msgEl && mData.edited) {
-                buildMessageHtml(mData).then(res => {
-                    const contentWrapper = msgEl.querySelector('.msg-content-wrapper');
-                    if (contentWrapper && !contentWrapper.querySelector('.edit-msg-input')) { contentWrapper.innerHTML = res.html; bindImageClick(contentWrapper.querySelector('.message-image, .message-gif')); }
-                });
+            
+            if (msgEl) {
+                const contentWrapper = msgEl.querySelector('.msg-content-wrapper');
+                if (contentWrapper && !contentWrapper.querySelector('.edit-msg-input')) {
+                    
+                    // FIX: Check if the message gained an embed or was edited natively!
+                    const currentDataStr = JSON.stringify({ text: mData.text, edited: mData.edited, embed: mData.embed });
+                    
+                    if (msgEl.dataset.raw !== currentDataStr) {
+                        msgEl.dataset.raw = currentDataStr;
+                        buildMessageHtml(mData).then(res => { 
+                            contentWrapper.innerHTML = res.html; 
+                            bindImageClick(contentWrapper.querySelector('.message-image, .message-gif'));
+                            scrollToBottom(); // Scroll down if the embed pushed content out of view
+                        });
+                    }
+                }
             }
         });
     });

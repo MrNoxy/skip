@@ -180,7 +180,12 @@ input, textarea, select { font-family: inherit; font-size: 14px !important; }
     position: relative; background-size: cover; background-position: center;
     color: var(--text-main); flex-shrink: 0; border: 1px solid transparent;
 }
-.server-icon:hover { border-radius: var(--radius-lg); background: var(--accent-primary); color: white; transform: scale(1.05); }
+.server-icon:hover { 
+    border-radius: var(--radius-lg); 
+    background: var(--accent-primary); 
+    color: white; 
+    transform: translateY(-2px); /* Gentle lift instead of huge zoom */
+}
 .server-icon.active { border-radius: var(--radius-lg); background: var(--accent-primary); color: white; }
 .server-icon.drag-over { border: 2px dashed var(--accent-primary); opacity: 0.5; }
 
