@@ -954,7 +954,7 @@ function renderHomeContent() {
                         bar.innerHTML = '';
                         
                         // You can customize these options!
-                        const emojis = ['👍', '❤️', '🔥', '🎉'];
+                        const emojis = ['👍','👎','❤️', '🔥', '🎉','💀'];
                         emojis.forEach(emoji => {
                             const users = reactions[emoji] || {};
                             const count = Object.keys(users).length;
