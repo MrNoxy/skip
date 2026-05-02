@@ -917,24 +917,34 @@ function renderHomeContent() {
     document.getElementById('nav-requests-btn').classList.toggle('active', currentHomeTab === 'requests');
 
     // === 1. NEWS TAB (Headway Integration) ===
+    // === 1. NEWS TAB (Headway Integration) ===
     if (currentHomeTab === 'news') {
         hNews.style.display = 'flex'; hFriends.style.display = 'none'; hRequests.style.display = 'none';
         content.innerHTML = '<div style="text-align:center; padding: 40px; color:var(--text-muted);"><div class="loading-spinner" style="width:24px;height:24px;border:2px solid var(--border-color);border-top-color:var(--accent-primary);border-radius:50%;margin:0 auto 10px;"></div>Loading latest updates...</div>';
         
-        // IMPORTANT: Replace 'YOUR-HEADWAY-ACCOUNT' with your actual Headway page name.
-        // Example: If your headway is https://headwayapp.co/skip-chat, put 'skip-chat' here.
-       const HEADWAY_PAGE = 'mrnoxy-github-changelog'; 
+        // IMPORTANT: Make sure this is your EXACT Headway page name!
+        const HEADWAY_PAGE = 'mrnoxy-github-changelog'; 
         const RSS_URL = `https://headwayapp.co/${HEADWAY_PAGE}/rss`;
         
-        // FIX: Removed the &t= parameter because rss2json strictly rejects it with a 422 error!
-        fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(RSS_URL)}&order_by=pubDate`)
+        // FIX: Abandon rss2json. We use a simple proxy and parse the raw XML natively!
+        fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(RSS_URL)}`)
             .then(res => {
                 if (!res.ok) throw new Error('API Error');
                 return res.json();
             })
             .then(data => {
+                // If Headway returns a 404 page instead of XML, catch it
+                if (!data.contents || data.contents.includes('The page you were looking for doesn')) {
+                    throw new Error('Headway page not found');
+                }
+
+                // Natively parse the XML feed
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(data.contents, "text/xml");
+                const items = Array.from(xmlDoc.querySelectorAll("item"));
+
                 content.innerHTML = '';
-                if (!data.items || data.items.length === 0) {
+                if (items.length === 0) {
                     content.innerHTML = '<div class="news-container"><p style="color:var(--text-muted); text-align:center;">No news available at the moment.</p></div>';
                     return;
                 }
@@ -942,25 +952,30 @@ function renderHomeContent() {
                 const container = document.createElement('div');
                 container.className = 'news-container';
                 
-                // Clear old reaction listeners to prevent memory leaks/disappearing UI
+                // Clear old reaction listeners
                 newsListeners.forEach(unsub => unsub());
                 newsListeners = [];
                 
-                data.items.forEach(item => {
-                    const date = new Date(item.pubDate.replace(/-/g, '/')).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
-                    const postId = btoa(item.guid || item.title).replace(/=/g, '').substring(0, 30);
+                items.forEach(item => {
+                    const title = item.querySelector("title")?.textContent || "Update";
+                    const pubDateRaw = item.querySelector("pubDate")?.textContent || "";
+                    const description = item.querySelector("description")?.textContent || "";
+                    const guid = item.querySelector("guid")?.textContent || title;
+                    
+                    const date = new Date(pubDateRaw).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+                    const postId = btoa(guid).replace(/=/g, '').substring(0, 30);
                     
                     const card = document.createElement('div');
                     card.className = 'news-card';
                     card.innerHTML = `
-                        <div class="news-date">${date}</div>
-                        <h2 class="news-title">${item.title}</h2>
-                        <div class="news-content">${item.content}</div>
+                        <div class="news-date">${date !== "Invalid Date" ? date : "Recent"}</div>
+                        <h2 class="news-title">${title}</h2>
+                        <div class="news-content">${description}</div>
                         <div class="news-reaction-bar" id="news-react-${postId}"></div>
                     `;
                     container.appendChild(card);
                     
-                    // FIX: Push listener to array so it safely stays alive
+                    // Reaction logic
                     const unsub = onValue(ref(db, `news_reactions/${postId}`), (rSnap) => {
                         const reactions = rSnap.val() || {};
                         const bar = document.getElementById(`news-react-${postId}`);
@@ -988,9 +1003,10 @@ function renderHomeContent() {
                 content.appendChild(container);
             })
             .catch(err => {
-                content.innerHTML = '<div class="news-container"><p style="color:var(--accent-danger); text-align:center;">Failed to load news. Please try again later.</p></div>';
+                console.error("News Feed Error:", err);
+                content.innerHTML = '<div class="news-container"><p style="color:var(--accent-danger); text-align:center;">Failed to load news. Please verify your Headway page name is correct.</p></div>';
             });
-    } 
+    }
     // === 2. FRIENDS TAB ===
     else if (currentHomeTab === 'friends') {
         hFriends.style.display = 'flex'; hRequests.style.display = 'none'; if(hNews) hNews.style.display = 'none';

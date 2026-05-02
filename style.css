@@ -188,8 +188,8 @@ input, textarea, select { font-family: inherit; font-size: 14px !important; }
     /* FIX: Absolute lockdown on transforms */
     transform: none !important; 
 }
-.server-icon.active { border-radius: var(--radius-lg); background: var(--accent-primary); color: white; }
-.server-icon.drag-over { border: 2px dashed var(--accent-primary); opacity: 0.5; }
+.server-icon.active { border-radius: var(--radius-lg); background: var(--accent-primary); color: white; transform: none !important;  }
+.server-icon.drag-over { border: 2px dashed var(--accent-primary); opacity: 0.5; transform: none !important; }
 
 /* === CHANNEL SIDEBAR === */
 #channel-sidebar {
