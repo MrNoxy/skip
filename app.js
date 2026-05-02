@@ -1962,6 +1962,10 @@ function processMentionsAndText(text) {
     if (!text) return { html: "", isMentioned: false };
     let processed = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
     let isMentioned = false;
+
+    // FIX: Linkify raw URLs safely BEFORE we add any other HTML tags
+    processed = processed.replace(/(https?:\/\/[^\s<]+)/g, `<a href="$1" target="_blank" class="chat-inline-link" style="color:var(--accent-primary); text-decoration:none;">$1</a>`);
+
     if (myProfile.username && text.includes('@' + myProfile.username)) isMentioned = true;
     myServerRoles.forEach(role => { if (serverRolesCache[role] && text.includes('@' + serverRolesCache[role].name)) isMentioned = true; });
 
@@ -2031,22 +2035,22 @@ async function buildMessageHtml(data) {
 
     // NEW: OpenGraph Link Previews
     if (data.embed) {
-        const site = data.embed.publisher || data.embed.author || new URL(data.embed.url).hostname;
-        const imgHtml = data.embed.image ? `<img src="${data.embed.image.url}" class="url-embed-img">` : '';
-        const logoHtml = data.embed.logo ? `<img src="${data.embed.logo.url}" style="width:14px;height:14px;border-radius:3px;">` : '';
+        // Safer checks to prevent errors if the API misses some data
+        const site = data.embed.publisher || data.embed.author || (data.embed.url ? new URL(data.embed.url).hostname : 'Link');
+        const imgHtml = data.embed.image?.url ? `<img src="${data.embed.image.url}" class="url-embed-img">` : '';
+        const logoHtml = data.embed.logo?.url ? `<img src="${data.embed.logo.url}" style="width:14px;height:14px;border-radius:3px;object-fit:contain;">` : '';
         const desc = data.embed.description ? `<div class="url-embed-desc">${data.embed.description}</div>` : '';
         
         contentHtml += `
-        <a href="${data.embed.url}" target="_blank" class="url-embed" style="margin-left:42px;">
+        <a href="${data.embed.url || '#'}" target="_blank" class="url-embed" style="margin-left:42px;">
             <div class="url-embed-site">${logoHtml} ${site}</div>
-            <div class="url-embed-title">${data.embed.title || 'Link'}</div>
+            <div class="url-embed-title">${data.embed.title || 'Link Preview'}</div>
             ${desc}
             ${imgHtml}
         </a>`;
     }
-    
-    // Optional: make raw URLs in text clickable
-    contentHtml = contentHtml.replace(/(https?:\/\/[^\s]+)(?!["'])/g, `<a href="$1" target="_blank" style="color:var(--accent-primary); text-decoration:none;">$1</a>`);
+
+    // FIX: Removed the "contentHtml = contentHtml.replace..." line that was breaking the HTML!
 
     return { html: contentHtml, isMentioned: mentionData.isMentioned, embeds: tempEmbeds };
 }
