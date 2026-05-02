@@ -923,11 +923,11 @@ function renderHomeContent() {
         
         // IMPORTANT: Replace 'YOUR-HEADWAY-ACCOUNT' with your actual Headway page name.
         // Example: If your headway is https://headwayapp.co/skip-chat, put 'skip-chat' here.
-        const HEADWAY_PAGE = 'mrnoxy-github-changelog'; 
+       const HEADWAY_PAGE = 'mrnoxy-github-changelog'; 
         const RSS_URL = `https://headwayapp.co/${HEADWAY_PAGE}/rss`;
         
-        // FIX: Add the cache buster to the outer rss2json URL, NOT the Headway URL!
-        fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(RSS_URL)}&order_by=pubDate&t=${Date.now()}`)
+        // FIX: Removed the &t= parameter because rss2json strictly rejects it with a 422 error!
+        fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(RSS_URL)}&order_by=pubDate`)
             .then(res => {
                 if (!res.ok) throw new Error('API Error');
                 return res.json();
@@ -1291,6 +1291,7 @@ function loadMyServers() {
                     currentServerId = serverId;
 
                     currentChatId = null;
+                    chatType = 'server';
 
                     document.getElementById('server-name-display').innerText = sData.name;
                     document.getElementById('server-dropdown-arrow').style.display = 'inline';

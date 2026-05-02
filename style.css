@@ -173,19 +173,20 @@ input, textarea, select { font-family: inherit; font-size: 14px !important; }
 }
 .server-list-separator { width: 32px; height: 1px; background: var(--border-color); margin: 4px 0; flex-shrink: 0; }
 .server-icon {
-    width: 46px; height: 46px; background: var(--bg-tertiary);
+    width: 46px; height: 46px; background-color: var(--bg-tertiary);
     border-radius: var(--radius-md); display: flex; justify-content: center; align-items: center;
     cursor: pointer; font-weight: 700; font-size: 17px;
-    transition: border-radius 0.2s ease, background 0.2s ease, transform 0.15s ease;
+    /* FIX: Removed 'transform' from the transition to stop sub-pixel zooming */
+    transition: border-radius 0.2s ease, background-color 0.2s ease; 
     position: relative; background-size: cover; background-position: center;
     color: var(--text-main); flex-shrink: 0; border: 1px solid transparent;
 }
 .server-icon:hover { 
     border-radius: var(--radius-lg); 
-    background: var(--accent-primary); 
+    background-color: var(--accent-primary); 
     color: white; 
-    /* FIX: Force scale to 1 so it doesn't inherit a zoom effect */
-    transform: translateY(-2px) scale(1) !important; 
+    /* FIX: Absolute lockdown on transforms */
+    transform: none !important; 
 }
 .server-icon.active { border-radius: var(--radius-lg); background: var(--accent-primary); color: white; }
 .server-icon.drag-over { border: 2px dashed var(--accent-primary); opacity: 0.5; }
