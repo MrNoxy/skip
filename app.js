@@ -917,7 +917,6 @@ function renderHomeContent() {
     document.getElementById('nav-requests-btn').classList.toggle('active', currentHomeTab === 'requests');
 
     // === 1. NEWS TAB (Headway Integration) ===
-    // === 1. NEWS TAB (Headway Integration) ===
     if (currentHomeTab === 'news') {
         hNews.style.display = 'flex'; hFriends.style.display = 'none'; hRequests.style.display = 'none';
         content.innerHTML = '<div style="text-align:center; padding: 40px; color:var(--text-muted);"><div class="loading-spinner" style="width:24px;height:24px;border:2px solid var(--border-color);border-top-color:var(--accent-primary);border-radius:50%;margin:0 auto 10px;"></div>Loading latest updates...</div>';
@@ -926,21 +925,32 @@ function renderHomeContent() {
         const HEADWAY_PAGE = 'mrnoxy-github-changelog'; 
         const RSS_URL = `https://headwayapp.co/${HEADWAY_PAGE}/rss`;
         
-        // FIX: Abandon rss2json. We use a simple proxy and parse the raw XML natively!
-        fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(RSS_URL)}`)
+        // FIX: Using corsproxy.io, which is much stealthier against Cloudflare!
+        // Notice we are fetching raw text now, not JSON.
+        fetch(`https://corsproxy.io/?${encodeURIComponent(RSS_URL)}`)
             .then(res => {
-                if (!res.ok) throw new Error('API Error');
-                return res.json();
+                if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
+                return res.text();
             })
-            .then(data => {
-                // If Headway returns a 404 page instead of XML, catch it
-                if (!data.contents || data.contents.includes('The page you were looking for doesn')) {
-                    throw new Error('Headway page not found');
+            .then(xmlText => {
+                // DEBUGGING: This will print the first 150 characters to your F12 Console
+                console.log("Headway Response:", xmlText.substring(0, 150));
+
+                // If Cloudflare blocked us, it usually sends an HTML page saying "Just a moment..."
+                if (xmlText.includes('cloudflare') || xmlText.includes('Just a moment')) {
+                    throw new Error('Blocked by Cloudflare bot protection');
                 }
 
                 // Natively parse the XML feed
                 const parser = new DOMParser();
-                const xmlDoc = parser.parseFromString(data.contents, "text/xml");
+                const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+                
+                // If the parser fails, throw an error
+                if (xmlDoc.querySelector("parsererror")) {
+                    console.error("XML Parse Error:", xmlDoc.querySelector("parsererror").textContent);
+                    throw new Error('Invalid XML format');
+                }
+
                 const items = Array.from(xmlDoc.querySelectorAll("item"));
 
                 content.innerHTML = '';
@@ -1004,7 +1014,7 @@ function renderHomeContent() {
             })
             .catch(err => {
                 console.error("News Feed Error:", err);
-                content.innerHTML = '<div class="news-container"><p style="color:var(--accent-danger); text-align:center;">Failed to load news. Please verify your Headway page name is correct.</p></div>';
+                content.innerHTML = `<div class="news-container"><p style="color:var(--accent-danger); text-align:center;">Failed to load news. ${err.message}</p></div>`;
             });
     }
     // === 2. FRIENDS TAB ===
