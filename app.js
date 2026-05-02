@@ -923,11 +923,16 @@ function renderHomeContent() {
         
         // IMPORTANT: Make sure this is your EXACT Headway page name!
         const HEADWAY_PAGE = 'mrnoxy-github-changelog'; 
-        const RSS_URL = `https://headwayapp.co/${HEADWAY_PAGE}/rss`;
+        const RSS_URL = `https://headwayapp.co/${HEADWAY_PAGE}/rss?nocache=${Date.now()}`;
         
-        // FIX: Using corsproxy.io, which is much stealthier against Cloudflare!
-        // Notice we are fetching raw text now, not JSON.
-        fetch(`https://corsproxy.io/?${encodeURIComponent(RSS_URL)}`)
+        
+        fetch(`https://corsproxy.io/?${encodeURIComponent(RSS_URL)}`, {
+            cache: 'no-store',
+            headers: {
+                'Pragma': 'no-cache',
+                'Cache-Control': 'no-cache'
+            }
+        })
             .then(res => {
                 if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
                 return res.text();
