@@ -932,8 +932,9 @@ function renderHomeContent() {
                 container.className = 'news-container';
                 
                 data.items.forEach(item => {
-                    // Format date nicely (e.g., "October 14, 2024")
                     const date = new Date(item.pubDate.replace(/-/g, '/')).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+                    // Create a unique ID for Firebase using the Headway GUID
+                    const postId = btoa(item.guid || item.title).replace(/=/g, '').substring(0, 30);
                     
                     const card = document.createElement('div');
                     card.className = 'news-card';
@@ -941,8 +942,34 @@ function renderHomeContent() {
                         <div class="news-date">${date}</div>
                         <h2 class="news-title">${item.title}</h2>
                         <div class="news-content">${item.content}</div>
+                        <div class="news-reaction-bar" id="news-react-${postId}"></div>
                     `;
                     container.appendChild(card);
+                    
+                    // Setup Live Reactions for this specific post
+                    onValue(ref(db, `news_reactions/${postId}`), (rSnap) => {
+                        const reactions = rSnap.val() || {};
+                        const bar = document.getElementById(`news-react-${postId}`);
+                        if (!bar) return;
+                        bar.innerHTML = '';
+                        
+                        // You can customize these options!
+                        const emojis = ['👍', '❤️', '🔥', '🎉'];
+                        emojis.forEach(emoji => {
+                            const users = reactions[emoji] || {};
+                            const count = Object.keys(users).length;
+                            const hasVoted = !!users[currentUserSafeEmail];
+                            
+                            const btn = document.createElement('button');
+                            btn.className = `news-reaction-btn ${hasVoted ? 'active' : ''}`;
+                            btn.innerHTML = `${emoji} ${count > 0 ? count : ''}`;
+                            btn.onclick = () => {
+                                const p = `news_reactions/${postId}/${emoji}/${currentUserSafeEmail}`;
+                                if (hasVoted) remove(ref(db, p)); else set(ref(db, p), true);
+                            };
+                            bar.appendChild(btn);
+                        });
+                    });
                 });
                 content.appendChild(container);
             })
@@ -2002,6 +2029,25 @@ async function buildMessageHtml(data) {
         </a>`;
     }
 
+    // NEW: OpenGraph Link Previews
+    if (data.embed) {
+        const site = data.embed.publisher || data.embed.author || new URL(data.embed.url).hostname;
+        const imgHtml = data.embed.image ? `<img src="${data.embed.image.url}" class="url-embed-img">` : '';
+        const logoHtml = data.embed.logo ? `<img src="${data.embed.logo.url}" style="width:14px;height:14px;border-radius:3px;">` : '';
+        const desc = data.embed.description ? `<div class="url-embed-desc">${data.embed.description}</div>` : '';
+        
+        contentHtml += `
+        <a href="${data.embed.url}" target="_blank" class="url-embed" style="margin-left:42px;">
+            <div class="url-embed-site">${logoHtml} ${site}</div>
+            <div class="url-embed-title">${data.embed.title || 'Link'}</div>
+            ${desc}
+            ${imgHtml}
+        </a>`;
+    }
+    
+    // Optional: make raw URLs in text clickable
+    contentHtml = contentHtml.replace(/(https?:\/\/[^\s]+)(?!["'])/g, `<a href="$1" target="_blank" style="color:var(--accent-primary); text-decoration:none;">$1</a>`);
+
     return { html: contentHtml, isMentioned: mentionData.isMentioned, embeds: tempEmbeds };
 }
 
@@ -2169,9 +2215,37 @@ function renderReactions(msgId, reactionsObj) {
     });
 }
 
+let unsubscribeTyping = null;
+
 async function loadMessages(dbPath, chatNameLabel) {
     messagesDiv.innerHTML = '';
     currentChatLabelText = chatNameLabel;
+    // NEW: Listen for typing activity
+    if (unsubscribeTyping) unsubscribeTyping();
+    unsubscribeTyping = onValue(ref(db, `typing/${currentChatId}`), (snap) => {
+        const typers = [];
+        snap.forEach(child => {
+            // Check if the timestamp is less than 5 seconds old
+            if (child.key !== currentUserSafeEmail && Date.now() - child.val() < 5000) {
+                const u = globalUsersCache[child.key];
+                if (u) typers.push(u.username);
+            }
+        });
+        const tEl = document.getElementById('typing-indicator');
+        if (tEl) {
+            if (typers.length > 0) {
+                const text = typers.length === 1 ? `<strong>${typers[0]}</strong> is typing` : 
+                             typers.length === 2 ? `<strong>${typers[0]}</strong> and <strong>${typers[1]}</strong> are typing` : 
+                             `Several people are typing`;
+                tEl.innerHTML = `<span class="typing-dots"><span>.</span><span>.</span><span>.</span></span> <span>${text}</span>`;
+                tEl.style.display = 'flex';
+                // Auto scroll a tiny bit to make room for indicator
+                messagesDiv.scrollTop += 20; 
+            } else {
+                tEl.style.display = 'none';
+            }
+        }
+    });
     lastMsgSender = null; lastMsgTime = 0;
     oldestMsgTimestamp = null; isFetchingMore = false;
     if (unsubscribeMessages) unsubscribeMessages();
@@ -2252,11 +2326,23 @@ document.getElementById('cancel-reply-btn')?.addEventListener('click', () => { r
 const msgInput = document.getElementById('msg-input');
 const mentionMenu = document.getElementById('mention-menu');
 let mentionStartIndex = -1; let mentionSearchTerm = null;
+let myTypingTimeout = null;
 
 msgInput?.addEventListener('input', function () {
     this.style.height = 'auto';
     this.style.height = Math.min(this.scrollHeight, 200) + 'px';
     const val = this.value; const cursorPos = this.selectionStart;
+    
+    // Broadcast Typing Indicator
+    if (currentChatId) {
+        if (!myTypingTimeout) set(ref(db, `typing/${currentChatId}/${currentUserSafeEmail}`), Date.now());
+        else clearTimeout(myTypingTimeout);
+        myTypingTimeout = setTimeout(() => {
+            remove(ref(db, `typing/${currentChatId}/${currentUserSafeEmail}`));
+            myTypingTimeout = null;
+        }, 3000);
+    }
+
     const textBeforeCursor = val.substring(0, cursorPos);
     const match = textBeforeCursor.match(/@(\w*)$/);
     if (match) { mentionStartIndex = match.index; mentionSearchTerm = match[1].toLowerCase(); showMentionMenu(mentionSearchTerm); }
@@ -2746,7 +2832,22 @@ async function sendMessage() {
         document.getElementById('attachment-preview-area').style.display = 'none';
     }
 
-    push(ref(db, path), msgPayload);
+    const sentMsgRef = push(ref(db, path), msgPayload);
+    
+    // --- NEW: LINK EMBED PREVIEW FETCHING ---
+    const urls = text.match(/(https?:\/\/[^\s]+)/g);
+    if (urls && urls.length > 0) {
+        // Fetch metadata in the background
+        fetch(`https://api.microlink.io/?url=${encodeURIComponent(urls[0])}`)
+            .then(res => res.json())
+            .then(data => {
+                // If the link has valid meta tags, attach it to the message payload
+                if (data.status === 'success' && data.data) {
+                    update(sentMsgRef, { embed: data.data });
+                }
+            }).catch(e => console.log('Embed fetch failed', e));
+    }
+
     input.value = '';
     input.style.height = 'auto';
     mentionMenu.style.display = 'none';
