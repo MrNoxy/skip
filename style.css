@@ -184,7 +184,8 @@ input, textarea, select { font-family: inherit; font-size: 14px !important; }
     border-radius: var(--radius-lg); 
     background: var(--accent-primary); 
     color: white; 
-    transform: translateY(-2px); /* Gentle lift instead of huge zoom */
+    /* FIX: Force scale to 1 so it doesn't inherit a zoom effect */
+    transform: translateY(-2px) scale(1) !important; 
 }
 .server-icon.active { border-radius: var(--radius-lg); background: var(--accent-primary); color: white; }
 .server-icon.drag-over { border: 2px dashed var(--accent-primary); opacity: 0.5; }

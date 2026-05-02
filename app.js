@@ -926,12 +926,12 @@ function renderHomeContent() {
         const HEADWAY_PAGE = 'mrnoxy-github-changelog'; 
         const RSS_URL = `https://headwayapp.co/${HEADWAY_PAGE}/rss`;
         
-        // We use rss2json to convert the XML feed into a nice JSON format
-        // FIX: Added cache bypass string to ensure immediate updates from Headway
-        const bypassCacheUrl = `${RSS_URL}?t=${Date.now()}`;
-        
-        fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(bypassCacheUrl)}&order_by=pubDate`)
-            .then(res => res.json())
+        // FIX: Add the cache buster to the outer rss2json URL, NOT the Headway URL!
+        fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(RSS_URL)}&order_by=pubDate&t=${Date.now()}`)
+            .then(res => {
+                if (!res.ok) throw new Error('API Error');
+                return res.json();
+            })
             .then(data => {
                 content.innerHTML = '';
                 if (!data.items || data.items.length === 0) {
@@ -1289,6 +1289,9 @@ function loadMyServers() {
                 div.addEventListener('click', async () => {
                     document.body.classList.remove('mobile-chat-active', 'mobile-home-active');
                     currentServerId = serverId;
+
+                    currentChatId = null;
+
                     document.getElementById('server-name-display').innerText = sData.name;
                     document.getElementById('server-dropdown-arrow').style.display = 'inline';
                     const header = document.getElementById('sidebar-header');
