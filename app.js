@@ -2403,9 +2403,8 @@ async function loadTrendingGifs(loadMore = false) {
     document.getElementById('gif-loading').style.display = 'block';
 
     try {
-        // FIX: Klipy uses 'offset', calculated by page number
-        const offset = (gifPage - 1) * 20;
-        const res = await fetch(`https://api.klipy.com/v2/featured?key=${KLIPY_API_KEY}&limit=20&offset=${offset}&media_filter=gif`);
+        // FIX: Reverted back to using page=${gifPage} so Klipy actually gives us new GIFs!
+        const res = await fetch(`https://api.klipy.com/v2/featured?key=${KLIPY_API_KEY}&limit=20&page=${gifPage}&media_filter=gif`);
         const data = await res.json();
         document.getElementById('gif-loading').style.display = 'none';
         
@@ -2435,9 +2434,8 @@ async function searchGifs(query, loadMore = false) {
     document.getElementById('gif-loading').style.display = 'block';
 
     try {
-        // FIX: Klipy uses 'offset', calculated by page number
-        const offset = (gifPage - 1) * 20;
-        const res = await fetch(`https://api.klipy.com/v2/search?key=${KLIPY_API_KEY}&q=${encodeURIComponent(query)}&limit=20&offset=${offset}&media_filter=gif`);
+        // FIX: Reverted back to using page=${gifPage} here too
+        const res = await fetch(`https://api.klipy.com/v2/search?key=${KLIPY_API_KEY}&q=${encodeURIComponent(query)}&limit=20&page=${gifPage}&media_filter=gif`);
         const data = await res.json();
         document.getElementById('gif-loading').style.display = 'none';
         
@@ -2472,7 +2470,8 @@ function renderGifResults(results, append = false) {
         
         item.innerHTML = `<img src="${preview}" alt="gif" loading="lazy">`;
         
-        if (gif.is_ad) {
+        // --- KLIPY ADVERTISEMENT HANDLING ---
+        if (gif.is_ad || gif.type === 'ad') {
             const adBadge = document.createElement('div');
             adBadge.innerText = 'Ad';
             adBadge.style.cssText = 'position:absolute; bottom:6px; right:6px; background:rgba(0,0,0,0.7); color:white; font-size:10px; font-weight:bold; padding:2px 6px; border-radius:4px; pointer-events:none; z-index: 10;';
