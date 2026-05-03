@@ -1273,7 +1273,7 @@ document.getElementById('create-server-btn')?.addEventListener('click', () => {
             const serverId = generateCode();
             const everyonePerms = { viewChannels: true, sendMessages: true, manageChannels: false, manageServerSettings: false, manageServerProfile: false, manageServerOverview: false, manageRoles: false, manageMessages: false, kickMembers: false, banMembers: false, timeoutMembers: false };
             set(ref(db, `servers/${serverId}`), { name: serverName, owner: auth.currentUser.email });
-            set(ref(db, `servers/${serverId}/roles/everyone`), { name: '@everyone', color: '#abb2bf', order: -1, hoist: false, mentionable: true, perms: everyonePerms });
+            set(ref(db, `servers/${serverId}/roles/everyone`), { name: 'everyone', color: '#abb2bf', order: -1, hoist: false, mentionable: true, perms: everyonePerms });
             set(ref(db, `server_members/${serverId}/${currentUserSafeEmail}`), { role: 'owner' });
             set(ref(db, `users/${currentUserSafeEmail}/servers/${serverId}`), { order: Date.now() });
             const catId = push(ref(db, `categories/${serverId}`)).key;
