@@ -2073,7 +2073,8 @@ function processMentionsAndText(text) {
 }
 
 async function buildMessageHtml(data) {
-    const mentionData = processMentionsAndText(data.text);
+    const rawText = data.text || ""; // FIX: Guarantees text never crashes the regex
+    const mentionData = processMentionsAndText(rawText);
     const editedHtml = data.edited ? `<span style="font-size:10px;color:var(--text-muted);margin-left:5px;">(edited)</span>` : '';
     // NEW: Apply jumbo-emoji class if it's emoji-only
     const emojiClass = mentionData.isEmojiOnly ? 'emoji-only-msg' : '';
@@ -2081,7 +2082,7 @@ async function buildMessageHtml(data) {
 
     const inviteRegex = new RegExp(`${appBaseUrl.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\?invite=([a-zA-Z0-9]+)`, 'g');
     let match; let tempEmbeds = [];
-    while ((match = inviteRegex.exec(data.text)) !== null) {
+    while ((match = inviteRegex.exec(rawText)) !== null) {
         const iCode = match[1]; const placeholderId = 'embed-' + generateCode();
         contentHtml += `<div id="${placeholderId}" style="margin-left:42px;margin-top:5px;"></div>`;
         tempEmbeds.push({ code: iCode, id: placeholderId });
@@ -2159,24 +2160,56 @@ function insertWelcomeMessage() {
 }
 
 async function fetchOlderMessages() {
+    if (!oldestMsgTimestamp) return;
     isFetchingMore = true;
     const oldScrollHeight = messagesDiv.scrollHeight;
     document.getElementById('chat-loading-spinner').style.display = 'block';
-    const msgRef = query(ref(db, chatType === 'server' ? `messages/${currentChatId}` : `dms/${currentChatId}`), orderByChild('timestamp'), endAt(oldestMsgTimestamp - 1), limitToLast(50));
-    const snap = await get(msgRef);
-    if (snap.exists()) {
-        const msgs = [];
-        snap.forEach(c => msgs.push({ id: c.key, data: c.val() }));
-        if (msgs.length > 0) oldestMsgTimestamp = msgs[0].data.timestamp; else oldestMsgTimestamp = null;
-        const fragment = document.createDocumentFragment();
-        let tempLastSender = null; let tempLastTime = 0;
-        for (const m of msgs) { const el = await createMessageDOM(m.id, m.data, tempLastSender, tempLastTime); fragment.appendChild(el); tempLastSender = m.data.sender; tempLastTime = m.data.timestamp; }
-        messagesDiv.insertBefore(fragment, messagesDiv.firstChild);
-        messagesDiv.scrollTop = messagesDiv.scrollHeight - oldScrollHeight;
-        if (msgs.length < 50) { oldestMsgTimestamp = null; insertWelcomeMessage(); }
-    } else { oldestMsgTimestamp = null; insertWelcomeMessage(); }
-    document.getElementById('chat-loading-spinner').style.display = 'none';
-    isFetchingMore = false;
+    
+    try {
+        // FIX: Use endAt(oldestMsgTimestamp) to prevent skipping messages sent at the exact same millisecond
+        const msgRef = query(ref(db, chatType === 'server' ? `messages/${currentChatId}` : `dms/${currentChatId}`), orderByChild('timestamp'), endAt(oldestMsgTimestamp), limitToLast(50));
+        const snap = await get(msgRef);
+        
+        if (snap.exists()) {
+            const msgs = [];
+            snap.forEach(c => {
+                // FIX: Filter out the duplicate anchor message so it doesn't repeat
+                if (!document.getElementById(`msg-${c.key}`)) {
+                    msgs.push({ id: c.key, data: c.val() });
+                }
+            });
+            
+            if (msgs.length > 0) {
+                oldestMsgTimestamp = msgs[0].data.timestamp;
+                const fragment = document.createDocumentFragment();
+                let tempLastSender = null; let tempLastTime = 0;
+                for (const m of msgs) { 
+                    const el = await createMessageDOM(m.id, m.data, tempLastSender, tempLastTime); 
+                    fragment.appendChild(el); 
+                    tempLastSender = m.data.sender; tempLastTime = m.data.timestamp; 
+                }
+                messagesDiv.insertBefore(fragment, messagesDiv.firstChild);
+                
+                // Keep the screen exactly where the user was looking
+                messagesDiv.scrollTop = messagesDiv.scrollHeight - oldScrollHeight;
+            }
+            
+            // If we fetched fewer than 49 new messages, we've hit the absolute beginning!
+            if (msgs.length < 49) { 
+                oldestMsgTimestamp = null; 
+                insertWelcomeMessage(); 
+            }
+        } else { 
+            oldestMsgTimestamp = null; 
+            insertWelcomeMessage(); 
+        }
+    } catch (err) {
+        console.error("History fetch error:", err);
+    } finally {
+        document.getElementById('chat-loading-spinner').style.display = 'none';
+        // FIX: Guaranteed to unlock scrolling even if a rare error occurs!
+        setTimeout(() => { isFetchingMore = false; }, 100);
+    }
 }
 
 async function createMessageDOM(msgId, data, prevSender, prevTime) {
