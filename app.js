@@ -47,6 +47,7 @@ let globalDecorationsCache = {};
 
 let unsubscribeMessages = null;
 let unsubscribeMessagesRemoved = null;
+let unsubscribeMessagesChanged = null;
 let unsubscribeMembers = null;
 let unsubscribeChannels = null;
 let unsubscribeCategories = null;
@@ -2374,12 +2375,21 @@ async function loadMessages(dbPath, chatNameLabel) {
     let insertedDivider = false;
     document.getElementById('chat-loading-spinner').style.display = 'block';
     const msgRef = query(ref(db, dbPath), orderByChild('timestamp'), limitToLast(50));
+    
     const initialSnap = await get(msgRef);
-    let highestTimestamp = 0; let firstMsg = true;
-    const initialMessages = Object.entries(initialSnap.val() || {});
-    for (const childSnap of initialMessages) {
-        const msgId = childSnap[0]; const data = childSnap[1];
-        if (firstMsg) { oldestMsgTimestamp = data.timestamp; firstMsg = false; }
+    let highestTimestamp = 0; 
+    
+    // FIX 1: Safely parse messages strictly in Firebase's chronological order
+    const initialMessages = [];
+    initialSnap.forEach(child => {
+        initialMessages.push({ id: child.key, data: child.val() });
+    });
+
+    if (initialMessages.length > 0) oldestMsgTimestamp = initialMessages[0].data.timestamp;
+    else oldestMsgTimestamp = null;
+
+    for (const m of initialMessages) {
+        const msgId = m.id; const data = m.data;
         const el = await createMessageDOM(msgId, data, lastMsgSender, lastMsgTime);
         if (data.timestamp > lastReadTime && !insertedDivider && data.sender !== auth.currentUser.email) {
             insertedDivider = true;
@@ -2390,6 +2400,7 @@ async function loadMessages(dbPath, chatNameLabel) {
         lastMsgSender = data.sender; lastMsgTime = data.timestamp;
         highestTimestamp = Math.max(highestTimestamp, data.timestamp);
     }
+    
     if (initialMessages.length < 50) { insertWelcomeMessage(); oldestMsgTimestamp = null; }
     document.getElementById('chat-loading-spinner').style.display = 'none';
     
@@ -2415,30 +2426,28 @@ async function loadMessages(dbPath, chatNameLabel) {
 
     unsubscribeMessagesRemoved = onChildRemoved(ref(db, dbPath), (snapshot) => { const msgEl = document.getElementById(`msg-${snapshot.key}`); if (msgEl) msgEl.remove(); });
 
-    onValue(ref(db, dbPath), async (snap) => {
-        snap.forEach(msgSnap => {
-            const mData = msgSnap.val();
-            renderReactions(msgSnap.key, mData.reactions || {});
-            const msgEl = document.getElementById(`msg-${msgSnap.key}`);
-            
-            if (msgEl) {
-                const contentWrapper = msgEl.querySelector('.msg-content-wrapper');
-                if (contentWrapper && !contentWrapper.querySelector('.edit-msg-input')) {
-                    
-                    // FIX: Check if the message gained an embed or was edited natively!
-                    const currentDataStr = JSON.stringify({ text: mData.text, edited: mData.edited, embed: mData.embed });
-                    
-                    if (msgEl.dataset.raw !== currentDataStr) {
-                        msgEl.dataset.raw = currentDataStr;
-                        buildMessageHtml(mData).then(res => { 
-                            contentWrapper.innerHTML = res.html; 
-                            bindImageClick(contentWrapper.querySelector('.message-image, .message-gif'));
-                            scrollToBottom(); // Scroll down if the embed pushed content out of view
-                        });
-                    }
+    // FIX 2: Only update specific messages that change (saves massive memory & stops glitches)
+    if (unsubscribeMessagesChanged) unsubscribeMessagesChanged();
+    unsubscribeMessagesChanged = onChildChanged(ref(db, dbPath), async (childSnap) => {
+        const mData = childSnap.val();
+        const msgId = childSnap.key;
+        renderReactions(msgId, mData.reactions || {});
+        
+        const msgEl = document.getElementById(`msg-${msgId}`);
+        if (msgEl) {
+            const contentWrapper = msgEl.querySelector('.msg-content-wrapper');
+            if (contentWrapper && !contentWrapper.querySelector('.edit-msg-input')) {
+                const currentDataStr = JSON.stringify({ text: mData.text, edited: mData.edited, embed: mData.embed });
+                
+                if (msgEl.dataset.raw !== currentDataStr) {
+                    msgEl.dataset.raw = currentDataStr;
+                    buildMessageHtml(mData).then(res => { 
+                        contentWrapper.innerHTML = res.html; 
+                        bindImageClick(contentWrapper.querySelector('.message-image, .message-gif'));
+                    });
                 }
             }
-        });
+        }
     });
 
     if (chatType === 'dm') clearUnread('dm', currentChatId); else if (chatType === 'server') clearUnread('channel', currentChatId, currentServerId);

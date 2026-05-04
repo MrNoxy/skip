@@ -774,16 +774,19 @@ button:disabled { background: var(--bg-tertiary); cursor: not-allowed; color: va
     
     /* Mobile Fluid Swipe Setup */
     #main-view-container { 
-        width: 100vw; display: flex; position: absolute; top: 0; left: 0; height: 100%; 
+        width: 100vw; display: flex; 
+        position: absolute !important; /* CRITICAL FIX: Overrides inline HTML style */
+        top: 0 !important; left: 0 !important; 
+        height: 100%; 
         background: var(--bg-main); z-index: 40; 
-        transform: translateX(100%); /* Hides it off-screen to the right */
+        transform: translateX(100%); 
         transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
-        box-shadow: -8px 0 24px rgba(0,0,0,0.5); /* Drops a shadow on the sidebars */
+        box-shadow: -8px 0 24px rgba(0,0,0,0.5); 
     }
     
     body.mobile-chat-active #main-view-container,
     body.mobile-home-active #main-view-container { 
-        transform: translateX(0); /* Slides it into view */
+        transform: translateX(0) !important; 
     }
     
     
