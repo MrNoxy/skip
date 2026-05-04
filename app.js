@@ -835,7 +835,9 @@ document.getElementById('uc-profile-trigger')?.addEventListener('click', (e) => 
 // Update Status from Dropdown
 document.querySelectorAll('.status-option[data-status]').forEach(opt => {
     opt.addEventListener('click', (e) => {
-        const s = e.target.getAttribute('data-status');
+        // FIX: Changed e.target to e.currentTarget
+        const s = e.currentTarget.getAttribute('data-status'); 
+        
         update(ref(db, `users/${currentUserSafeEmail}`), { status: s, saved_status: s });
         document.getElementById('status-selector').style.display = 'none';
     });
