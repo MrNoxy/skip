@@ -767,18 +767,24 @@ button:disabled { background: var(--bg-tertiary); cursor: not-allowed; color: va
 /* === MEDIA: MOBILE === */
 @media (max-width: 768px) {
     #channel-sidebar { width: calc(100vw - 68px); }
-    #main-view-container { width: 100vw; display: none; position: absolute; top: 0; left: 0; height: 100%; background: var(--bg-main); z-index: 40; }
+    
     
     #user-controls-dock { width: calc(100vw - 20px); }
     body.mobile-chat-active #user-controls-dock { display: none !important; }
     
-    body.mobile-chat-active #server-sidebar { display: none; }
-    body.mobile-chat-active #channel-sidebar { display: none; }
-    body.mobile-chat-active #main-view-container { display: flex; }
+    /* Mobile Fluid Swipe Setup */
+    #main-view-container { 
+        width: 100vw; display: flex; position: absolute; top: 0; left: 0; height: 100%; 
+        background: var(--bg-main); z-index: 40; 
+        transform: translateX(100%); /* Hides it off-screen to the right */
+        transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+        box-shadow: -8px 0 24px rgba(0,0,0,0.5); /* Drops a shadow on the sidebars */
+    }
     
-    body.mobile-home-active #server-sidebar { display: none; }
-    body.mobile-home-active #channel-sidebar { display: none; }
-    body.mobile-home-active #main-view-container { display: flex; }
+    body.mobile-chat-active #main-view-container,
+    body.mobile-home-active #main-view-container { 
+        transform: translateX(0); /* Slides it into view */
+    }
     
     
     .mobile-back-btn { display: flex; }

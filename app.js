@@ -2225,6 +2225,25 @@ async function createMessageDOM(msgId, data, prevSender, prevTime) {
     } else {        msgElement.innerHTML = `${actionsHtml}<div class="msg-content-wrapper">${buildRes.html}</div>`;
     }
 
+    // --- Jump to Replied Message ---
+    const replyCtx = msgElement.querySelector('.reply-context');
+    if (replyCtx && data.replyTo && data.replyTo.id) {
+        replyCtx.style.cursor = 'pointer';
+        replyCtx.addEventListener('click', () => {
+            const targetMsg = document.getElementById(`msg-${data.replyTo.id}`);
+            if (targetMsg) {
+                targetMsg.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // Flash the message background
+                const oldBg = targetMsg.style.backgroundColor;
+                targetMsg.style.backgroundColor = 'rgba(79,129,214,0.25)';
+                targetMsg.style.transition = 'background-color 0.4s ease';
+                setTimeout(() => targetMsg.style.backgroundColor = oldBg, 1200);
+            } else {
+                showToast("Message is too old or hasn't loaded yet.", "info");
+            }
+        });
+    }
+
     const reactionsDiv = document.createElement('div'); reactionsDiv.className = 'reactions-container'; reactionsDiv.id = `reactions-${msgId}`;
     msgElement.appendChild(reactionsDiv);
     if (data.reactions) renderReactions(msgId, data.reactions);
@@ -2648,6 +2667,69 @@ document.addEventListener('click', (e) => {
     if (!e.target.closest('#emoji-picker') && !e.target.closest('#emoji-picker-btn') && !e.target.closest('.react')) emojiPickerEl.style.display = 'none';
     if (!e.target.closest('#gif-picker') && !e.target.closest('#gif-picker-btn')) closeGifPicker();
 });
+
+
+// ==========================================
+// --- MOBILE SWIPE GESTURES ---
+// ==========================================
+const mainViewEl = document.getElementById('main-view-container');
+let touchStartX = 0;
+let touchStartY = 0;
+let isSwiping = false;
+
+mainViewEl.addEventListener('touchstart', (e) => {
+    if (window.innerWidth > 768) return;
+    
+    // Only trigger if swiping from the very left edge (first 30px of screen)
+    if (e.touches[0].clientX > 30) return; 
+    
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+    isSwiping = true;
+    
+    // Temporarily remove the CSS transition so the screen sticks exactly to your finger
+    mainViewEl.style.transition = 'none'; 
+}, { passive: true });
+
+mainViewEl.addEventListener('touchmove', (e) => {
+    if (!isSwiping) return;
+    const deltaX = e.touches[0].clientX - touchStartX;
+    const deltaY = Math.abs(e.touches[0].clientY - touchStartY);
+    
+    // Cancel the swipe if the user is scrolling up/down through messages
+    if (deltaY > 20 && deltaY > deltaX) {
+        isSwiping = false;
+        mainViewEl.style.transform = '';
+        mainViewEl.style.transition = '';
+        return;
+    }
+
+    // Only drag fluidly to the right
+    if (deltaX > 0) {
+        mainViewEl.style.transform = `translateX(${deltaX}px)`;
+    }
+}, { passive: true });
+
+mainViewEl.addEventListener('touchend', (e) => {
+    if (!isSwiping) return;
+    isSwiping = false;
+    
+    // Restore the smooth CSS snap transition
+    mainViewEl.style.transition = ''; 
+    
+    const deltaX = e.changedTouches[0].clientX - touchStartX;
+    
+    // If they swiped past 25% of the screen, trigger the back action
+    if (deltaX > window.innerWidth / 4) { 
+        document.body.classList.remove('mobile-chat-active', 'mobile-home-active');
+        mainViewEl.style.transform = ''; // Let CSS take over
+    } else {
+        // Didn't swipe far enough, snap back to active
+        mainViewEl.style.transform = 'translateX(0)';
+        setTimeout(() => { if (!isSwiping) mainViewEl.style.transform = ''; }, 300);
+    }
+});
+
 
 // ==========================================
 // --- GIF PICKER (KLIPY API) ---
