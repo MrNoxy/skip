@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-import { getDatabase, ref, push, onChildAdded, onChildRemoved, onValue, set, get, child, remove, onDisconnect, query, limitToLast, update, orderByChild, startAt, endAt } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { getDatabase, ref, push, onChildAdded, onChildRemoved, onChildChanged, onValue, set, get, child, remove, onDisconnect, query, limitToLast, update, orderByChild, startAt, endAt } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-storage.js";
 
 // ==========================================
@@ -2702,18 +2702,21 @@ mainViewEl.addEventListener('touchstart', (e) => {
 
 mainViewEl.addEventListener('touchmove', (e) => {
     if (!isSwiping) return;
+    
     const deltaX = e.touches[0].clientX - touchStartX;
     const deltaY = Math.abs(e.touches[0].clientY - touchStartY);
     
-    // Cancel the swipe if the user is scrolling up/down through messages
-    if (deltaY > 20 && deltaY > deltaX) {
+    // FIX: Ultra-strict scroll detection. 
+    // If the user's finger moves vertically more than horizontally early in the touch, 
+    // instantly abort the swipe lock and let them scroll the chat normally!
+    if (deltaY > deltaX) {
         isSwiping = false;
         mainViewEl.style.transform = '';
         mainViewEl.style.transition = '';
         return;
     }
 
-    // Only drag fluidly to the right
+    // Only drag fluidly to the right if they are intentionally swiping sideways
     if (deltaX > 0) {
         mainViewEl.style.transform = `translateX(${deltaX}px)`;
     }
