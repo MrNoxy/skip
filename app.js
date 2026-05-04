@@ -959,6 +959,22 @@ function renderHomeContent() {
 
                 const items = Array.from(xmlDoc.querySelectorAll("item"));
 
+                // --- NEW NEWS BADGE LOGIC ---
+                if (items.length > 0) {
+                 const latestPostId = btoa(items[0].querySelector("guid")?.textContent || "").replace(/=/g, '').substring(0, 30);
+                    const savedPostId = localStorage.getItem('skip_last_news_id');
+                    
+                    // If they are on a different tab and haven't seen this post, show a dot!
+                    if (savedPostId !== latestPostId && currentHomeTab !== 'news') {
+                        updateBadge('nav-news-btn', true, true, false); // Shows the red dot
+                    } 
+                    // If they are currently looking at the news tab, clear the dot and save the ID
+                    else if (currentHomeTab === 'news') {
+                        localStorage.setItem('skip_last_news_id', latestPostId);
+                        updateBadge('nav-news-btn', false);
+                    }
+                }   
+
                 content.innerHTML = '';
                 if (items.length === 0) {
                     content.innerHTML = '<div class="news-container"><p style="color:var(--text-muted); text-align:center;">No news available at the moment.</p></div>';
@@ -3116,16 +3132,28 @@ document.getElementById('msg-input')?.addEventListener('keydown', (e) => {
 // ==========================================
 // --- NOTIFICATIONS ---
 // ==========================================
+// 1. Load the audio file
+const notifSound = new Audio('ping.mp3'); 
+
 function startNotificationListeners() {
+    // Ask the browser/OS for permission to show popups on startup
+    if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+        Notification.requestPermission();
+    }
+
     if (dmsNotifListener) dmsNotifListener();
     if (serversNotifListener) serversNotifListener();
+    
     dmsNotifListener = onChildAdded(ref(db, `users/${currentUserSafeEmail}/friends`), (childSnapshot) => {
         const dmId = childSnapshot.val().dmId;
         onChildAdded(query(ref(db, `dms/${dmId}`), limitToLast(1)), (msg) => {
             const mData = msg.val();
-            if (notificationsActive && currentChatId !== dmId && mData.timestamp > appStartTime && mData.sender !== auth.currentUser.email) markUnread('dm', dmId, null, false);
+            if (notificationsActive && currentChatId !== dmId && mData.timestamp > appStartTime && mData.sender !== auth.currentUser.email) {
+                markUnread('dm', dmId, null, false, mData); // Passed mData here!
+            }
         });
     });
+    
     serversNotifListener = onChildAdded(ref(db, `users/${currentUserSafeEmail}/servers`), (childSnapshot) => {
         const serverId = childSnapshot.key;
         onChildAdded(ref(db, `channels/${serverId}`), (cSnap) => {
@@ -3134,7 +3162,7 @@ function startNotificationListeners() {
                     const mData = msg.val();
                     if (notificationsActive && currentChatId !== cSnap.key && mData.timestamp > appStartTime && mData.sender !== auth.currentUser.email) {
                         const isMention = processMentionsAndText(mData.text).isMentioned;
-                        markUnread('channel', cSnap.key, serverId, isMention);
+                        markUnread('channel', cSnap.key, serverId, isMention, mData); // Passed mData here!
                     }
                 });
             }
@@ -3142,9 +3170,43 @@ function startNotificationListeners() {
     });
 }
 
-function markUnread(type, id, serverId = null, isMention = false) {
-    if (type === 'dm') { unreadState.dms.add(id); updateBadge(`dm-${id}`, true, false, isMention); updateBadge('home-btn', true, true, isMention); }
-    else if (type === 'channel') { unreadState.channels.add(id); unreadState.servers.add(serverId); updateBadge(`channel-${id}`, true, false, isMention); updateBadge(`server-${serverId}`, true, true, isMention); }
+function markUnread(type, id, serverId = null, isMention = false, messageData = null) {
+    // Visual Badges
+    if (type === 'dm') { 
+        unreadState.dms.add(id); 
+        updateBadge(`dm-${id}`, true, false, isMention); 
+        updateBadge('home-btn', true, true, isMention); 
+    } else if (type === 'channel') { 
+        unreadState.channels.add(id); 
+        unreadState.servers.add(serverId); 
+        updateBadge(`channel-${id}`, true, false, isMention); 
+        updateBadge(`server-${serverId}`, true, true, isMention); 
+    }
+
+    // --- SOUND & POPUP LOGIC ---
+    if (messageData && myProfile) {
+        // Only trigger if Online or Invisible ('offline' in your db)
+        if (myProfile.status === 'online' || myProfile.status === 'offline') {
+            
+            // 1. Play the Discord-style ping
+            notifSound.play().catch(e => console.log("Audio autoplay blocked until user clicks"));
+            
+            // 2. Show native OS notification
+            if (Notification.permission === "granted") {
+                let title = type === 'dm' ? `Direct Message from ${messageData.username}` : `New message in Server`;
+                if (isMention) title = `You were mentioned by ${messageData.username}`;
+                
+                let plainText = (messageData.text || '').replace(/<[^>]*>?/gm, ''); // Strip HTML
+                if (!plainText && messageData.imageUrl) plainText = "Sent an image";
+                if (!plainText && messageData.fileUrl) plainText = "Sent a file";
+
+                new Notification(title, {
+                    body: plainText,
+                    icon: messageData.avatar || 'https://ui-avatars.com/api/?name=U'
+                });
+            }
+        }
+    }
 }
 function clearUnread(type, id, serverId = null) {
     if (type === 'dm') { unreadState.dms.delete(id); updateBadge(`dm-${id}`, false); if (unreadState.dms.size === 0) updateBadge('home-btn', false); }
