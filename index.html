@@ -370,11 +370,14 @@
                 <div class="fs-tab" data-tab="security" id="tab-us-security">Security</div>
                 <div class="fs-tab" data-tab="emojis" id="tab-us-emojis">Personal Emojis</div>
 		        <div class="fs-tab" data-tab="decorations" id="tab-us-decorations">Avatar Decorations</div>
+
+                <div class="fs-tab" data-tab="admin" id="tab-us-admin" style="display: none; color: var(--accent-purple);">👑 Admin Dashboard</div>
+
                 <div style="height: 1px; background: var(--border-color); margin: 10px 0;"></div>
                 <div class="fs-tab" id="us-logout-btn" style="color: var(--accent-danger);">Log Out</div>
 
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; position: absolute; bottom: 0px;">
-                    <h3><span style="color: var(--text-muted); font-size: 11px; font-weight:bold; text-transform:uppercase; letter-spacing: 0.05em;">Version 2.2.5-may001B</span></h3>
+                    <h3><span style="color: var(--text-muted); font-size: 11px; font-weight:bold; text-transform:uppercase; letter-spacing: 0.05em;">Version 2.2.5-may002B</span></h3>
                     <button id="close-user-settings-btn" class="fs-close-btn-mobile" title="Close">✖</button>
                 </div>
 
@@ -396,6 +399,31 @@
     			<div id="us-decorations-grid" style="display: flex; flex-wrap: wrap; gap: 15px;">
         		</div>
 		</div>
+
+
+                <!-- Admin Dashboard Tab -->
+<div class="ss-pane" id="pane-us-admin" style="display: none;">
+    <h3 style="color:var(--accent-purple); font-size:11px; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:15px;">Manage User Badges</h3>
+    
+    <div style="padding:15px; background:var(--bg-main); border-radius:8px; border:1px solid var(--border-color); margin-bottom:20px;">
+        <p style="color:var(--text-muted); font-size:13px; margin:0 0 15px 0;">Grant or revoke badges for any user. Enter their exact login email.</p>
+        
+        <label class="fs-label">Target User Email</label>
+        <input type="email" id="admin-target-email" placeholder="user@example.com" class="fs-input" autocomplete="off">
+        
+        <label class="fs-label">Select Badge</label>
+        <select id="admin-badge-select" class="fs-input">
+            <option value="developer">Skip Developer</option>
+            <option value="early_user">Early Supporter</option>
+            <option value="bug_hunter">Bug Hunter</option>
+        </select>
+        
+        <div style="display: flex; gap: 10px; margin-top: 10px;">
+            <button id="admin-grant-btn" style="background-color: var(--accent-success); flex: 1;">Grant Badge</button>
+            <button id="admin-revoke-btn" style="background-color: var(--accent-danger); flex: 1;">Revoke Badge</button>
+        </div>
+    </div>
+</div>
                 
                 
                 <!-- Account Tab -->

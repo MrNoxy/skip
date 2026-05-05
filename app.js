@@ -616,6 +616,13 @@ onAuthStateChanged(auth, async (user) => {
         appContainer.style.display = 'flex';
         currentUserSafeEmail = sanitizeEmail(user.email);
 
+        // Set your admin email here!
+const MY_ADMIN_EMAIL = "noxy@gmail.com"; 
+
+if (user.email === MY_ADMIN_EMAIL) {
+    document.getElementById('tab-us-admin').style.display = 'block';
+}
+
         onValue(ref(db, `users/${currentUserSafeEmail}`), (snapshot) => {
             if (snapshot.exists()) {
                 myProfile = snapshot.val();
@@ -2959,6 +2966,39 @@ async function sendGif(gifUrl) {
     }
     update(ref(db, `users/${currentUserSafeEmail}/lastRead`), { [currentChatId]: Date.now() });
 }
+
+
+// ==========================================
+// --- ADMIN DASHBOARD LOGIC ---
+// ==========================================
+async function handleAdminBadge(isGranting) {
+    const targetEmailRaw = document.getElementById('admin-target-email').value.trim().toLowerCase();
+    const badgeType = document.getElementById('admin-badge-select').value;
+    
+    if (!targetEmailRaw) {
+        return customAlert("Please enter a target user's email.", "Error");
+    }
+
+    const targetSafeEmail = sanitizeEmail(targetEmailRaw);
+
+    try {
+        // We set the badge to 'true' if granting, or 'null' (which deletes it) if revoking
+        await update(ref(db, `users/${targetSafeEmail}/badges`), {
+            [badgeType]: isGranting ? true : null
+        });
+        
+        showToast(`Badge successfully ${isGranting ? 'granted to' : 'revoked from'} ${targetEmailRaw}!`, 'success');
+        document.getElementById('admin-target-email').value = ''; // clear the input
+        
+    } catch (error) {
+        console.error(error);
+        customAlert("Permission Denied! Are you sure you are logged in as the Admin?", "Security Blocked");
+    }
+}
+
+document.getElementById('admin-grant-btn')?.addEventListener('click', () => handleAdminBadge(true));
+document.getElementById('admin-revoke-btn')?.addEventListener('click', () => handleAdminBadge(false));
+
 
 // ==========================================
 // --- FILE UPLOAD (Firebase Storage) ---
