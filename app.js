@@ -340,10 +340,11 @@ window.showGlobalUserProfile = async function (email, event) {
             studioLayer.innerHTML = ''; // Clear old elements
             const studio = uData.studio || { colors: ['var(--bg-secondary)', 'var(--bg-main)'], angle: 135, elements: [] };
             
-            // 1. Draw the gradient background
-            studioLayer.style.background = `linear-gradient(${studio.angle}deg, ${studio.colors.join(', ')})`;
+            // 1. Draw the gradient background safely
+            const safeColors = studio.colors || ['var(--bg-secondary)', 'var(--bg-main)'];
+            studioLayer.style.background = `linear-gradient(${studio.angle || 135}deg, ${safeColors.join(', ')})`;
             
-            // 2. Plot the stickers and text
+            // 2. Plot the stickers and text safely
             if (studio.elements && studio.elements.length > 0) {
                 studio.elements.forEach(el => {
                     const domEl = document.createElement(el.type === 'image' ? 'img' : 'div');
@@ -984,7 +985,8 @@ function renderStudio() {
     const elementsLayer = document.getElementById('studio-elements-layer');
     if(elementsLayer) {
         elementsLayer.innerHTML = '';
-        studioState.elements.forEach((el, index) => {
+        // FIX: Force fallback to empty array so it never crashes!
+        (studioState.elements || []).forEach((el, index) => {
             const domEl = document.createElement(el.type === 'image' ? 'img' : 'div');
             domEl.className = 'studio-element';
             domEl.style.left = el.x + 'px';
@@ -1087,8 +1089,11 @@ document.getElementById('open-settings-btn')?.addEventListener('click', (e) => {
     const bioInput = document.getElementById('edit-bio');
     if (bioInput) bioInput.value = myProfile.bio || '';
 
-    // Load Studio State safely
+    // Load Studio State safely and fix Firebase empty array deletions
     studioState = myProfile.studio || { colors: ['#161b22', '#0f1115'], angle: 135, elements: [] };
+    if (!studioState.elements) studioState.elements = []; // Prevent the crash
+    if (!studioState.colors) studioState.colors = ['#161b22', '#0f1115']; // Ensure colors exist
+    
     if (typeof renderStudio === 'function') renderStudio(); // Draw the studio!
 
     // Open Modal safely
