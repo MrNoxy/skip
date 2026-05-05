@@ -1063,32 +1063,43 @@ document.getElementById('studio-add-text-btn')?.addEventListener('click', () => 
 // Settings Button Logic
 document.getElementById('open-settings-btn')?.addEventListener('click', (e) => {
     e.stopPropagation();
-    document.getElementById('status-selector').style.display = 'none';
-    document.getElementById('edit-username').value = myProfile.username;
-    document.getElementById('edit-tag').value = myProfile.tag;
     
-    // Load Avatar & Banner
-document.getElementById('profile-preview').src = myProfile.avatar;
-tempBase64Avatar = myProfile.avatar;
-tempBase64Banner = myProfile.banner || null;
-document.getElementById('settings-banner-preview').style.backgroundImage = tempBase64Banner ? `url("${tempBase64Banner}")` : 'none';
-document.getElementById('edit-bio').value = myProfile.bio || '';
-
-// Load Studio State
-studioState = myProfile.studio || { colors: ['#161b22', '#0f1115'], angle: 135, elements: [] };
-renderStudio(); // Force the studio to draw itself!
+    const statusSelector = document.getElementById('status-selector');
+    if (statusSelector) statusSelector.style.display = 'none';
     
-    // Load Banner & Bio & Colors
+    // Load Username & Tag safely
+    const usernameInput = document.getElementById('edit-username');
+    if (usernameInput) usernameInput.value = myProfile.username || '';
+    
+    const tagInput = document.getElementById('edit-tag');
+    if (tagInput) tagInput.value = myProfile.tag || '';
+    
+    // Load Avatar safely
+    const avatarPreview = document.getElementById('profile-preview');
+    if (avatarPreview) avatarPreview.src = myProfile.avatar || 'https://cdn.pixabay.com/photo/2023/02/18/11/00/icon-7797704_640.png';
+    tempBase64Avatar = myProfile.avatar;
+    
+    // Load Banner & Bio safely
     tempBase64Banner = myProfile.banner || null;
-    document.getElementById('settings-banner-preview').style.backgroundImage = tempBase64Banner ? `url(${tempBase64Banner})` : 'none';
-    document.getElementById('edit-bio').value = myProfile.bio || '';
-    document.getElementById('edit-color1').value = myProfile.profileTheme?.color1 || '#161b22';
-    document.getElementById('edit-color2').value = myProfile.profileTheme?.color2 || '#0f1115';
+    const bannerPreview = document.getElementById('settings-banner-preview');
+    if (bannerPreview) bannerPreview.style.backgroundImage = tempBase64Banner ? `url("${tempBase64Banner}")` : 'none';
+    
+    const bioInput = document.getElementById('edit-bio');
+    if (bioInput) bioInput.value = myProfile.bio || '';
 
-    document.getElementById('user-settings-modal').style.display = 'flex';
-    document.querySelector('#user-settings-modal .fs-modal-layout').classList.remove('mobile-viewing-content');
-    document.querySelector('#user-settings-modal .fs-tab[data-tab="account"]').click();
-    loadPersonalEmojis();
+    // Load Studio State safely
+    studioState = myProfile.studio || { colors: ['#161b22', '#0f1115'], angle: 135, elements: [] };
+    if (typeof renderStudio === 'function') renderStudio(); // Draw the studio!
+
+    // Open Modal safely
+    const userSettingsModal = document.getElementById('user-settings-modal');
+    if (userSettingsModal) {
+        userSettingsModal.style.display = 'flex';
+        document.querySelector('#user-settings-modal .fs-modal-layout')?.classList.remove('mobile-viewing-content');
+        document.querySelector('#user-settings-modal .fs-tab[data-tab="account"]')?.click();
+    }
+    
+    if (typeof loadPersonalEmojis === 'function') loadPersonalEmojis();
 });
 
 // Banner Upload Logic (Supports GIFs)
