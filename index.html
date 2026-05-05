@@ -289,7 +289,11 @@
     <!-- User Profile Popout -->
     <div id="global-user-profile-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: transparent; z-index: 4000;">
         <div class="modal-content profile-popout" style="padding: 0; width: 340px; overflow: hidden; background: var(--bg-secondary); position: absolute; box-shadow: 0 8px 24px rgba(0,0,0,0.6); border: 1px solid var(--border-color); border-radius: 10px;">
-            <div id="gup-banner" style="height: 100px; width: 100%; background: var(--accent-primary); background-color:  #0e1218; position: relative; border-radius: 10px 10px 0 0; overflow: hidden;">
+            
+            <!-- NEW: Studio Background Layer (Lives behind the banner and the card) -->
+            <div id="gup-studio-layer" style="position:absolute; inset:0; z-index:0;"></div>
+            
+            <div id="gup-banner" style="height: 100px; width: 100%; background: var(--accent-primary); background-color: #0e1218; position: relative; border-radius: 10px 10px 0 0; overflow: hidden; z-index: 1;"></div>
                 <div style="position: absolute; top: 10px; right: 10px; display: flex; gap: 8px; z-index: 10;">
                     <div class="action-circle message-btn" id="gup-send-message" title="Message" style="background: rgba(0,0,0,0.6); color: white; display: none; width: 32px; height: 32px;">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
@@ -308,7 +312,7 @@
     </div>
     
     <!-- We added the ID 'gup-inner-card' and glassmorphism styling here -->
-    <div id="gup-inner-card" style="margin-top: 35px; background: rgba(15, 17, 21, 0.7); backdrop-filter: blur(12px); padding: 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+    <div id="gup-inner-card" style="margin-top: 35px; background: rgba(15, 17, 21, 0.3); backdrop-filter: blur(12px); padding: 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
         <div style="display: flex; align-items: center; gap: 8px;">
             <h3 id="gup-username" style="margin: 0; font-size: 18px; color: var(--text-bright); font-weight:700;">Username</h3>
             <div id="gup-badges" style="display: flex; gap: 4px; align-items: center;"></div>
@@ -391,7 +395,7 @@
                 <div class="fs-tab" id="us-logout-btn" style="color: var(--accent-danger);">Log Out</div>
 
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; position: absolute; bottom: 0px;">
-                    <h3><span style="color: var(--text-muted); font-size: 11px; font-weight:bold; text-transform:uppercase; letter-spacing: 0.05em;">Version 2.2.5-may004B</span></h3>
+                    <h3><span style="color: var(--text-muted); font-size: 11px; font-weight:bold; text-transform:uppercase; letter-spacing: 0.05em;">Version 2.2.5-may005B</span></h3>
                     <button id="close-user-settings-btn" class="fs-close-btn-mobile" title="Close">✖</button>
                 </div>
 
@@ -471,18 +475,41 @@
                         </div>
                     </div>
 
-                    <!-- NEW: Profile Theme (Colors) -->
-                    <h3 style="color:var(--text-muted); font-size:11px; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:15px;">Profile Theme</h3>
-                    <div style="display: flex; gap: 20px; margin-bottom: 25px; padding: 15px; background:var(--bg-main); border-radius:8px; border:1px solid var(--border-color);">
-                        <div style="flex: 1;">
-                            <label class="fs-label" style="margin-bottom: 5px;">Primary Color</label>
-                            <input type="color" id="edit-color1" style="width: 100%; height: 40px; padding: 0; cursor: pointer; border: 1px solid var(--border-color); border-radius: 4px;" value="#161b22">
-                        </div>
-                        <div style="flex: 1;">
-                            <label class="fs-label" style="margin-bottom: 5px;">Accent Color</label>
-                            <input type="color" id="edit-color2" style="width: 100%; height: 40px; padding: 0; cursor: pointer; border: 1px solid var(--border-color); border-radius: 4px;" value="#0f1115">
-                        </div>
-                    </div>
+                    <!-- PROFILE BACKGROUND STUDIO -->
+    <h3 style="color:var(--text-muted); font-size:11px; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:15px;">Profile Background Studio</h3>
+    <div id="profile-studio" style="display:flex; flex-direction:column; gap:15px; margin-bottom: 25px; padding: 15px; background:var(--bg-main); border-radius:8px; border:1px solid var(--border-color);">
+        <div style="display:flex; gap: 20px;">
+            
+            <!-- Left: Preview Canvas -->
+            <div id="studio-canvas" style="width: 260px; height: 360px; position:relative; overflow:hidden; border-radius:10px; border: 1px solid var(--border-color); flex-shrink:0;">
+                <!-- Render Layers -->
+                <div id="studio-bg-layer" style="position:absolute; inset:0; z-index:1;"></div>
+                <div id="studio-elements-layer" style="position:absolute; inset:0; z-index:2;"></div>
+                
+                <!-- Fake UI overlay to help them position things -->
+                <div style="position:absolute; top:0; left:0; width:100%; height:80px; background:rgba(0,0,0,0.2); z-index:3; pointer-events:none;"></div>
+                <div style="position:absolute; bottom:15px; left:15px; right:15px; height: 160px; background: rgba(15, 17, 21, 0.85); backdrop-filter: blur(12px); border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); z-index:3; pointer-events:none;"></div>
+            </div>
+
+            <!-- Right: Studio Controls -->
+            <div style="flex-grow: 1; display:flex; flex-direction:column; gap:10px;">
+                <label class="fs-label">Background Colors</label>
+                <div id="studio-color-list" style="display:flex; flex-direction:column; gap:5px;"></div>
+                <button class="small-btn" id="studio-add-color" style="margin:0; background:var(--bg-hover); color:var(--text-bright); border:1px dashed var(--border-color);">+ Add Color</button>
+
+                <label class="fs-label" style="margin-top:10px;">Gradient Angle</label>
+                <input type="range" id="studio-angle" min="0" max="360" value="135" style="width:100%; accent-color: var(--accent-primary);">
+
+                <label class="fs-label" style="margin-top:10px;">Add Elements</label>
+                <div style="display:flex; gap:10px;">
+                    <button class="small-btn" onclick="document.getElementById('studio-sticker-upload').click()" style="margin:0; flex:1;">🖼️ Sticker</button>
+                    <input type="file" id="studio-sticker-upload" accept="image/*,image/gif" style="display:none;">
+                    <button class="small-btn" id="studio-add-text-btn" style="margin:0; flex:1;">📝 Text</button>
+                </div>
+                <p style="font-size:11px; color:var(--text-muted); margin-top:5px; line-height: 1.4;">Drag elements on the canvas to position them.<br><strong style="color:var(--accent-danger);">Right-click an element to remove it.</strong></p>
+            </div>
+        </div>
+    </div>
                     
                     <h3 style="color:var(--text-muted); font-size:11px; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:15px;">Profile Info</h3>
                     <label class="fs-label">Username</label>

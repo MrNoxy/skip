@@ -334,71 +334,91 @@ window.showGlobalUserProfile = async function (email, event) {
         nameEl.innerText = uData.username;
         tagEl.innerText = `#${uData.tag}`;
 
-        // --- NEW: APPLY THEME & BANNER ---
-        const themeC1 = uData.profileTheme?.color1 || 'var(--bg-secondary)';
-        const themeC2 = uData.profileTheme?.color2 || '#0e1218'; // Fallback darker color
-        
-        // Apply the gradient background to the entire modal
-        content.style.background = `linear-gradient(135deg, ${themeC1} 0%, ${themeC2} 100%)`;
-        
+        // --- RENDER STUDIO BACKGROUND & ELEMENTS ---
+        const studioLayer = document.getElementById('gup-studio-layer');
+        if(studioLayer) {
+            studioLayer.innerHTML = ''; // Clear old elements
+            const studio = uData.studio || { colors: ['var(--bg-secondary)', 'var(--bg-main)'], angle: 135, elements: [] };
+            
+            // 1. Draw the gradient background
+            studioLayer.style.background = `linear-gradient(${studio.angle}deg, ${studio.colors.join(', ')})`;
+            
+            // 2. Plot the stickers and text
+            if (studio.elements && studio.elements.length > 0) {
+                studio.elements.forEach(el => {
+                    const domEl = document.createElement(el.type === 'image' ? 'img' : 'div');
+                    domEl.style.cssText = `position:absolute; left:${el.x}px; top:${el.y}px; z-index:0; pointer-events:none; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));`;
+                    if(el.type === 'image') {
+                        domEl.src = el.content;
+                        domEl.style.maxWidth = '100px';
+                        domEl.style.maxHeight = '100px';
+                    } else {
+                        domEl.innerText = el.content;
+                        domEl.style.color = '#ffffff';
+                        domEl.style.fontWeight = 'bold';
+                        domEl.style.fontSize = '24px';
+                        domEl.style.textShadow = '0 2px 4px rgba(0,0,0,0.8)';
+                    }
+                    studioLayer.appendChild(domEl);
+                });
+            }
+        }
+
+        // --- FIX THE BANNER BUG ---
+        // Using explicit URL quotes stops Base64 string breaking
         if (uData.banner) {
-            bannerEl.style.backgroundImage = `url(${uData.banner})`;
+            bannerEl.style.backgroundImage = `url("${uData.banner}")`;
             bannerEl.style.backgroundSize = 'cover';
             bannerEl.style.backgroundPosition = 'center';
             bannerEl.style.backgroundColor = 'transparent';
         } else {
             bannerEl.style.backgroundImage = 'none';
-            bannerEl.style.backgroundColor = themeC1;
+            bannerEl.style.backgroundColor = 'transparent'; // Let the studio gradient show through!
         }
 
-        // --- NEW: APPLY BIO ---
+        // --- RENDER BIO ---
         const bioContainer = document.getElementById('gup-bio-container');
         const bioText = document.getElementById('gup-bio');
         if (uData.bio && uData.bio.trim() !== '') {
             bioText.innerText = uData.bio;
-            bioContainer.style.display = 'block';
+            if(bioContainer) bioContainer.style.display = 'block';
         } else {
-            bioContainer.style.display = 'none';
+            if(bioContainer) bioContainer.style.display = 'none';
         }
 
         // --- RENDER BADGES ---
-const badgesContainer = document.getElementById('gup-badges');
-if (badgesContainer) {
-    badgesContainer.innerHTML = ''; // Clear previous profile's badges
-    
-    if (uData.badges) {
-        Object.keys(uData.badges).forEach(badgeKey => {
-            if (uData.badges[badgeKey] && badgeIcons[badgeKey]) {
-                const badgeDiv = document.createElement('div');
-                badgeDiv.className = 'profile-badge';
-                badgeDiv.title = badgeNames[badgeKey] || badgeKey; // Tooltip on hover
-                badgeDiv.innerHTML = badgeIcons[badgeKey];
-                badgesContainer.appendChild(badgeDiv);
+        const badgesContainer = document.getElementById('gup-badges');
+        if (badgesContainer) {
+            badgesContainer.innerHTML = ''; // Clear previous profile's badges
+            
+            if (uData.badges) {
+                Object.keys(uData.badges).forEach(badgeKey => {
+                    if (uData.badges[badgeKey] && badgeIcons[badgeKey]) {
+                        const badgeDiv = document.createElement('div');
+                        badgeDiv.className = 'profile-badge';
+                        badgeDiv.title = badgeNames[badgeKey] || badgeKey; // Tooltip on hover
+                        badgeDiv.innerHTML = badgeIcons[badgeKey];
+                        badgesContainer.appendChild(badgeDiv);
+                    }
+                });
             }
-        });
-    }
-}
-// ----------------------
-        
-        // --- FIX: Target the wrapper directly so it doesn't crash on the 2nd click! ---
-        // --- FIX: Target the wrapper directly so it doesn't crash on the 2nd click! ---
+        }
+
+        // --- RENDER AVATAR RING COLOR ---
         const avatarContainerWrapper = document.getElementById('gup-avatar-wrapper');
         if (avatarContainerWrapper) {
             avatarContainerWrapper.innerHTML = getAvatarHTML(uData, 'avatar-large');
-            
             const newAvatarContainer = avatarContainerWrapper.querySelector('.avatar-container');
             if (newAvatarContainer) {
                 newAvatarContainer.style.width = '80px';
                 newAvatarContainer.style.height = '80px';
-                // Set the border and background to the primary theme color!
-                newAvatarContainer.style.border = `5px solid ${themeC1}`;
+                // Pick the first gradient color to match the border perfectly
+                const primaryColor = uData.studio?.colors[0] || 'var(--bg-secondary)';
+                newAvatarContainer.style.border = `5px solid ${primaryColor}`;
                 newAvatarContainer.style.borderRadius = '50%';
-                newAvatarContainer.style.background = themeC1;
+                newAvatarContainer.style.background = primaryColor;
             }
         }
-        // ----------------------------------------------------------------------------
-        
-        bannerEl.style.backgroundImage = 'none';
 
         if (currentServerId) {
             const memSnap = await get(ref(db, `server_members/${currentServerId}/${safeEmail}`));
@@ -415,37 +435,33 @@ if (badgesContainer) {
                 const roleFlex = document.createElement('div');
                 roleFlex.style.cssText = 'display:flex; flex-wrap:wrap; gap:5px;';
 
-                // 1. Fixing the badges (around line 369)
-userRoles.forEach(rId => {
-    if (serverRolesCache[rId]) {
-        const badge = document.createElement('span');
-        badge.className = 'role-badge';
-        badge.innerHTML = `<span style="color:${serverRolesCache[rId].color};">●</span> ${serverRolesCache[rId].name}`;
-        
-        // FIX: Removed safeEmail check here!
-        if (myServerPerms.manageRoles || myServerRoles.includes('owner')) {
-            badge.style.cursor = 'pointer';
-            badge.title = 'Click to remove role';
-            badge.onclick = async () => {
-                let newRoles = {};
-                userRoles.forEach(r => { if (r !== rId) newRoles[r] = true; });
-                await update(ref(db, `server_members/${currentServerId}/${safeEmail}`), { roles: Object.keys(newRoles).length ? newRoles : null });
-                showGlobalUserProfile(email); // refresh popup
-            };
-        }
-        roleFlex.appendChild(badge);
-    }
-});
+                userRoles.forEach(rId => {
+                    if (serverRolesCache[rId]) {
+                        const badge = document.createElement('span');
+                        badge.className = 'role-badge';
+                        badge.innerHTML = `<span style="color:${serverRolesCache[rId].color};">●</span> ${serverRolesCache[rId].name}`;
+                        
+                        if (myServerPerms.manageRoles || myServerRoles.includes('owner')) {
+                            badge.style.cursor = 'pointer';
+                            badge.title = 'Click to remove role';
+                            badge.onclick = async () => {
+                                let newRoles = {};
+                                userRoles.forEach(r => { if (r !== rId) newRoles[r] = true; });
+                                await update(ref(db, `server_members/${currentServerId}/${safeEmail}`), { roles: Object.keys(newRoles).length ? newRoles : null });
+                                showGlobalUserProfile(email); // refresh popup
+                            };
+                        }
+                        roleFlex.appendChild(badge);
+                    }
+                });
 
-// 2. Fixing the + Add Role button (around line 385)
-// FIX: Removed safeEmail check here too!
-if (myServerPerms.manageRoles || myServerRoles.includes('owner')) {
-    const addRoleBtn = document.createElement('button');
-    addRoleBtn.style.cssText = 'background:var(--bg-hover); border:1px dashed var(--border-color); color:var(--text-muted); padding:2px 8px; font-size:11px; margin:0; border-radius:4px;';
-    addRoleBtn.innerText = '+ Add Role';
-    addRoleBtn.onclick = (e) => openQuickRoleDropdown(safeEmail, userRoles, e.currentTarget);
-    roleFlex.appendChild(addRoleBtn);
-}
+                if (myServerPerms.manageRoles || myServerRoles.includes('owner')) {
+                    const addRoleBtn = document.createElement('button');
+                    addRoleBtn.style.cssText = 'background:var(--bg-hover); border:1px dashed var(--border-color); color:var(--text-muted); padding:2px 8px; font-size:11px; margin:0; border-radius:4px;';
+                    addRoleBtn.innerText = '+ Add Role';
+                    addRoleBtn.onclick = (e) => openQuickRoleDropdown(safeEmail, userRoles, e.currentTarget);
+                    roleFlex.appendChild(addRoleBtn);
+                }
                 if (roleFlex.children.length > 0) rolesContainer.appendChild(roleFlex);
                 else rolesContainer.style.display = 'none';
 
@@ -819,22 +835,20 @@ document.getElementById('save-profile-btn')?.addEventListener('click', async () 
     const newUsername = document.getElementById('edit-username').value.trim();
     const newTag = document.getElementById('edit-tag').value.trim();
     const newBio = document.getElementById('edit-bio').value.trim();
-    const color1 = document.getElementById('edit-color1').value;
-    const color2 = document.getElementById('edit-color2').value;
 
     if (!newUsername || !newTag) return customAlert("Fields cannot be empty", "Error");
     
     await remove(ref(db, `user_tags/${myProfile.username}_${myProfile.tag}`));
     await set(ref(db, `user_tags/${newUsername}_${newTag}`), currentUserSafeEmail);
     
-    // Save everything!
+    // Save EVERYTHING to Firebase
     await update(ref(db, `users/${currentUserSafeEmail}`), { 
         username: newUsername, 
         tag: newTag, 
         avatar: tempBase64Avatar,
         banner: tempBase64Banner,
         bio: newBio,
-        profileTheme: { color1, color2 }
+        studio: studioState // Save the entire studio configuration!
     });
     showToast('Profile saved!', 'success');
 });
@@ -927,6 +941,125 @@ document.querySelectorAll('.status-option[data-status]').forEach(opt => {
 // Variable to hold the new banner base64
 let tempBase64Banner = null;
 
+// ==========================================
+// --- PROFILE BACKGROUND STUDIO LOGIC ---
+// ==========================================
+let studioState = {
+    colors: ['#161b22', '#0f1115'],
+    angle: 135,
+    elements: [] // Array of { id, type: 'image'|'text', content, x, y }
+};
+
+function renderStudio() {
+    // 1. Render Background
+    const bgLayer = document.getElementById('studio-bg-layer');
+    if(bgLayer) bgLayer.style.background = `linear-gradient(${studioState.angle}deg, ${studioState.colors.join(', ')})`;
+
+    // 2. Render Colors List in Controls
+    const colorList = document.getElementById('studio-color-list');
+    if(colorList) {
+        colorList.innerHTML = '';
+        studioState.colors.forEach((color, index) => {
+            const row = document.createElement('div');
+            row.className = 'studio-color-row';
+            row.innerHTML = `
+                <input type="color" value="${color}">
+                ${studioState.colors.length > 1 ? `<button class="small-btn" style="background:transparent; color:var(--accent-danger); padding:0; margin:0;">✖</button>` : ''}
+            `;
+            row.querySelector('input').addEventListener('input', (e) => {
+                studioState.colors[index] = e.target.value;
+                renderStudio();
+            });
+            if(studioState.colors.length > 1) {
+                row.querySelector('button').addEventListener('click', () => {
+                    studioState.colors.splice(index, 1);
+                    renderStudio();
+                });
+            }
+            colorList.appendChild(row);
+        });
+    }
+
+    // 3. Render Elements (Stickers & Text)
+    const elementsLayer = document.getElementById('studio-elements-layer');
+    if(elementsLayer) {
+        elementsLayer.innerHTML = '';
+        studioState.elements.forEach((el, index) => {
+            const domEl = document.createElement(el.type === 'image' ? 'img' : 'div');
+            domEl.className = 'studio-element';
+            domEl.style.left = el.x + 'px';
+            domEl.style.top = el.y + 'px';
+            
+            if(el.type === 'image') {
+                domEl.src = el.content;
+                domEl.style.maxWidth = '100px';
+                domEl.style.maxHeight = '100px';
+            } else {
+                domEl.innerText = el.content;
+                domEl.style.color = '#ffffff';
+                domEl.style.fontWeight = 'bold';
+                domEl.style.fontSize = '24px';
+                domEl.style.textShadow = '0 2px 4px rgba(0,0,0,0.8)';
+            }
+
+            // Right-click to remove
+            domEl.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                studioState.elements.splice(index, 1);
+                renderStudio();
+            });
+
+            // Drag and Drop Logic
+            let isDragging = false, startX, startY, origX, origY;
+            domEl.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                startX = e.clientX; startY = e.clientY;
+                origX = parseInt(domEl.style.left || 0); origY = parseInt(domEl.style.top || 0);
+                domEl.style.zIndex = 100;
+            });
+            document.addEventListener('mousemove', (e) => {
+                if(!isDragging) return;
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                domEl.style.left = (origX + dx) + 'px';
+                domEl.style.top = (origY + dy) + 'px';
+            });
+            document.addEventListener('mouseup', () => {
+                if(isDragging) {
+                    isDragging = false;
+                    domEl.style.zIndex = '';
+                    el.x = parseInt(domEl.style.left);
+                    el.y = parseInt(domEl.style.top);
+                }
+            });
+
+            elementsLayer.appendChild(domEl);
+        });
+    }
+}
+
+// Control Listeners
+document.getElementById('studio-add-color')?.addEventListener('click', () => {
+    if(studioState.colors.length < 5) { studioState.colors.push('#ffffff'); renderStudio(); }
+});
+document.getElementById('studio-angle')?.addEventListener('input', (e) => {
+    studioState.angle = e.target.value; renderStudio();
+});
+document.getElementById('studio-sticker-upload')?.addEventListener('change', async (e) => {
+    const file = e.target.files[0]; if(!file) return;
+    const result = file.type === 'image/gif' 
+        ? await new Promise(r => { const reader=new FileReader(); reader.onload=ev=>r({compressed: ev.target.result}); reader.readAsDataURL(file); })
+        : await compressImage(file, 200, 200, 0.9);
+    
+    studioState.elements.push({ id: generateCode(), type: 'image', content: result.compressed, x: 50, y: 50 });
+    renderStudio();
+});
+document.getElementById('studio-add-text-btn')?.addEventListener('click', () => {
+    openInputModal("Add Text", "Type something...", "", (text) => {
+        if(text) { studioState.elements.push({ id: generateCode(), type: 'text', content: text, x: 50, y: 50 }); renderStudio(); }
+    });
+});
+
 // Settings Button Logic
 document.getElementById('open-settings-btn')?.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -934,9 +1067,16 @@ document.getElementById('open-settings-btn')?.addEventListener('click', (e) => {
     document.getElementById('edit-username').value = myProfile.username;
     document.getElementById('edit-tag').value = myProfile.tag;
     
-    // Load Avatar
-    document.getElementById('profile-preview').src = myProfile.avatar;
-    tempBase64Avatar = myProfile.avatar;
+    // Load Avatar & Banner
+document.getElementById('profile-preview').src = myProfile.avatar;
+tempBase64Avatar = myProfile.avatar;
+tempBase64Banner = myProfile.banner || null;
+document.getElementById('settings-banner-preview').style.backgroundImage = tempBase64Banner ? `url("${tempBase64Banner}")` : 'none';
+document.getElementById('edit-bio').value = myProfile.bio || '';
+
+// Load Studio State
+studioState = myProfile.studio || { colors: ['#161b22', '#0f1115'], angle: 135, elements: [] };
+renderStudio(); // Force the studio to draw itself!
     
     // Load Banner & Bio & Colors
     tempBase64Banner = myProfile.banner || null;
