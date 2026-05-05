@@ -334,6 +334,33 @@ window.showGlobalUserProfile = async function (email, event) {
         nameEl.innerText = uData.username;
         tagEl.innerText = `#${uData.tag}`;
 
+        // --- NEW: APPLY THEME & BANNER ---
+        const themeC1 = uData.profileTheme?.color1 || 'var(--bg-secondary)';
+        const themeC2 = uData.profileTheme?.color2 || '#0e1218'; // Fallback darker color
+        
+        // Apply the gradient background to the entire modal
+        content.style.background = `linear-gradient(135deg, ${themeC1} 0%, ${themeC2} 100%)`;
+        
+        if (uData.banner) {
+            bannerEl.style.backgroundImage = `url(${uData.banner})`;
+            bannerEl.style.backgroundSize = 'cover';
+            bannerEl.style.backgroundPosition = 'center';
+            bannerEl.style.backgroundColor = 'transparent';
+        } else {
+            bannerEl.style.backgroundImage = 'none';
+            bannerEl.style.backgroundColor = themeC1;
+        }
+
+        // --- NEW: APPLY BIO ---
+        const bioContainer = document.getElementById('gup-bio-container');
+        const bioText = document.getElementById('gup-bio');
+        if (uData.bio && uData.bio.trim() !== '') {
+            bioText.innerText = uData.bio;
+            bioContainer.style.display = 'block';
+        } else {
+            bioContainer.style.display = 'none';
+        }
+
         // --- RENDER BADGES ---
 const badgesContainer = document.getElementById('gup-badges');
 if (badgesContainer) {
@@ -354,18 +381,19 @@ if (badgesContainer) {
 // ----------------------
         
         // --- FIX: Target the wrapper directly so it doesn't crash on the 2nd click! ---
+        // --- FIX: Target the wrapper directly so it doesn't crash on the 2nd click! ---
         const avatarContainerWrapper = document.getElementById('gup-avatar-wrapper');
         if (avatarContainerWrapper) {
             avatarContainerWrapper.innerHTML = getAvatarHTML(uData, 'avatar-large');
             
-            // Force the 80x80 size and centering specific to the profile popout
             const newAvatarContainer = avatarContainerWrapper.querySelector('.avatar-container');
             if (newAvatarContainer) {
                 newAvatarContainer.style.width = '80px';
                 newAvatarContainer.style.height = '80px';
-                newAvatarContainer.style.border = '5px solid var(--bg-secondary)';
+                // Set the border and background to the primary theme color!
+                newAvatarContainer.style.border = `5px solid ${themeC1}`;
                 newAvatarContainer.style.borderRadius = '50%';
-                newAvatarContainer.style.background = 'var(--bg-secondary)';
+                newAvatarContainer.style.background = themeC1;
             }
         }
         // ----------------------------------------------------------------------------
@@ -790,10 +818,24 @@ document.getElementById('avatar-upload')?.addEventListener('change', async (e) =
 document.getElementById('save-profile-btn')?.addEventListener('click', async () => {
     const newUsername = document.getElementById('edit-username').value.trim();
     const newTag = document.getElementById('edit-tag').value.trim();
+    const newBio = document.getElementById('edit-bio').value.trim();
+    const color1 = document.getElementById('edit-color1').value;
+    const color2 = document.getElementById('edit-color2').value;
+
     if (!newUsername || !newTag) return customAlert("Fields cannot be empty", "Error");
+    
     await remove(ref(db, `user_tags/${myProfile.username}_${myProfile.tag}`));
     await set(ref(db, `user_tags/${newUsername}_${newTag}`), currentUserSafeEmail);
-    await update(ref(db, `users/${currentUserSafeEmail}`), { username: newUsername, tag: newTag, avatar: tempBase64Avatar });
+    
+    // Save everything!
+    await update(ref(db, `users/${currentUserSafeEmail}`), { 
+        username: newUsername, 
+        tag: newTag, 
+        avatar: tempBase64Avatar,
+        banner: tempBase64Banner,
+        bio: newBio,
+        profileTheme: { color1, color2 }
+    });
     showToast('Profile saved!', 'success');
 });
 
@@ -882,18 +924,56 @@ document.querySelectorAll('.status-option[data-status]').forEach(opt => {
     });
 });
 
+// Variable to hold the new banner base64
+let tempBase64Banner = null;
+
 // Settings Button Logic
 document.getElementById('open-settings-btn')?.addEventListener('click', (e) => {
     e.stopPropagation();
     document.getElementById('status-selector').style.display = 'none';
     document.getElementById('edit-username').value = myProfile.username;
     document.getElementById('edit-tag').value = myProfile.tag;
+    
+    // Load Avatar
     document.getElementById('profile-preview').src = myProfile.avatar;
     tempBase64Avatar = myProfile.avatar;
+    
+    // Load Banner & Bio & Colors
+    tempBase64Banner = myProfile.banner || null;
+    document.getElementById('settings-banner-preview').style.backgroundImage = tempBase64Banner ? `url(${tempBase64Banner})` : 'none';
+    document.getElementById('edit-bio').value = myProfile.bio || '';
+    document.getElementById('edit-color1').value = myProfile.profileTheme?.color1 || '#161b22';
+    document.getElementById('edit-color2').value = myProfile.profileTheme?.color2 || '#0f1115';
+
     document.getElementById('user-settings-modal').style.display = 'flex';
     document.querySelector('#user-settings-modal .fs-modal-layout').classList.remove('mobile-viewing-content');
     document.querySelector('#user-settings-modal .fs-tab[data-tab="account"]').click();
     loadPersonalEmojis();
+});
+
+// Banner Upload Logic (Supports GIFs)
+document.getElementById('user-banner-upload')?.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.type === 'image/gif') {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            tempBase64Banner = ev.target.result;
+            document.getElementById('settings-banner-preview').style.backgroundImage = `url(${tempBase64Banner})`;
+        };
+        reader.readAsDataURL(file);
+    } else {
+        // Compress to a nice banner ratio
+        const result = await compressImage(file, 600, 240, 0.85);
+        tempBase64Banner = result.compressed;
+        document.getElementById('settings-banner-preview').style.backgroundImage = `url(${tempBase64Banner})`;
+    }
+});
+
+// Remove Banner Button
+document.getElementById('remove-banner-btn')?.addEventListener('click', () => {
+    tempBase64Banner = null;
+    document.getElementById('settings-banner-preview').style.backgroundImage = 'none';
 });
 
 // Quick 'Edit Profile' button inside the new popup
