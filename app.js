@@ -106,6 +106,19 @@ const icons = {
     music: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`,
 };
 
+// Badge Icons dictionary
+const badgeIcons = {
+    developer: `<svg style="color: #4f81d6;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/></svg>`,
+    early_user: `<svg style="color: #e3b341;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>`,
+    bug_hunter: `<svg style="color: #56d364;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 13.29l-3.3-2.4a8.5 8.5 0 0 0-1.4-7.4a8.5 8.5 0 0 0-11.4 0 8.5 8.5 0 0 0-1.5 7.4l-3.3 2.4A1.5 1.5 0 0 0 2 15v2a1.5 1.5 0 0 0 1.5 1.5h17a1.5 1.5 0 0 0 1.5-1.5v-2a1.5 1.5 0 0 0-.8-1.21z"/><circle cx="12" cy="14" r="4"/></svg>`
+};
+
+const badgeNames = {
+    developer: "Skip Developer",
+    early_user: "Early Supporter",
+    bug_hunter: "Bug Hunter"
+};
+
 // Image Compressor
 function compressImage(file, maxWidth, maxHeight, quality) {
     return new Promise((resolve) => {
@@ -320,6 +333,25 @@ window.showGlobalUserProfile = async function (email, event) {
 
         nameEl.innerText = uData.username;
         tagEl.innerText = `#${uData.tag}`;
+
+        // --- RENDER BADGES ---
+const badgesContainer = document.getElementById('gup-badges');
+if (badgesContainer) {
+    badgesContainer.innerHTML = ''; // Clear previous profile's badges
+    
+    if (uData.badges) {
+        Object.keys(uData.badges).forEach(badgeKey => {
+            if (uData.badges[badgeKey] && badgeIcons[badgeKey]) {
+                const badgeDiv = document.createElement('div');
+                badgeDiv.className = 'profile-badge';
+                badgeDiv.title = badgeNames[badgeKey] || badgeKey; // Tooltip on hover
+                badgeDiv.innerHTML = badgeIcons[badgeKey];
+                badgesContainer.appendChild(badgeDiv);
+            }
+        });
+    }
+}
+// ----------------------
         
         // --- FIX: Target the wrapper directly so it doesn't crash on the 2nd click! ---
         const avatarContainerWrapper = document.getElementById('gup-avatar-wrapper');

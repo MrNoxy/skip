@@ -590,6 +590,30 @@ button:disabled { background: var(--bg-tertiary); cursor: not-allowed; color: va
 .status-dnd { background: var(--accent-danger); }
 .status-offline { background: var(--text-muted); }
 
+/* === BADGES === */
+.profile-badge {
+    width: 22px;
+    height: 22px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: 4px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    cursor: help;
+    transition: transform var(--transition), background var(--transition);
+}
+
+.profile-badge:hover {
+    transform: scale(1.15);
+    background: var(--bg-hover);
+}
+
+.profile-badge svg {
+    width: 14px;
+    height: 14px;
+}
+
 /* === AVATARS === */
 .avatar-small { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: var(--bg-tertiary); }
 .avatar-large { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; background: var(--bg-tertiary); }
