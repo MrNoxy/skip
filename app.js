@@ -109,13 +109,13 @@ const icons = {
 // Badge Icons dictionary
 const badgeIcons = {
     developer: `<svg style="color: #4f81d6;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/></svg>`,
-    early_user: `<svg style="color: #e3b341;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>`,
-    bug_hunter: `<svg style="color: #56d364;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 13.29l-3.3-2.4a8.5 8.5 0 0 0-1.4-7.4a8.5 8.5 0 0 0-11.4 0 8.5 8.5 0 0 0-1.5 7.4l-3.3 2.4A1.5 1.5 0 0 0 2 15v2a1.5 1.5 0 0 0 1.5 1.5h17a1.5 1.5 0 0 0 1.5-1.5v-2a1.5 1.5 0 0 0-.8-1.21z"/><circle cx="12" cy="14" r="4"/></svg>`
+    early: `<svg style="color: #e3b341;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v6"/><path d="m4.93 10.93 1.41 1.41"/><path d="M2 18h20"/><path d="M20 18h2"/><path d="m19.07 10.93-1.41 1.41"/><path d="M22 22H2"/><path d="m16 6-1.41 1.41"/><path d="m9.41 7.41-1.41-1.41"/><path d="M12 22a8 8 0 0 0 8-8c0-4.42-3.58-8-8-8s-8 3.58-8 8a8 8 0 0 0 8 8Z"/></svg>`,
+    bug_hunter: `<svg style="color: #56d364;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2l1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3 3 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M17.47 9c1.93-.2 3.53-1.9 3.53-3.9"/><path d="M6 14H2"/><path d="M22 14h-4"/><path d="M7.5 18H2"/><path d="M22 18h-5.5"/></svg>`
 };
 
 const badgeNames = {
-    developer: "Skip Developer",
-    early_user: "Early Supporter",
+    developer: "Skip Dev",
+    early: "Early",
     bug_hunter: "Bug Hunter"
 };
 
