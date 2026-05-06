@@ -500,19 +500,19 @@
         </div>
     </div>
 
-    <!-- 3. PROFILE BACKGROUND STUDIO -->
+    <!-- PROFILE BACKGROUND STUDIO -->
     <h3 style="color:var(--text-muted); font-size:11px; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:15px;">Profile Background Studio</h3>
-    <div id="profile-studio" style="display:flex; flex-direction:column; gap:15px; padding: 15px; background:var(--bg-main); border-radius:8px; border:1px solid var(--border-color);">
-        <div style="display:flex; gap: 20px; flex-wrap: wrap;">
+    <div id="profile-studio" style="display:flex; flex-direction:column; gap:15px; margin-bottom: 25px; padding: 15px; background:var(--bg-main); border-radius:8px; border:1px solid var(--border-color);">
+        <div style="display:flex; gap: 20px;">
             <!-- Left: Preview Canvas -->
-            <div id="studio-canvas" style="width: 260px; height: 360px; position:relative; overflow:hidden; border-radius:10px; border: 1px solid var(--border-color); flex-shrink:0;">
+            <div id="studio-canvas" style="width: 340px; height: 314px; position:relative; overflow:hidden; border-radius:10px; border: 1px solid var(--border-color); flex-shrink:0;">
                 <!-- Render Layers -->
                 <div id="studio-bg-layer" style="position:absolute; inset:0; z-index:1;"></div>
                 <div id="studio-elements-layer" style="position:absolute; inset:0; z-index:2;"></div>
                 
                 <!-- Fake UI overlay to help them position things -->
-                <div style="position:absolute; top:0; left:0; width:100%; height:80px; background:rgba(0,0,0,0.2); z-index:3; pointer-events:none;"></div>
-                <div style="position:absolute; bottom:15px; left:15px; right:15px; height: 160px; background: rgba(15, 17, 21, 0.85); backdrop-filter: blur(12px); border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); z-index:3; pointer-events:none;"></div>
+                <div style="position:absolute; top:0; left:0; width:100%; height:100px; background:rgba(0,0,0,0.2); z-index:3; pointer-events:none;"></div>
+                <div style="position:absolute; width: 308px; height: 147px; margin-top:150px; left:15px; right:15px; background: rgba(15, 17, 21, 0.3); backdrop-filter: blur(12px); border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); z-index:3; pointer-events:none;"></div>
             </div>
 
             <!-- Right: Studio Controls -->
