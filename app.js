@@ -33,7 +33,7 @@ let chatType = 'home';
 let currentHomeTab = 'news';
 let currentUserSafeEmail = null;
 let myProfile = {};
-let myServerPerms = { viewChannels: true, sendMessages: true, manageChannels: false, manageServerSettings: false, manageServerProfile: false, manageServerOverview: false, manageRoles: false, manageMessages: false, kickMembers: false, banMembers: false, timeoutMembers: false };
+let myServerPerms = { viewChannels: true, sendMessages: true, manageChannels: false, manageServerSettings: false, manageServerProfile: false, manageServerOverview: false, manageRoles: false, manageMessages: false, kickMembers: false, banMembers: false, timeoutMembers: false, manageStore: false };
 let myServerRoles = [];
 let myServerMemberData = {};
 
@@ -104,6 +104,7 @@ const icons = {
     file: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>`,
     video: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>`,
     music: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`,
+    storeChannel: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>`,
 };
 
 // Badge Icons dictionary
@@ -596,6 +597,7 @@ function showContextMenu(e, type, id) {
         if (!myServerPerms.manageChannels && !myServerPerms.manageServerSettings && !myServerRoles.includes('owner')) return;
         html += `<div class="context-item" id="ctx-cat-add-text">${icons.textChannel} Add Text Channel</div>`;
         html += `<div class="context-item" id="ctx-cat-add-voice">${icons.voiceChannel} Add Voice Channel</div>`;
+        html += `<div class="context-item" id="ctx-cat-add-store" style="color: var(--accent-success);">${icons.storeChannel} Add Store Channel</div>`;
         html += `<div style="height:1px;background:var(--border-color);margin:4px 0;"></div>`;
         html += `<div class="context-item" id="ctx-edit">${icons.gear} Edit Category</div>`;
         html += `<div class="context-item" id="ctx-delete" style="color:var(--accent-danger);">${icons.trash} Delete Category</div>`;
@@ -629,6 +631,7 @@ document.addEventListener('click', (e) => {
     const ctxSaveEmoji = e.target.closest('#ctx-save-emoji');
     const ctxAddText = e.target.closest('#ctx-cat-add-text');
     const ctxAddVoice = e.target.closest('#ctx-cat-add-voice');
+    const ctxAddStore = e.target.closest('#ctx-cat-add-store');
 
     if (ctxDel && contextTarget) {
         if (contextTarget.type === 'dm') {
@@ -656,6 +659,18 @@ document.addEventListener('click', (e) => {
     } else if (ctxAddVoice && contextTarget) {
         openInputModal("Add Voice Channel", "Lounge", "", (name) => { if (name && currentServerId) push(ref(db, `channels/${currentServerId}`), { name, type: "voice", categoryId: contextTarget.id, order: Date.now() }); });
         ctxMenu.style.display = 'none';
+    } else if (ctxAddStore && contextTarget) {
+    let hasStore = Object.values(currentChannelsData).some(c => c.type === 'store');
+    if (hasStore) {
+        customAlert("You can only have one Store/Downloads channel per server.", "Limit Reached");
+    } else {
+        openInputModal("Add Store Channel", "downloads", "", (name) => { 
+            if (name && currentServerId) {
+                push(ref(db, `channels/${currentServerId}`), { name: name.toLowerCase(), type: "store", categoryId: contextTarget.id, order: Date.now() }); 
+            }
+        });
+    }
+    ctxMenu.style.display = 'none';
     } else if (ctxSaveEmoji && contextTarget) {
         const targetEmoji = globalEmojisCache[contextTarget.id];
         if (targetEmoji) { set(ref(db, `users/${currentUserSafeEmail}/emojis/${contextTarget.id}`), true); showToast('Emoji saved to your collection!', 'success'); }
@@ -1565,7 +1580,7 @@ document.getElementById('create-server-btn')?.addEventListener('click', () => {
     openInputModal("Create Server", "Server Name", "Give your server a name:", (serverName) => {
         if (serverName) {
             const serverId = generateCode();
-            const everyonePerms = { viewChannels: true, sendMessages: true, manageChannels: false, manageServerSettings: false, manageServerProfile: false, manageServerOverview: false, manageRoles: false, manageMessages: false, kickMembers: false, banMembers: false, timeoutMembers: false };
+            const everyonePerms = { viewChannels: true, sendMessages: true, manageChannels: false, manageServerSettings: false, manageServerProfile: false, manageServerOverview: false, manageRoles: false, manageMessages: false, kickMembers: false, banMembers: false, timeoutMembers: false, };
             set(ref(db, `servers/${serverId}`), { name: serverName, owner: auth.currentUser.email });
             set(ref(db, `servers/${serverId}/roles/everyone`), { name: 'everyone', color: '#abb2bf', order: -1, hoist: false, mentionable: true, perms: everyonePerms });
             set(ref(db, `server_members/${serverId}/${currentUserSafeEmail}`), { role: 'owner' });
@@ -2164,11 +2179,23 @@ function renderChannels(serverId) {
         }
         grouped[catId].sort((a, b) => (a.order || 0) - (b.order || 0)).forEach((channelData, index, arr) => {
             const div = document.createElement('div'); div.classList.add('channel-item'); div.id = `channel-${channelData.id}`; div.draggable = myServerPerms.manageChannels;
-            div.innerHTML = channelData.type === "voice" ? `<span class="c-icon">${icons.voiceChannel}</span><span class="c-name">${channelData.name}</span>` : `<span class="c-icon">${icons.textChannel}</span><span class="c-name">${channelData.name}</span>`;
+            if (channelData.type === "voice") {
+                div.innerHTML = `<span class="c-icon">${icons.voiceChannel}</span><span class="c-name">${channelData.name}</span>`;
+            } else if (channelData.type === "store") {
+                div.innerHTML = `<span class="c-icon" style="color: var(--accent-success);">${icons.storeChannel}</span><span class="c-name">${channelData.name}</span>`;
+            } else {
+                div.innerHTML = `<span class="c-icon">${icons.textChannel}</span><span class="c-name">${channelData.name}</span>`;
+            }
             div.addEventListener('click', () => {
-                if (channelData.type === "voice") joinVoiceChannel(serverId, channelData.id);
-                else {
-                    localStorage.setItem(`last_channel_${serverId}`, channelData.id);
+            if (channelData.type === "voice") {
+                joinVoiceChannel(serverId, channelData.id);
+            } else if (channelData.type === "store") {
+                chatType = 'store'; currentChatId = channelData.id;
+                document.querySelectorAll('.channel-item').forEach(el => el.classList.remove('active'));
+                div.classList.add('active');
+                openStoreChannel(channelData.name);
+            } else {
+                localStorage.setItem(`last_channel_${serverId}`, channelData.id);
 
                     chatType = 'server'; currentChatId = channelData.id;
                     document.getElementById('chat-title').innerText = `# ${channelData.name}`;
@@ -3235,6 +3262,199 @@ async function sendGif(gifUrl) {
     update(ref(db, `users/${currentUserSafeEmail}/lastRead`), { [currentChatId]: Date.now() });
 }
 
+// ==========================================
+// --- STORE / DOWNLOADS ENGINE ---
+// ==========================================
+let currentStoreApps = {};
+let tempAppBanner = null;
+let tempAppScreenshots = [];
+let editingAppId = null;
+
+function openStoreChannel(channelName) {
+    document.body.classList.remove('mobile-home-active');
+    document.body.classList.add('mobile-chat-active');
+    
+    document.getElementById('home-area').style.display = 'none';
+    document.getElementById('chat-area').style.display = 'none';
+    document.getElementById('store-area').style.display = 'flex';
+    document.getElementById('store-title').innerHTML = `${icons.storeChannel} ${channelName}`;
+    
+    // Check permissions
+    const canManageStore = myServerPerms.manageStore || myServerPerms.manageServerSettings || myServerRoles.includes('owner');
+    document.getElementById('add-app-btn').style.display = canManageStore ? 'block' : 'none';
+
+    loadStoreApps();
+}
+
+document.getElementById('mobile-back-btn-store')?.addEventListener('click', () => {
+    document.body.classList.remove('mobile-chat-active');
+});
+
+function loadStoreApps() {
+    const content = document.getElementById('store-content');
+    content.innerHTML = '<div style="text-align:center; padding: 40px; color:var(--text-muted);">Loading library...</div>';
+
+    onValue(ref(db, `store_apps/${currentServerId}`), (snap) => {
+        if (chatType !== 'store') return; 
+
+        currentStoreApps = snap.val() || {};
+        const appsArray = Object.keys(currentStoreApps).map(k => ({ id: k, ...currentStoreApps[k] })).sort((a,b) => a.order - b.order);
+
+        content.innerHTML = '';
+
+        if (appsArray.length === 0) {
+            content.innerHTML = `<div style="text-align:center; margin-top: 60px;">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--border-color)" stroke-width="1.5" style="margin-bottom:15px;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                <h2 style="color:var(--text-main); margin:0 0 10px 0;">No apps available yet.</h2>
+                <p style="color:var(--text-muted); font-size:14px;">Check back later for downloads!</p>
+            </div>`;
+            return;
+        }
+
+        if (appsArray.length === 1) {
+            renderAppDetail(appsArray[0]);
+        } else {
+            const grid = document.createElement('div');
+            grid.className = 'store-library-grid';
+            
+            appsArray.forEach(app => {
+                const card = document.createElement('div');
+                card.className = 'app-card';
+                card.innerHTML = `
+                    <div class="app-card-banner" style="background-image: url('${app.banner}')"></div>
+                    <div class="app-card-info">
+                        <h3 class="app-card-title">${app.name}</h3>
+                        <div class="app-card-desc">${app.shortDesc}</div>
+                    </div>
+                `;
+                card.onclick = () => renderAppDetail(app);
+                grid.appendChild(card);
+            });
+            content.appendChild(grid);
+        }
+    });
+}
+
+function renderAppDetail(app) {
+    const content = document.getElementById('store-content');
+    const canManageStore = myServerPerms.manageStore || myServerPerms.manageServerSettings || myServerRoles.includes('owner');
+    
+    const isLibraryMode = Object.keys(currentStoreApps).length > 1;
+    let backBtnHtml = isLibraryMode ? `<button class="small-btn" onclick="loadStoreApps()" style="background:transparent; color:var(--text-muted); padding:0; margin:0 0 15px 0; display:flex; align-items:center; gap:5px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg> Back to Library</button>` : '';
+
+    let screenshotsHtml = '';
+    if (app.screenshots && app.screenshots.length > 0) {
+        screenshotsHtml = `<div class="app-screenshot-carousel">
+            ${app.screenshots.map(s => `<img src="${s}" class="app-screenshot" onclick="openFullscreenImg('${s}')">`).join('')}
+        </div>`;
+    }
+
+    let adminHtml = canManageStore ? `<button class="app-delete-btn" onclick="deleteApp('${app.id}', '${app.name}')">Remove App</button>` : '';
+
+    content.innerHTML = `
+        <div class="app-detail-view">
+            ${backBtnHtml}
+            <div class="app-detail-banner" style="background-image: url('${app.banner}')"></div>
+            
+            <div class="app-detail-header">
+                <div>
+                    <h1 class="app-detail-title">${app.name}</h1>
+                    <div style="color:var(--accent-primary); font-size:14px; font-weight:600;">Server Release</div>
+                </div>
+                <a href="${app.link}" target="_blank" class="app-detail-download-btn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    Download
+                </a>
+            </div>
+            
+            <div style="color:var(--text-main); font-size:15px; line-height:1.6; white-space: pre-wrap;">${app.fullDesc}</div>
+            
+            ${screenshotsHtml}
+            ${adminHtml}
+        </div>
+    `;
+}
+
+window.openFullscreenImg = function(src) {
+    document.getElementById('enlarged-image').src = src;
+    document.getElementById('download-image-btn').href = src;
+    document.getElementById('image-modal').style.display = 'flex';
+};
+
+document.getElementById('add-app-btn')?.addEventListener('click', () => {
+    editingAppId = null;
+    document.getElementById('app-name-input').value = '';
+    document.getElementById('app-short-desc-input').value = '';
+    document.getElementById('app-full-desc-input').value = '';
+    document.getElementById('app-download-link').value = '';
+    tempAppBanner = null;
+    tempAppScreenshots = [];
+    document.getElementById('app-banner-preview').style.backgroundImage = 'none';
+    document.getElementById('app-screenshots-container').querySelectorAll('.preview-thumb').forEach(e => e.remove());
+    document.getElementById('app-edit-modal').style.display = 'flex';
+});
+
+document.getElementById('cancel-app-btn')?.addEventListener('click', () => {
+    document.getElementById('app-edit-modal').style.display = 'none';
+});
+
+document.getElementById('app-banner-upload')?.addEventListener('change', async (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    const result = await compressImage(file, 800, 450, 0.85); 
+    tempAppBanner = result.compressed;
+    document.getElementById('app-banner-preview').style.backgroundImage = `url(${tempAppBanner})`;
+});
+
+document.getElementById('app-screenshot-upload')?.addEventListener('change', async (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    if (tempAppScreenshots.length >= 5) return customAlert("Maximum 5 screenshots allowed.", "Limit Reached");
+    
+    const result = await compressImage(file, 800, 450, 0.85);
+    tempAppScreenshots.push(result.compressed);
+    
+    const thumb = document.createElement('div');
+    thumb.className = 'preview-thumb';
+    thumb.style.cssText = `height:40px; width:70px; background-image:url(${result.compressed}); background-size:cover; border-radius:4px; position:relative;`;
+    
+    const removeBtn = document.createElement('div');
+    removeBtn.innerHTML = '✖';
+    removeBtn.style.cssText = 'position:absolute; top:-5px; right:-5px; background:var(--accent-danger); color:white; border-radius:50%; width:16px; height:16px; font-size:10px; display:flex; justify-content:center; align-items:center; cursor:pointer;';
+    removeBtn.onclick = () => {
+        tempAppScreenshots = tempAppScreenshots.filter(s => s !== result.compressed);
+        thumb.remove();
+    };
+    
+    thumb.appendChild(removeBtn);
+    document.getElementById('app-screenshots-container').appendChild(thumb);
+});
+
+document.getElementById('save-app-btn')?.addEventListener('click', () => {
+    const name = document.getElementById('app-name-input').value.trim();
+    const shortDesc = document.getElementById('app-short-desc-input').value.trim();
+    const fullDesc = document.getElementById('app-full-desc-input').value.trim();
+    const link = document.getElementById('app-download-link').value.trim();
+
+    if (!name || !link || !tempAppBanner) return customAlert("Name, Download Link, and Banner are required.", "Missing Info");
+
+    const appId = editingAppId || push(ref(db, `store_apps/${currentServerId}`)).key;
+    const order = Date.now(); 
+
+    set(ref(db, `store_apps/${currentServerId}/${appId}`), {
+        name, shortDesc, fullDesc, link, banner: tempAppBanner, screenshots: tempAppScreenshots, order
+    });
+
+    document.getElementById('app-edit-modal').style.display = 'none';
+    showToast(`App "${name}" saved!`, 'success');
+});
+
+window.deleteApp = function(appId, appName) {
+    customConfirm(`Delete ${appName}?`, "Remove App", (yes) => {
+        if (yes) {
+            remove(ref(db, `store_apps/${currentServerId}/${appId}`));
+            showToast("App removed.", "info");
+        }
+    });
+};
 
 // ==========================================
 // --- ADMIN DASHBOARD LOGIC ---
