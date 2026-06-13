@@ -33,7 +33,7 @@ let chatType = 'home';
 let currentHomeTab = 'news';
 let currentUserSafeEmail = null;
 let myProfile = {};
-let myServerPerms = { viewChannels: true, sendMessages: true, manageChannels: false, manageServerSettings: false, manageServerProfile: false, manageServerOverview: false, manageRoles: false, manageMessages: false, kickMembers: false, banMembers: false, timeoutMembers: false, manageStore: false };
+let myServerPerms = { viewChannels: true, sendMessages: true, manageChannels: false, manageServerSettings: false, manageServerProfile: false, manageServerOverview: false, manageRoles: false, manageMessages: false, kickMembers: false, banMembers: false, timeoutMembers: false, manageDownloadChannel: false };
 let myServerRoles = [];
 let myServerMemberData = {};
 
@@ -88,6 +88,7 @@ function formatBytes(bytes) {
 const icons = {
     textChannel: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>`,
     voiceChannel: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>`,
+    downloadChannel: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
     trash: `<svg class="svg-icon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`,
     gear: `<svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>`,
     addFriend: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>`,
@@ -104,7 +105,6 @@ const icons = {
     file: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>`,
     video: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>`,
     music: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`,
-    storeChannel: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>`,
 };
 
 // Badge Icons dictionary
@@ -468,12 +468,24 @@ window.showGlobalUserProfile = async function (email, event) {
                 else rolesContainer.style.display = 'none';
 
                 if (safeEmail !== currentUserSafeEmail && (myServerRoles.includes('owner') || myServerPerms.kickMembers || myServerPerms.banMembers || myServerPerms.timeoutMembers)) {
-                    modContainer.style.display = 'flex';
+                    modContainer.style.display = 'block';
+                    modContainer.style.cssText = 'display:block; margin-top:12px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.06);';
+
+                    const modTitle = document.createElement('div');
+                    modTitle.style.cssText = 'font-size:11px; color:var(--text-muted); text-transform:uppercase; font-weight:700; letter-spacing:0.05em; margin-bottom:8px;';
+                    modTitle.innerText = 'Moderation';
+                    modContainer.appendChild(modTitle);
+
+                    const modBtns = document.createElement('div');
+                    modBtns.style.cssText = 'display:flex; gap:6px; flex-wrap:wrap;';
+                    modContainer.appendChild(modBtns);
+
                     if (myServerRoles.includes('owner') || myServerPerms.timeoutMembers) {
                         const isTimedOut = memInfo.timeoutUntil && memInfo.timeoutUntil > Date.now();
                         const timeoutBtn = document.createElement('button');
-                        timeoutBtn.innerHTML = isTimedOut ? `${icons.timeout} Remove Timeout` : `${icons.timeout} Timeout Member`;
-                        timeoutBtn.style.cssText = 'background:transparent; border:1px solid var(--border-color); color:var(--text-bright); margin:0; display:flex; gap:8px; align-items:center;';
+                        timeoutBtn.className = 'mod-action-btn mod-timeout';
+                        timeoutBtn.title = isTimedOut ? 'Remove Timeout' : 'Timeout Member';
+                        timeoutBtn.innerHTML = `${icons.timeout}<span>${isTimedOut ? 'Untimeout' : 'Timeout'}</span>`;
                         timeoutBtn.onclick = () => {
                             if (isTimedOut) {
                                 update(ref(db, `server_members/${currentServerId}/${safeEmail}`), { timeoutUntil: null });
@@ -485,21 +497,23 @@ window.showGlobalUserProfile = async function (email, event) {
                                 });
                             }
                         };
-                        modContainer.appendChild(timeoutBtn);
+                        modBtns.appendChild(timeoutBtn);
                     }
                     if (myServerRoles.includes('owner') || myServerPerms.kickMembers) {
                         const kickBtn = document.createElement('button');
-                        kickBtn.innerHTML = `${icons.kick} Kick Member`;
-                        kickBtn.style.cssText = 'background:transparent; border:1px solid var(--accent-warning); color:var(--accent-warning); margin:0; display:flex; gap:8px; align-items:center;';
+                        kickBtn.className = 'mod-action-btn mod-kick';
+                        kickBtn.title = 'Kick Member';
+                        kickBtn.innerHTML = `${icons.kick}<span>Kick</span>`;
                         kickBtn.onclick = () => { customConfirm(`Kick ${uData.username}?`, "Kick Member", async (yes) => { if (yes) { await remove(ref(db, `server_members/${currentServerId}/${safeEmail}`)); await remove(ref(db, `users/${safeEmail}/servers/${currentServerId}`)); modal.style.display = 'none'; showToast(`${uData.username} was kicked.`, 'success'); } }); };
-                        modContainer.appendChild(kickBtn);
+                        modBtns.appendChild(kickBtn);
                     }
                     if (myServerRoles.includes('owner') || myServerPerms.banMembers) {
                         const banBtn = document.createElement('button');
-                        banBtn.innerHTML = `${icons.ban} Ban Member`;
-                        banBtn.style.cssText = 'background:transparent; border:1px solid var(--accent-danger); color:var(--accent-danger); margin:0; display:flex; gap:8px; align-items:center;';
+                        banBtn.className = 'mod-action-btn mod-ban';
+                        banBtn.title = 'Ban Member';
+                        banBtn.innerHTML = `${icons.ban}<span>Ban</span>`;
                         banBtn.onclick = () => { customConfirm(`Permanently ban ${uData.username}?`, "Ban Member", async (yes) => { if (yes) { await set(ref(db, `servers/${currentServerId}/bans/${safeEmail}`), { timestamp: Date.now(), by: currentUserSafeEmail }); await remove(ref(db, `server_members/${currentServerId}/${safeEmail}`)); await remove(ref(db, `users/${safeEmail}/servers/${currentServerId}`)); modal.style.display = 'none'; showToast(`${uData.username} was banned.`, 'success'); } }); };
-                        modContainer.appendChild(banBtn);
+                        modBtns.appendChild(banBtn);
                     }
                 }
             }
@@ -597,7 +611,7 @@ function showContextMenu(e, type, id) {
         if (!myServerPerms.manageChannels && !myServerPerms.manageServerSettings && !myServerRoles.includes('owner')) return;
         html += `<div class="context-item" id="ctx-cat-add-text">${icons.textChannel} Add Text Channel</div>`;
         html += `<div class="context-item" id="ctx-cat-add-voice">${icons.voiceChannel} Add Voice Channel</div>`;
-        html += `<div class="context-item" id="ctx-cat-add-store" style="color: var(--accent-success);">${icons.storeChannel} Add Store Channel</div>`;
+        html += `<div class="context-item" id="ctx-cat-add-download">${icons.downloadChannel} Add Download Channel</div>`;
         html += `<div style="height:1px;background:var(--border-color);margin:4px 0;"></div>`;
         html += `<div class="context-item" id="ctx-edit">${icons.gear} Edit Category</div>`;
         html += `<div class="context-item" id="ctx-delete" style="color:var(--accent-danger);">${icons.trash} Delete Category</div>`;
@@ -631,7 +645,7 @@ document.addEventListener('click', (e) => {
     const ctxSaveEmoji = e.target.closest('#ctx-save-emoji');
     const ctxAddText = e.target.closest('#ctx-cat-add-text');
     const ctxAddVoice = e.target.closest('#ctx-cat-add-voice');
-    const ctxAddStore = e.target.closest('#ctx-cat-add-store');
+    const ctxAddDownload = e.target.closest('#ctx-cat-add-download');
 
     if (ctxDel && contextTarget) {
         if (contextTarget.type === 'dm') {
@@ -659,18 +673,15 @@ document.addEventListener('click', (e) => {
     } else if (ctxAddVoice && contextTarget) {
         openInputModal("Add Voice Channel", "Lounge", "", (name) => { if (name && currentServerId) push(ref(db, `channels/${currentServerId}`), { name, type: "voice", categoryId: contextTarget.id, order: Date.now() }); });
         ctxMenu.style.display = 'none';
-    } else if (ctxAddStore && contextTarget) {
-    let hasStore = Object.values(currentChannelsData).some(c => c.type === 'store');
-    if (hasStore) {
-        customAlert("You can only have one Store/Downloads channel per server.", "Limit Reached");
-    } else {
-        openInputModal("Add Store Channel", "downloads", "", (name) => { 
-            if (name && currentServerId) {
-                push(ref(db, `channels/${currentServerId}`), { name: name.toLowerCase(), type: "store", categoryId: contextTarget.id, order: Date.now() }); 
-            }
-        });
-    }
-    ctxMenu.style.display = 'none';
+    } else if (ctxAddDownload && contextTarget) {
+        // Check if a download channel already exists in this server
+        const existingDownload = Object.values(currentChannelsData).find(c => c.type === 'downloads');
+        if (existingDownload) {
+            customAlert("A Download Channel already exists in this server. Only one is allowed.", "Limit Reached");
+        } else {
+            openInputModal("Add Download Channel", "downloads", "", (name) => { if (name && currentServerId) push(ref(db, `channels/${currentServerId}`), { name: name.toLowerCase(), type: "downloads", categoryId: contextTarget.id, order: Date.now() }); });
+        }
+        ctxMenu.style.display = 'none';
     } else if (ctxSaveEmoji && contextTarget) {
         const targetEmoji = globalEmojisCache[contextTarget.id];
         if (targetEmoji) { set(ref(db, `users/${currentUserSafeEmail}/emojis/${contextTarget.id}`), true); showToast('Emoji saved to your collection!', 'success'); }
@@ -1162,6 +1173,7 @@ document.addEventListener('click', (e) => {
 // --- NAVIGATION ---
 // ==========================================
 function switchToHomeView() {
+    leaveDownloadChannel();
     document.body.classList.remove('mobile-chat-active', 'mobile-home-active');
     chatType = 'home'; currentChatId = null; currentServerId = null;
     document.getElementById('server-name-display').innerText = "Friends & DMs";
@@ -1530,6 +1542,7 @@ function loadFriendsList() {
 }
 
 function openDM(dmId, friendEmail) {
+    leaveDownloadChannel();
     chatType = 'dm'; currentChatId = dmId;
     const uData = globalUsersCache[friendEmail]; currentDMOtherUser = uData;
     myServerPerms = { viewChannels: true, sendMessages: true, manageMessages: false };
@@ -1580,7 +1593,7 @@ document.getElementById('create-server-btn')?.addEventListener('click', () => {
     openInputModal("Create Server", "Server Name", "Give your server a name:", (serverName) => {
         if (serverName) {
             const serverId = generateCode();
-            const everyonePerms = { viewChannels: true, sendMessages: true, manageChannels: false, manageServerSettings: false, manageServerProfile: false, manageServerOverview: false, manageRoles: false, manageMessages: false, kickMembers: false, banMembers: false, timeoutMembers: false, };
+            const everyonePerms = { viewChannels: true, sendMessages: true, manageChannels: false, manageServerSettings: false, manageServerProfile: false, manageServerOverview: false, manageRoles: false, manageMessages: false, kickMembers: false, banMembers: false, timeoutMembers: false, manageDownloadChannel: false };
             set(ref(db, `servers/${serverId}`), { name: serverName, owner: auth.currentUser.email });
             set(ref(db, `servers/${serverId}/roles/everyone`), { name: 'everyone', color: '#abb2bf', order: -1, hoist: false, mentionable: true, perms: everyonePerms });
             set(ref(db, `server_members/${serverId}/${currentUserSafeEmail}`), { role: 'owner' });
@@ -1669,7 +1682,7 @@ function loadMyServers() {
                     });
                     if (sData.owner === auth.currentUser.email || myServerRoles.includes('owner') || resolvedPerms.manageServerSettings) {
                         if (!myServerRoles.includes('owner')) myServerRoles.push('owner');
-                        resolvedPerms = { viewChannels: true, sendMessages: true, manageChannels: true, manageServerSettings: true, manageServerProfile: true, manageServerOverview: true, manageRoles: true, manageMessages: true, kickMembers: true, banMembers: true, timeoutMembers: true };
+                        resolvedPerms = { viewChannels: true, sendMessages: true, manageChannels: true, manageServerSettings: true, manageServerProfile: true, manageServerOverview: true, manageRoles: true, manageMessages: true, kickMembers: true, banMembers: true, timeoutMembers: true, manageDownloadChannel: true };
                     }
                     myServerPerms = resolvedPerms;
 
@@ -1678,6 +1691,7 @@ function loadMyServers() {
                     document.getElementById('menu-add-category').style.display = myServerPerms.manageChannels ? 'flex' : 'none';
                     document.getElementById('menu-add-text').style.display = myServerPerms.manageChannels ? 'flex' : 'none';
                     document.getElementById('menu-add-voice').style.display = myServerPerms.manageChannels ? 'flex' : 'none';
+                    document.getElementById('menu-add-download').style.display = myServerPerms.manageChannels ? 'flex' : 'none';
                     document.getElementById('menu-leave-server').style.display = sData.owner === auth.currentUser.email ? 'none' : 'flex';
                     document.getElementById('server-stats-display').style.display = 'none';
 
@@ -1732,6 +1746,16 @@ document.getElementById('menu-add-text')?.addEventListener('click', () => {
 document.getElementById('menu-add-voice')?.addEventListener('click', () => {
     document.getElementById('server-dropdown').style.display = 'none';
     openInputModal("Add Voice Channel", "Lounge", "", (name) => { if (name && currentServerId) push(ref(db, `channels/${currentServerId}`), { name, type: "voice", order: Date.now() }); });
+});
+
+document.getElementById('menu-add-download')?.addEventListener('click', () => {
+    document.getElementById('server-dropdown').style.display = 'none';
+    const existingDownload = Object.values(currentChannelsData).find(c => c.type === 'downloads');
+    if (existingDownload) {
+        customAlert("A Download Channel already exists in this server. Only one is allowed.", "Limit Reached");
+        return;
+    }
+    openInputModal("Add Download Channel", "downloads", "", (name) => { if (name && currentServerId) push(ref(db, `channels/${currentServerId}`), { name: name.toLowerCase(), type: "downloads", order: Date.now() }); });
 });
 
 document.getElementById('menu-leave-server')?.addEventListener('click', () => {
@@ -1898,7 +1922,7 @@ function editRole(roleId, noSwitch = false) {
     document.getElementById('er-hoist').checked = !!rData.hoist;
     document.getElementById('er-mentionable').checked = !!rData.mentionable;
     const p = rData.perms || {};
-    ['viewChannels', 'sendMessages', 'manageChannels', 'manageServerSettings', 'manageServerProfile', 'manageServerOverview', 'manageRoles', 'manageMessages', 'kickMembers', 'banMembers', 'timeoutMembers'].forEach(perm => {
+    ['viewChannels', 'sendMessages', 'manageChannels', 'manageServerSettings', 'manageServerProfile', 'manageServerOverview', 'manageRoles', 'manageMessages', 'kickMembers', 'banMembers', 'timeoutMembers', 'manageDownloadChannel'].forEach(perm => {
         const el = document.getElementById(`p-${perm}`); if (el) el.checked = !!p[perm];
     });
     document.getElementById('delete-role-btn').style.display = roleId === 'everyone' ? 'none' : 'block';
@@ -1921,7 +1945,7 @@ document.getElementById('ss-create-role-btn')?.addEventListener('click', () => {
 document.getElementById('save-role-settings-btn')?.addEventListener('click', () => {
     if (currentServerId && currentEditingRoleId) {
         const perms = {};
-        ['viewChannels', 'sendMessages', 'manageChannels', 'manageServerSettings', 'manageServerProfile', 'manageServerOverview', 'manageRoles', 'manageMessages', 'kickMembers', 'banMembers', 'timeoutMembers'].forEach(perm => {
+        ['viewChannels', 'sendMessages', 'manageChannels', 'manageServerSettings', 'manageServerProfile', 'manageServerOverview', 'manageRoles', 'manageMessages', 'kickMembers', 'banMembers', 'timeoutMembers', 'manageDownloadChannel'].forEach(perm => {
             const el = document.getElementById(`p-${perm}`); if (el) perms[perm] = el.checked;
         });
         update(ref(db, `servers/${currentServerId}/roles/${currentEditingRoleId}`), { name: document.getElementById('er-name').value, color: document.getElementById('er-color').value, hoist: document.getElementById('er-hoist').checked, mentionable: document.getElementById('er-mentionable').checked, perms });
@@ -2179,23 +2203,22 @@ function renderChannels(serverId) {
         }
         grouped[catId].sort((a, b) => (a.order || 0) - (b.order || 0)).forEach((channelData, index, arr) => {
             const div = document.createElement('div'); div.classList.add('channel-item'); div.id = `channel-${channelData.id}`; div.draggable = myServerPerms.manageChannels;
-            if (channelData.type === "voice") {
-                div.innerHTML = `<span class="c-icon">${icons.voiceChannel}</span><span class="c-name">${channelData.name}</span>`;
-            } else if (channelData.type === "store") {
-                div.innerHTML = `<span class="c-icon" style="color: var(--accent-success);">${icons.storeChannel}</span><span class="c-name">${channelData.name}</span>`;
-            } else {
-                div.innerHTML = `<span class="c-icon">${icons.textChannel}</span><span class="c-name">${channelData.name}</span>`;
-            }
+            let channelIcon = icons.textChannel;
+            if (channelData.type === 'voice') channelIcon = icons.voiceChannel;
+            else if (channelData.type === 'downloads') channelIcon = icons.downloadChannel;
+            div.innerHTML = `<span class="c-icon">${channelIcon}</span><span class="c-name">${channelData.name}</span>`;
             div.addEventListener('click', () => {
-            if (channelData.type === "voice") {
-                joinVoiceChannel(serverId, channelData.id);
-            } else if (channelData.type === "store") {
-                chatType = 'store'; currentChatId = channelData.id;
-                document.querySelectorAll('.channel-item').forEach(el => el.classList.remove('active'));
-                div.classList.add('active');
-                openStoreChannel(channelData.name);
-            } else {
-                localStorage.setItem(`last_channel_${serverId}`, channelData.id);
+                if (channelData.type === "voice") joinVoiceChannel(serverId, channelData.id);
+                else if (channelData.type === "downloads") {
+                    document.querySelectorAll('.channel-item').forEach(el => el.classList.remove('active'));
+                    div.classList.add('active');
+                    document.body.classList.remove('mobile-home-active');
+                    document.body.classList.add('mobile-chat-active');
+                    openDownloadChannel(channelData.id, channelData.name);
+                }
+                else {
+                    leaveDownloadChannel();
+                    localStorage.setItem(`last_channel_${serverId}`, channelData.id);
 
                     chatType = 'server'; currentChatId = channelData.id;
                     document.getElementById('chat-title').innerText = `# ${channelData.name}`;
@@ -2256,8 +2279,448 @@ function renderChannels(serverId) {
 }
 
 // ==========================================
-// --- VOICE CHAT ---
+// --- DOWNLOAD CHANNEL ---
 // ==========================================
+let currentDownloadChannelId = null;
+let unsubscribeDownloadChannel = null;
+
+function openDownloadChannel(channelId, channelName) {
+    currentDownloadChannelId = channelId;
+    chatType = 'download';
+    currentChatId = channelId;
+
+    const chatArea = document.getElementById('chat-area');
+    const homeArea = document.getElementById('home-area');
+    homeArea.style.display = 'none';
+    chatArea.style.display = 'flex';
+
+    // Update header
+    document.getElementById('chat-title').innerText = `↓ ${channelName}`;
+    document.getElementById('chat-title').style.cursor = 'default';
+    document.getElementById('chat-title').onclick = null;
+
+    // Hide normal chat UI
+    document.getElementById('messages').style.display = 'none';
+    document.getElementById('message-input-area').style.display = 'none';
+    const chatTopBar = document.getElementById('chat-header');
+
+    // Show or create download channel view
+    let dlView = document.getElementById('download-channel-view');
+    if (!dlView) {
+        dlView = document.createElement('div');
+        dlView.id = 'download-channel-view';
+        chatArea.appendChild(dlView);
+    }
+    dlView.style.display = 'flex';
+    dlView.innerHTML = '';
+
+    // Load and render apps
+    if (unsubscribeDownloadChannel) unsubscribeDownloadChannel();
+    unsubscribeDownloadChannel = onValue(ref(db, `download_channels/${currentServerId}/${channelId}/apps`), (snap) => {
+        renderDownloadChannelView(dlView, snap.val() || {}, channelId);
+    });
+}
+
+function renderDownloadChannelView(container, appsData, channelId) {
+    const apps = Object.keys(appsData).map(k => ({ id: k, ...appsData[k] }));
+    const canManage = myServerPerms.manageDownloadChannel || myServerRoles.includes('owner');
+
+    container.innerHTML = '';
+
+    // Header bar
+    const header = document.createElement('div');
+    header.className = 'dl-channel-header';
+    header.innerHTML = `
+        <div class="dl-header-left">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>Downloads</span>
+        </div>
+        <div class="dl-header-right">
+            ${canManage ? `<button class="dl-add-app-btn" id="dl-add-app-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add App
+            </button>` : ''}
+        </div>`;
+    container.appendChild(header);
+
+    if (canManage) {
+        header.querySelector('#dl-add-app-btn')?.addEventListener('click', () => openAddAppModal(channelId));
+    }
+
+    // Main content
+    const content = document.createElement('div');
+    content.className = 'dl-channel-content';
+    container.appendChild(content);
+
+    if (apps.length === 0) {
+        content.innerHTML = `
+            <div class="dl-empty-state">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" style="color: var(--text-muted); opacity: 0.4;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                <h3>No apps yet</h3>
+                <p>${canManage ? 'Click "Add App" to showcase your first app.' : 'The server owner hasn\'t added any apps yet.'}</p>
+            </div>`;
+        return;
+    }
+
+    if (apps.length === 1) {
+        // Single app — full showcase view
+        renderSingleAppView(content, apps[0], channelId, canManage);
+    } else {
+        // Library view
+        renderAppLibrary(content, apps, channelId, canManage);
+    }
+}
+
+function renderSingleAppView(container, app, channelId, canManage) {
+    container.innerHTML = '';
+    const view = document.createElement('div');
+    view.className = 'dl-single-app';
+    view.innerHTML = buildAppPageHTML(app, channelId, canManage, false);
+    container.appendChild(view);
+    bindAppPageEvents(view, app, channelId, canManage);
+    // Animate in
+    requestAnimationFrame(() => view.classList.add('dl-app-visible'));
+}
+
+function renderAppLibrary(container, apps, channelId, canManage) {
+    container.innerHTML = '';
+
+    const grid = document.createElement('div');
+    grid.className = 'dl-app-grid';
+
+    apps.forEach((app, i) => {
+        const card = document.createElement('div');
+        card.className = 'dl-app-card';
+        card.style.animationDelay = `${i * 60}ms`;
+        card.innerHTML = `
+            <div class="dl-card-banner" style="${app.mainImage ? `background-image: url('${app.mainImage}'); background-size: cover; background-position: center;` : `background: linear-gradient(135deg, var(--bg-hover), var(--bg-tertiary));`}">
+                <div class="dl-card-banner-overlay"></div>
+            </div>
+            <div class="dl-card-body">
+                <div class="dl-card-icon-row">
+                    ${app.icon ? `<img src="${app.icon}" class="dl-card-icon" alt="${app.name}">` : `<div class="dl-card-icon dl-card-icon-placeholder">${app.name.charAt(0)}</div>`}
+                    <div class="dl-card-title-col">
+                        <div class="dl-card-name">${app.name}</div>
+                        ${app.version ? `<div class="dl-card-version">v${app.version}</div>` : ''}
+                    </div>
+                    ${canManage ? `<button class="dl-card-edit-btn" data-appid="${app.id}" title="Edit">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                    </button>` : ''}
+                </div>
+                <p class="dl-card-desc">${app.shortDesc || app.description?.substring(0, 80) + '...' || 'No description.'}</p>
+                ${app.tags ? `<div class="dl-card-tags">${app.tags.split(',').slice(0,3).map(t => `<span class="dl-tag">${t.trim()}</span>`).join('')}</div>` : ''}
+            </div>`;
+        card.addEventListener('click', (e) => {
+            if (e.target.closest('.dl-card-edit-btn')) return;
+            openAppDetailModal(app, channelId, canManage);
+        });
+        if (canManage) {
+            card.querySelector('.dl-card-edit-btn')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openAddAppModal(channelId, app);
+            });
+        }
+        grid.appendChild(card);
+    });
+    container.appendChild(grid);
+}
+
+function buildAppPageHTML(app, channelId, canManage, isModal) {
+    const screenshots = app.screenshots ? (Array.isArray(app.screenshots) ? app.screenshots : Object.values(app.screenshots)) : [];
+    return `
+        <div class="dl-app-hero ${isModal ? 'dl-app-hero-modal' : ''}">
+            ${app.mainImage ? `<img src="${app.mainImage}" class="dl-app-hero-img" alt="${app.name} banner">` : `<div class="dl-app-hero-placeholder"></div>`}
+            <div class="dl-app-hero-overlay"></div>
+        </div>
+        <div class="dl-app-page-body">
+            <div class="dl-app-page-top">
+                ${app.icon ? `<img src="${app.icon}" class="dl-app-page-icon" alt="${app.name}">` : `<div class="dl-app-page-icon dl-app-page-icon-placeholder">${app.name.charAt(0)}</div>`}
+                <div class="dl-app-page-info">
+                    <h2 class="dl-app-page-name">${app.name}</h2>
+                    ${app.developer ? `<div class="dl-app-page-dev">by ${app.developer}</div>` : ''}
+                    ${app.version ? `<div class="dl-app-page-ver">Version ${app.version}</div>` : ''}
+                    ${app.tags ? `<div class="dl-card-tags" style="margin-top:6px;">${app.tags.split(',').slice(0,5).map(t => `<span class="dl-tag">${t.trim()}</span>`).join('')}</div>` : ''}
+                </div>
+                <div class="dl-app-page-actions">
+                    ${app.downloadUrl ? `<a class="dl-download-btn" href="${app.downloadUrl}" target="_blank" rel="noopener">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        Download${app.fileSize ? ` · ${app.fileSize}` : ''}
+                    </a>` : `<div class="dl-download-btn dl-download-unavailable">No download link</div>`}
+                    ${canManage ? `<button class="dl-edit-app-btn" data-appid="${app.id}">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                        Edit
+                    </button>` : ''}
+                </div>
+            </div>
+
+            ${screenshots.length > 0 ? `
+            <div class="dl-screenshots-section">
+                <h4 class="dl-section-title">Screenshots</h4>
+                <div class="dl-screenshots-scroll">
+                    ${screenshots.map((url, i) => `<img src="${url}" class="dl-screenshot" alt="Screenshot ${i+1}" loading="lazy">`).join('')}
+                </div>
+            </div>` : ''}
+
+            <div class="dl-description-section">
+                <h4 class="dl-section-title">About</h4>
+                <div class="dl-app-description">${(app.description || 'No description provided.').replace(/\n/g, '<br>')}</div>
+            </div>
+
+            ${app.changelog ? `
+            <div class="dl-changelog-section">
+                <h4 class="dl-section-title">What's New</h4>
+                <div class="dl-app-description">${app.changelog.replace(/\n/g, '<br>')}</div>
+            </div>` : ''}
+
+            <div class="dl-meta-section">
+                ${app.platform ? `<div class="dl-meta-item"><span class="dl-meta-label">Platform</span><span class="dl-meta-value">${app.platform}</span></div>` : ''}
+                ${app.license ? `<div class="dl-meta-item"><span class="dl-meta-label">License</span><span class="dl-meta-value">${app.license}</span></div>` : ''}
+                ${app.website ? `<div class="dl-meta-item"><span class="dl-meta-label">Website</span><a class="dl-meta-link" href="${app.website}" target="_blank" rel="noopener">${app.website}</a></div>` : ''}
+            </div>
+        </div>`;
+}
+
+function bindAppPageEvents(container, app, channelId, canManage) {
+    if (canManage) {
+        container.querySelectorAll('.dl-edit-app-btn, [data-appid]').forEach(btn => {
+            btn.addEventListener('click', () => openAddAppModal(channelId, app));
+        });
+    }
+    container.querySelectorAll('.dl-screenshot').forEach(img => {
+        img.addEventListener('click', () => {
+            document.getElementById('enlarged-image').src = img.src;
+            document.getElementById('download-image-btn').href = img.src;
+            document.getElementById('image-modal').style.display = 'flex';
+        });
+    });
+}
+
+function openAppDetailModal(app, channelId, canManage) {
+    let overlay = document.getElementById('app-detail-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'app-detail-overlay';
+        overlay.className = 'app-detail-overlay';
+        document.body.appendChild(overlay);
+    }
+    overlay.innerHTML = `
+        <div class="app-detail-modal" id="app-detail-modal">
+            <button class="app-detail-close" id="app-detail-close">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+            <div class="app-detail-inner">
+                ${buildAppPageHTML(app, channelId, canManage, true)}
+            </div>
+        </div>`;
+    overlay.style.display = 'flex';
+    requestAnimationFrame(() => {
+        overlay.classList.add('app-detail-visible');
+        overlay.querySelector('#app-detail-modal').classList.add('app-detail-modal-visible');
+    });
+    overlay.querySelector('#app-detail-close').addEventListener('click', () => closeAppDetailModal());
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) closeAppDetailModal(); });
+    bindAppPageEvents(overlay, app, channelId, canManage);
+}
+
+function closeAppDetailModal() {
+    const overlay = document.getElementById('app-detail-overlay');
+    if (!overlay) return;
+    overlay.classList.remove('app-detail-visible');
+    overlay.querySelector('#app-detail-modal')?.classList.remove('app-detail-modal-visible');
+    setTimeout(() => { overlay.style.display = 'none'; overlay.innerHTML = ''; }, 300);
+}
+
+// Add App / Edit App Modal
+function openAddAppModal(channelId, existingApp = null) {
+    let overlay = document.getElementById('add-app-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'add-app-overlay';
+        overlay.className = 'app-detail-overlay';
+        document.body.appendChild(overlay);
+    }
+    const isEdit = !!existingApp;
+    const app = existingApp || {};
+    const screenshots = app.screenshots ? (Array.isArray(app.screenshots) ? app.screenshots : Object.values(app.screenshots)) : [];
+
+    overlay.innerHTML = `
+        <div class="app-detail-modal add-app-modal" id="add-app-modal">
+            <button class="app-detail-close" id="add-app-close">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+            <div class="add-app-inner">
+                <h2 class="add-app-title">${isEdit ? 'Edit App' : 'Add New App'}</h2>
+                <div class="add-app-form">
+                    <div class="add-app-row">
+                        <div class="add-app-col">
+                            <label class="add-app-label">App Name *</label>
+                            <input type="text" id="aa-name" class="fs-input" placeholder="My Awesome App" value="${app.name || ''}">
+                        </div>
+                        <div class="add-app-col">
+                            <label class="add-app-label">Version</label>
+                            <input type="text" id="aa-version" class="fs-input" placeholder="1.0.0" value="${app.version || ''}">
+                        </div>
+                    </div>
+                    <div class="add-app-row">
+                        <div class="add-app-col">
+                            <label class="add-app-label">Developer / Author</label>
+                            <input type="text" id="aa-developer" class="fs-input" placeholder="Your name or team" value="${app.developer || ''}">
+                        </div>
+                        <div class="add-app-col">
+                            <label class="add-app-label">Platform</label>
+                            <input type="text" id="aa-platform" class="fs-input" placeholder="Windows, macOS, Android..." value="${app.platform || ''}">
+                        </div>
+                    </div>
+                    <div class="add-app-row">
+                        <div class="add-app-col">
+                            <label class="add-app-label">Download Link *</label>
+                            <input type="url" id="aa-download-url" class="fs-input" placeholder="https://github.com/.../releases" value="${app.downloadUrl || ''}">
+                        </div>
+                        <div class="add-app-col">
+                            <label class="add-app-label">File Size</label>
+                            <input type="text" id="aa-file-size" class="fs-input" placeholder="e.g. 24 MB" value="${app.fileSize || ''}">
+                        </div>
+                    </div>
+                    <div class="add-app-row">
+                        <div class="add-app-col">
+                            <label class="add-app-label">Website</label>
+                            <input type="url" id="aa-website" class="fs-input" placeholder="https://yourapp.com" value="${app.website || ''}">
+                        </div>
+                        <div class="add-app-col">
+                            <label class="add-app-label">License</label>
+                            <input type="text" id="aa-license" class="fs-input" placeholder="MIT, Freeware, GPL..." value="${app.license || ''}">
+                        </div>
+                    </div>
+                    <div class="add-app-full-row">
+                        <label class="add-app-label">Tags (comma-separated)</label>
+                        <input type="text" id="aa-tags" class="fs-input" placeholder="open-source, utility, productivity" value="${app.tags || ''}">
+                    </div>
+                    <div class="add-app-full-row">
+                        <label class="add-app-label">Short Description (card preview)</label>
+                        <input type="text" id="aa-short-desc" class="fs-input" placeholder="One-liner shown in the library grid" value="${app.shortDesc || ''}">
+                    </div>
+                    <div class="add-app-full-row">
+                        <label class="add-app-label">Full Description</label>
+                        <textarea id="aa-description" class="fs-input" rows="4" placeholder="Describe your app, its features, how to install it...">${app.description || ''}</textarea>
+                    </div>
+                    <div class="add-app-full-row">
+                        <label class="add-app-label">What's New / Changelog</label>
+                        <textarea id="aa-changelog" class="fs-input" rows="3" placeholder="What changed in this version...">${app.changelog || ''}</textarea>
+                    </div>
+                    
+                    <div class="add-app-images-section">
+                        <h4 class="add-app-section-title">Images</h4>
+                        <div class="add-app-row">
+                            <div class="add-app-col">
+                                <label class="add-app-label">App Icon URL</label>
+                                <input type="url" id="aa-icon" class="fs-input" placeholder="https://..." value="${app.icon || ''}">
+                            </div>
+                            <div class="add-app-col">
+                                <label class="add-app-label">Main Banner Image URL</label>
+                                <input type="url" id="aa-main-image" class="fs-input" placeholder="https://..." value="${app.mainImage || ''}">
+                            </div>
+                        </div>
+                        <div class="add-app-full-row">
+                            <label class="add-app-label">Screenshots (one URL per line)</label>
+                            <textarea id="aa-screenshots" class="fs-input" rows="3" placeholder="https://screenshot1.png&#10;https://screenshot2.png">${screenshots.join('\n')}</textarea>
+                        </div>
+                    </div>
+                    
+                    <div class="add-app-actions">
+                        ${isEdit ? `<button id="aa-delete-btn" class="aa-delete-btn">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            Delete App
+                        </button>` : '<div></div>'}
+                        <div style="display:flex;gap:10px;">
+                            <button id="aa-cancel-btn" class="aa-cancel-btn">Cancel</button>
+                            <button id="aa-save-btn" class="aa-save-btn">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                                ${isEdit ? 'Save Changes' : 'Add App'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+
+    overlay.style.display = 'flex';
+    requestAnimationFrame(() => {
+        overlay.classList.add('app-detail-visible');
+        overlay.querySelector('#add-app-modal').classList.add('app-detail-modal-visible');
+    });
+
+    const closeModal = () => {
+        overlay.classList.remove('app-detail-visible');
+        overlay.querySelector('#add-app-modal')?.classList.remove('app-detail-modal-visible');
+        setTimeout(() => { overlay.style.display = 'none'; overlay.innerHTML = ''; }, 300);
+    };
+
+    overlay.querySelector('#add-app-close').addEventListener('click', closeModal);
+    overlay.querySelector('#aa-cancel-btn').addEventListener('click', closeModal);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
+
+    overlay.querySelector('#aa-save-btn').addEventListener('click', async () => {
+        const name = overlay.querySelector('#aa-name').value.trim();
+        if (!name) return showToast('App name is required.', 'error');
+        const screenshotLines = overlay.querySelector('#aa-screenshots').value.trim().split('\n').map(u => u.trim()).filter(u => u.length > 0);
+        const appData = {
+            name,
+            version: overlay.querySelector('#aa-version').value.trim() || null,
+            developer: overlay.querySelector('#aa-developer').value.trim() || null,
+            platform: overlay.querySelector('#aa-platform').value.trim() || null,
+            downloadUrl: overlay.querySelector('#aa-download-url').value.trim() || null,
+            fileSize: overlay.querySelector('#aa-file-size').value.trim() || null,
+            website: overlay.querySelector('#aa-website').value.trim() || null,
+            license: overlay.querySelector('#aa-license').value.trim() || null,
+            tags: overlay.querySelector('#aa-tags').value.trim() || null,
+            shortDesc: overlay.querySelector('#aa-short-desc').value.trim() || null,
+            description: overlay.querySelector('#aa-description').value.trim() || null,
+            changelog: overlay.querySelector('#aa-changelog').value.trim() || null,
+            icon: overlay.querySelector('#aa-icon').value.trim() || null,
+            mainImage: overlay.querySelector('#aa-main-image').value.trim() || null,
+            screenshots: screenshotLines.length > 0 ? screenshotLines : null,
+            updatedAt: Date.now()
+        };
+        // Remove null values
+        Object.keys(appData).forEach(k => { if (appData[k] === null) delete appData[k]; });
+
+        const basePath = `download_channels/${currentServerId}/${channelId}/apps`;
+        if (isEdit) {
+            await update(ref(db, `${basePath}/${app.id}`), appData);
+            showToast(`"${name}" updated!`, 'success');
+        } else {
+            appData.createdAt = Date.now();
+            await push(ref(db, basePath), appData);
+            showToast(`"${name}" added to downloads!`, 'success');
+        }
+        closeModal();
+    });
+
+    if (isEdit) {
+        overlay.querySelector('#aa-delete-btn')?.addEventListener('click', () => {
+            customConfirm(`Delete "${app.name}"? This cannot be undone.`, 'Delete App', async (yes) => {
+                if (yes) {
+                    await remove(ref(db, `download_channels/${currentServerId}/${channelId}/apps/${app.id}`));
+                    showToast(`"${app.name}" deleted.`, 'info');
+                    closeModal();
+                }
+            });
+        });
+    }
+}
+
+// When switching away from download channel, restore normal chat UI
+function leaveDownloadChannel() {
+    if (chatType !== 'download') return;
+    document.getElementById('messages').style.display = 'flex';
+    document.getElementById('message-input-area').style.display = 'flex';
+    const dlView = document.getElementById('download-channel-view');
+    if (dlView) dlView.style.display = 'none';
+    if (unsubscribeDownloadChannel) { unsubscribeDownloadChannel(); unsubscribeDownloadChannel = null; }
+    currentDownloadChannelId = null;
+}
+
+
 function initVoiceChat() {
     myPeer = new Peer();
     myPeer.on('open', id => myCurrentPeerId = id);
@@ -3262,199 +3725,6 @@ async function sendGif(gifUrl) {
     update(ref(db, `users/${currentUserSafeEmail}/lastRead`), { [currentChatId]: Date.now() });
 }
 
-// ==========================================
-// --- STORE / DOWNLOADS ENGINE ---
-// ==========================================
-let currentStoreApps = {};
-let tempAppBanner = null;
-let tempAppScreenshots = [];
-let editingAppId = null;
-
-function openStoreChannel(channelName) {
-    document.body.classList.remove('mobile-home-active');
-    document.body.classList.add('mobile-chat-active');
-    
-    document.getElementById('home-area').style.display = 'none';
-    document.getElementById('chat-area').style.display = 'none';
-    document.getElementById('store-area').style.display = 'flex';
-    document.getElementById('store-title').innerHTML = `${icons.storeChannel} ${channelName}`;
-    
-    // Check permissions
-    const canManageStore = myServerPerms.manageStore || myServerPerms.manageServerSettings || myServerRoles.includes('owner');
-    document.getElementById('add-app-btn').style.display = canManageStore ? 'block' : 'none';
-
-    loadStoreApps();
-}
-
-document.getElementById('mobile-back-btn-store')?.addEventListener('click', () => {
-    document.body.classList.remove('mobile-chat-active');
-});
-
-function loadStoreApps() {
-    const content = document.getElementById('store-content');
-    content.innerHTML = '<div style="text-align:center; padding: 40px; color:var(--text-muted);">Loading library...</div>';
-
-    onValue(ref(db, `store_apps/${currentServerId}`), (snap) => {
-        if (chatType !== 'store') return; 
-
-        currentStoreApps = snap.val() || {};
-        const appsArray = Object.keys(currentStoreApps).map(k => ({ id: k, ...currentStoreApps[k] })).sort((a,b) => a.order - b.order);
-
-        content.innerHTML = '';
-
-        if (appsArray.length === 0) {
-            content.innerHTML = `<div style="text-align:center; margin-top: 60px;">
-                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--border-color)" stroke-width="1.5" style="margin-bottom:15px;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-                <h2 style="color:var(--text-main); margin:0 0 10px 0;">No apps available yet.</h2>
-                <p style="color:var(--text-muted); font-size:14px;">Check back later for downloads!</p>
-            </div>`;
-            return;
-        }
-
-        if (appsArray.length === 1) {
-            renderAppDetail(appsArray[0]);
-        } else {
-            const grid = document.createElement('div');
-            grid.className = 'store-library-grid';
-            
-            appsArray.forEach(app => {
-                const card = document.createElement('div');
-                card.className = 'app-card';
-                card.innerHTML = `
-                    <div class="app-card-banner" style="background-image: url('${app.banner}')"></div>
-                    <div class="app-card-info">
-                        <h3 class="app-card-title">${app.name}</h3>
-                        <div class="app-card-desc">${app.shortDesc}</div>
-                    </div>
-                `;
-                card.onclick = () => renderAppDetail(app);
-                grid.appendChild(card);
-            });
-            content.appendChild(grid);
-        }
-    });
-}
-
-function renderAppDetail(app) {
-    const content = document.getElementById('store-content');
-    const canManageStore = myServerPerms.manageStore || myServerPerms.manageServerSettings || myServerRoles.includes('owner');
-    
-    const isLibraryMode = Object.keys(currentStoreApps).length > 1;
-    let backBtnHtml = isLibraryMode ? `<button class="small-btn" onclick="loadStoreApps()" style="background:transparent; color:var(--text-muted); padding:0; margin:0 0 15px 0; display:flex; align-items:center; gap:5px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg> Back to Library</button>` : '';
-
-    let screenshotsHtml = '';
-    if (app.screenshots && app.screenshots.length > 0) {
-        screenshotsHtml = `<div class="app-screenshot-carousel">
-            ${app.screenshots.map(s => `<img src="${s}" class="app-screenshot" onclick="openFullscreenImg('${s}')">`).join('')}
-        </div>`;
-    }
-
-    let adminHtml = canManageStore ? `<button class="app-delete-btn" onclick="deleteApp('${app.id}', '${app.name}')">Remove App</button>` : '';
-
-    content.innerHTML = `
-        <div class="app-detail-view">
-            ${backBtnHtml}
-            <div class="app-detail-banner" style="background-image: url('${app.banner}')"></div>
-            
-            <div class="app-detail-header">
-                <div>
-                    <h1 class="app-detail-title">${app.name}</h1>
-                    <div style="color:var(--accent-primary); font-size:14px; font-weight:600;">Server Release</div>
-                </div>
-                <a href="${app.link}" target="_blank" class="app-detail-download-btn">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                    Download
-                </a>
-            </div>
-            
-            <div style="color:var(--text-main); font-size:15px; line-height:1.6; white-space: pre-wrap;">${app.fullDesc}</div>
-            
-            ${screenshotsHtml}
-            ${adminHtml}
-        </div>
-    `;
-}
-
-window.openFullscreenImg = function(src) {
-    document.getElementById('enlarged-image').src = src;
-    document.getElementById('download-image-btn').href = src;
-    document.getElementById('image-modal').style.display = 'flex';
-};
-
-document.getElementById('add-app-btn')?.addEventListener('click', () => {
-    editingAppId = null;
-    document.getElementById('app-name-input').value = '';
-    document.getElementById('app-short-desc-input').value = '';
-    document.getElementById('app-full-desc-input').value = '';
-    document.getElementById('app-download-link').value = '';
-    tempAppBanner = null;
-    tempAppScreenshots = [];
-    document.getElementById('app-banner-preview').style.backgroundImage = 'none';
-    document.getElementById('app-screenshots-container').querySelectorAll('.preview-thumb').forEach(e => e.remove());
-    document.getElementById('app-edit-modal').style.display = 'flex';
-});
-
-document.getElementById('cancel-app-btn')?.addEventListener('click', () => {
-    document.getElementById('app-edit-modal').style.display = 'none';
-});
-
-document.getElementById('app-banner-upload')?.addEventListener('change', async (e) => {
-    const file = e.target.files[0]; if (!file) return;
-    const result = await compressImage(file, 800, 450, 0.85); 
-    tempAppBanner = result.compressed;
-    document.getElementById('app-banner-preview').style.backgroundImage = `url(${tempAppBanner})`;
-});
-
-document.getElementById('app-screenshot-upload')?.addEventListener('change', async (e) => {
-    const file = e.target.files[0]; if (!file) return;
-    if (tempAppScreenshots.length >= 5) return customAlert("Maximum 5 screenshots allowed.", "Limit Reached");
-    
-    const result = await compressImage(file, 800, 450, 0.85);
-    tempAppScreenshots.push(result.compressed);
-    
-    const thumb = document.createElement('div');
-    thumb.className = 'preview-thumb';
-    thumb.style.cssText = `height:40px; width:70px; background-image:url(${result.compressed}); background-size:cover; border-radius:4px; position:relative;`;
-    
-    const removeBtn = document.createElement('div');
-    removeBtn.innerHTML = '✖';
-    removeBtn.style.cssText = 'position:absolute; top:-5px; right:-5px; background:var(--accent-danger); color:white; border-radius:50%; width:16px; height:16px; font-size:10px; display:flex; justify-content:center; align-items:center; cursor:pointer;';
-    removeBtn.onclick = () => {
-        tempAppScreenshots = tempAppScreenshots.filter(s => s !== result.compressed);
-        thumb.remove();
-    };
-    
-    thumb.appendChild(removeBtn);
-    document.getElementById('app-screenshots-container').appendChild(thumb);
-});
-
-document.getElementById('save-app-btn')?.addEventListener('click', () => {
-    const name = document.getElementById('app-name-input').value.trim();
-    const shortDesc = document.getElementById('app-short-desc-input').value.trim();
-    const fullDesc = document.getElementById('app-full-desc-input').value.trim();
-    const link = document.getElementById('app-download-link').value.trim();
-
-    if (!name || !link || !tempAppBanner) return customAlert("Name, Download Link, and Banner are required.", "Missing Info");
-
-    const appId = editingAppId || push(ref(db, `store_apps/${currentServerId}`)).key;
-    const order = Date.now(); 
-
-    set(ref(db, `store_apps/${currentServerId}/${appId}`), {
-        name, shortDesc, fullDesc, link, banner: tempAppBanner, screenshots: tempAppScreenshots, order
-    });
-
-    document.getElementById('app-edit-modal').style.display = 'none';
-    showToast(`App "${name}" saved!`, 'success');
-});
-
-window.deleteApp = function(appId, appName) {
-    customConfirm(`Delete ${appName}?`, "Remove App", (yes) => {
-        if (yes) {
-            remove(ref(db, `store_apps/${currentServerId}/${appId}`));
-            showToast("App removed.", "info");
-        }
-    });
-};
 
 // ==========================================
 // --- ADMIN DASHBOARD LOGIC ---
