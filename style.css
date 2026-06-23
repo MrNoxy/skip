@@ -334,21 +334,34 @@ input, textarea, select { font-family: inherit; font-size: 14px !important; }
     flex-direction: column;
     min-height: 0;
 }
-#messages { flex-grow: 1; padding: 10px 20px 10px; overflow-y: auto; display: flex; flex-direction: column; background: var(--bg-main); min-height: 0; }
+#messages { flex-grow: 1; padding: 10px 20px 10px; overflow-y: auto; display: flex; flex-direction: column; background: var(--bg-main); min-height: 0; position: relative; }
 
 /* =============================================
    EMOJI STICKER SYSTEM
    ============================================= */
 
-/* Full overlay over the messages-wrapper */
+/* Lives INSIDE #messages (not the static wrapper) so it scrolls together with the
+   message it's anchored to. Zero height + visible overflow: takes no layout space
+   itself, children position relative to #messages's content box. z-index is kept
+   intentionally low (well under the emoji/gif panels at z:200 and the input bar at
+   z:11) so a placed sticker can never render on top of an open panel. */
 #emoji-sticker-layer {
     position: absolute;
-    inset: 0;
-    z-index: 20;
+    top: 0; left: 0; right: 0;
+    height: 0;
+    overflow: visible;
     pointer-events: none;
-    overflow: hidden;
+    z-index: 6;
 }
 #emoji-sticker-layer.stickers-hidden .emoji-sticker { opacity: 0 !important; pointer-events: none !important; }
+
+/* Highlighted while dragging a sticker near it — shows the user exactly which
+   message it will attach to */
+.sticker-anchor-target {
+    box-shadow: 0 0 0 2px var(--accent-primary) inset !important;
+    border-radius: var(--radius-sm);
+    transition: box-shadow 0.1s ease;
+}
 
 /* Individual sticker */
 .emoji-sticker {
@@ -541,11 +554,11 @@ input, textarea, select { font-family: inherit; font-size: 14px !important; }
 
 /* === EMOJI PICKER === */
 #emoji-picker {
-    position: absolute; bottom: calc(100% + 4px); right: 10px;
+    position: fixed; bottom: 80px; right: 10px;
     width: 340px; height: 380px;
     background: var(--bg-secondary); border: 1px solid var(--border-color);
     border-radius: var(--radius-lg); box-shadow: 0 12px 32px rgba(0,0,0,0.6);
-    z-index: 50; display: flex; flex-direction: column;
+    z-index: 200; display: flex; flex-direction: column;
     animation: slideUp 0.15s ease;
     overflow: hidden;
 }
@@ -564,16 +577,17 @@ input, textarea, select { font-family: inherit; font-size: 14px !important; }
 .ep-grid { display: grid; grid-template-columns: repeat(9, 1fr); gap: 2px; }
 .ep-emoji { display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: var(--radius-sm); cursor: pointer; font-size: 20px; transition: background var(--transition), transform 0.1s; }
 .ep-emoji:hover { background: var(--bg-hover); transform: scale(1.2); }
+.ep-emoji.ep-emoji-pressed { background: var(--bg-hover); transform: scale(1.3); transition: transform 0.12s ease; }
 .ep-custom-img { width: 28px; height: 28px; object-fit: contain; cursor: pointer; border-radius: var(--radius-sm); padding: 2px; transition: background var(--transition); }
 .ep-custom-img:hover { background: var(--bg-hover); }
 
 /* === GIF PICKER === */
 #gif-picker {
-    position: absolute; bottom: calc(100% + 4px); right: 10px;
+    position: fixed; bottom: 80px; right: 10px;
     width: 340px; height: 380px;
     background: var(--bg-secondary); border: 1px solid var(--border-color);
     border-radius: var(--radius-lg); box-shadow: 0 12px 32px rgba(0,0,0,0.6);
-    z-index: 50; display: flex; flex-direction: column;
+    z-index: 200; display: flex; flex-direction: column;
     animation: slideUp 0.15s ease; overflow: hidden;
 }
 

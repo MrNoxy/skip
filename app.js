@@ -48,6 +48,9 @@ let globalDecorationsCache = {};
 let unsubscribeMessages = null;
 let unsubscribeMessagesRemoved = null;
 let unsubscribeMessagesChanged = null;
+let unsubscribeStickers = null;
+let unsubscribeStickersChanged = null;
+let unsubscribeStickersRemoved = null;
 let unsubscribeMembers = null;
 let unsubscribeChannels = null;
 let unsubscribeCategories = null;
@@ -2976,6 +2979,7 @@ async function fetchOlderMessages() {
                 
                 // Keep the screen exactly where the user was looking
                 messagesDiv.scrollTop = messagesDiv.scrollHeight - oldScrollHeight;
+                repositionAllStickers(); // prepended content shifted everything below it down
             }
             
             // If we fetched fewer than 49 new messages, we've hit the absolute beginning!
@@ -3220,7 +3224,17 @@ async function loadMessages(dbPath, chatNameLabel) {
     
     if (initialMessages.length < 50) { insertWelcomeMessage(); oldestMsgTimestamp = null; }
     document.getElementById('chat-loading-spinner').style.display = 'none';
-    
+    ensureStickerLayer();
+
+    // Stickers anchor to message elements, so subscribe only after the initial
+    // batch is in the DOM — this also resyncs them (and the live listeners) on
+    // every chat switch, fixing the original "other person can't see it" bug.
+    if (unsubscribeStickers) unsubscribeStickers();
+    if (unsubscribeStickersChanged) unsubscribeStickersChanged();
+    if (unsubscribeStickersRemoved) unsubscribeStickersRemoved();
+    subscribeStickers(currentChatId);
+    onChatSwitched();
+
     if (insertedDivider) { 
         const divEl = messagesDiv.querySelector('.new-messages-divider'); 
         if (divEl) setTimeout(() => divEl.scrollIntoView({ behavior: "smooth", block: "center" }), 100); 
@@ -3361,8 +3375,22 @@ const emojiCategories = {
 // ==========================================
 // --- STICKER ENGINE ---
 // ==========================================
+// Stickers are synced through Firebase (chatStickers/{chatId}/{stickerId}) so both
+// participants in a chat see the same placements. Position is never stored as a raw
+// pixel coordinate — instead each sticker is *anchored* to the nearest message
+// element (anchorMsgId + a fractional X offset + a pixel Y offset from that
+// message's top edge). That anchor is re-resolved to real pixels every time it's
+// rendered, which is what makes a sticker:
+//   1. visible to the other person (it's just data in the DB),
+//   2. scroll naturally with the message it was dropped near,
+//   3. land in a sane, auto-corrected spot on a completely different screen size
+//      (a phone vs. a desktop), because "20% across this message, 18px above it"
+//      means roughly the same thing on any screen — unlike a raw "x:612,y:340".
+// If a sticker is dropped where there's no nearby message (e.g. a brand new empty
+// chat) it falls back to a fraction of the visible chat pane instead.
 const STICKER_MIN = 24, STICKER_MAX = 200;
-const stickersByChatId = {};  // chatId -> [{id,emoji,isCustom,customUrl,x,y,size,rot}]
+const STICKERS_DB_ROOT = 'chatStickers';
+const stickersByChatId = {};  // chatId -> [{id,emoji,isCustom,customUrl,anchorMsgId,ax,ay,fx,fy,size,rot}]
 let stickerLayerVisible = true;
 
 // Ghost element that follows the cursor/finger while dragging from picker
@@ -3382,24 +3410,22 @@ function canPlaceStickers() {
     return !!(myServerPerms.placeEmojiStickers || myServerPerms.manageServerSettings);
 }
 
-// Get the wrapper element used as positioning context for stickers
-function getStickerWrapper() {
-    return document.getElementById('messages-wrapper');
-}
-
-// ---- Render sticker layer on chat switch ----
-function renderStickerLayer() {
-    const layer = document.getElementById('emoji-sticker-layer');
-    if (!layer) return;
-    layer.innerHTML = '';
-    const list = stickersByChatId[currentChatId] || [];
-    list.forEach(s => appendStickerEl(s));
-    updateStickerHideBtn();
+// (Re)creates the sticker layer as the last child of #messages. Must be called
+// every time #messages is cleared (chat switch), since innerHTML='' wipes it.
+function ensureStickerLayer() {
+    let layer = document.getElementById('emoji-sticker-layer');
+    if (!layer) {
+        layer = document.createElement('div');
+        layer.id = 'emoji-sticker-layer';
+        layer.setAttribute('aria-hidden', 'true');
+    }
+    messagesDiv.appendChild(layer);
+    return layer;
 }
 
 function onChatSwitched() {
-    renderStickerLayer();
-    // Reset visibility
+    // Visual reset only — population now happens reactively via subscribeStickers()
+    // which loadMessages() calls once the new chat's DOM is ready.
     stickerLayerVisible = true;
     const layer = document.getElementById('emoji-sticker-layer');
     if (layer) layer.classList.remove('stickers-hidden');
@@ -3425,32 +3451,209 @@ document.getElementById('sticker-hide-btn')?.addEventListener('click', () => {
     btn.title = stickerLayerVisible ? 'Hide emoji stickers' : 'Show emoji stickers';
 });
 
-// ---- Place a new sticker ----
-// x,y are pixel coords RELATIVE TO the messages-wrapper element
-function placeSticker(emoji, isCustom, customUrl, x, y, size, rot) {
-    if (!currentChatId) return;
+// ---- Tiny debounce helper (used to throttle resize/wheel-driven DB writes) ----
+function debounce(fn, ms) {
+    let t = null;
+    return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+// ==========================================
+// --- ANCHOR RESOLUTION (the cross-device fix) ---
+// ==========================================
+
+// Finds the message element vertically nearest to a given point. Always returns
+// a message if any exist in the chat (anchoring "loosely" if dropped far above/
+// below the message list) — free-floating fallback is reserved for empty chats.
+function findAnchorNear(clientY) {
+    const msgEls = messagesDiv.querySelectorAll(':scope > .message');
+    let best = null, bestDist = Infinity;
+    msgEls.forEach(el => {
+        const r = el.getBoundingClientRect();
+        let dy;
+        if (clientY < r.top) dy = r.top - clientY;
+        else if (clientY > r.bottom) dy = clientY - r.bottom;
+        else dy = 0;
+        if (dy < bestDist) { bestDist = dy; best = el; }
+    });
+    return best;
+}
+
+// Briefly highlights the message a sticker is about to attach to.
+function updateAnchorHighlight(clientX, clientY) {
+    document.querySelectorAll('.sticker-anchor-target').forEach(el => el.classList.remove('sticker-anchor-target'));
+    const messagesRect = messagesDiv.getBoundingClientRect();
+    if (clientX < messagesRect.left || clientX > messagesRect.right || clientY < messagesRect.top || clientY > messagesRect.bottom) return null;
+    const anchorEl = findAnchorNear(clientY);
+    if (anchorEl) anchorEl.classList.add('sticker-anchor-target');
+    return anchorEl;
+}
+
+function clearAnchorHighlight() {
+    document.querySelectorAll('.sticker-anchor-target').forEach(el => el.classList.remove('sticker-anchor-target'));
+}
+
+// Turns a raw viewport point into a device-independent "anchor descriptor".
+// Returns null if the point isn't over the chat pane at all (drop ignored).
+function resolveAnchor(clientX, clientY) {
+    const messagesRect = messagesDiv.getBoundingClientRect();
+    if (clientX < messagesRect.left || clientX > messagesRect.right || clientY < messagesRect.top || clientY > messagesRect.bottom) {
+        return null;
+    }
+    const anchorEl = findAnchorNear(clientY);
+    if (anchorEl) {
+        const r = anchorEl.getBoundingClientRect();
+        return {
+            anchorMsgId: anchorEl.id,
+            ax: (clientX - r.left) / Math.max(1, r.width),
+            ay: clientY - r.top, // px offset from the message's top edge (negative = floats above it)
+            fx: null, fy: null,
+        };
+    }
+    // No messages at all yet (brand new chat) — float at a fraction of the visible pane
+    return {
+        anchorMsgId: null, ax: null, ay: null,
+        fx: (clientX - messagesRect.left) / Math.max(1, messagesRect.width),
+        fy: (clientY - messagesRect.top) / Math.max(1, messagesRect.height),
+    };
+}
+
+// Resolves a stored anchor descriptor back into real, current pixel coordinates
+// relative to #messages's content box (i.e. valid CSS left/top for an absolutely
+// positioned child of #messages — scrolls naturally along with it).
+function computeStickerPixelPos(s) {
+    const messagesRect = messagesDiv.getBoundingClientRect();
+    let x, y;
+    if (s.anchorMsgId) {
+        const anchorEl = document.getElementById(s.anchorMsgId);
+        if (anchorEl) {
+            const r = anchorEl.getBoundingClientRect();
+            x = (r.left - messagesRect.left) + messagesDiv.scrollLeft + (s.ax || 0) * r.width;
+            y = (r.top - messagesRect.top) + messagesDiv.scrollTop + (s.ay || 0);
+        }
+    }
+    if (x === undefined) {
+        // Anchor message no longer exists (scrolled out & pruned, deleted, etc.) or
+        // this sticker was placed free-floating — fall back to the fractional spot.
+        x = (s.fx != null ? s.fx : 0.5) * messagesRect.width;
+        y = (s.fy != null ? s.fy : 0.5) * messagesRect.height + (s.anchorMsgId ? messagesDiv.scrollTop : 0);
+    }
+    // Auto-corrective clamp: never let a sticker render fully off the (possibly much
+    // narrower, e.g. mobile) visible width.
+    const half = (s.size || 52) / 2;
+    const maxX = Math.max(half, messagesRect.width - half);
+    x = Math.max(half, Math.min(maxX, x));
+    return { x, y };
+}
+
+// Re-positions every currently-rendered sticker. Needed after window resize,
+// orientation change, or loading older messages (which shifts everything below
+// the newly-prepended content down).
+function repositionAllStickers() {
+    const layer = document.getElementById('emoji-sticker-layer');
+    if (!layer) return;
+    layer.querySelectorAll('.emoji-sticker').forEach(el => {
+        const s = (stickersByChatId[currentChatId] || []).find(x => x.id === el.dataset.stickerId);
+        if (!s) return;
+        const { x, y } = computeStickerPixelPos(s);
+        el.style.left = x + 'px';
+        el.style.top = y + 'px';
+    });
+}
+window.addEventListener('resize', debounce(repositionAllStickers, 120));
+
+// ==========================================
+// --- FIREBASE SYNC ----
+// ==========================================
+
+// Subscribes to live sticker data for a chat. Called from loadMessages() once the
+// new chat's DOM (and #emoji-sticker-layer) is ready.
+function subscribeStickers(chatId) {
+    stickersByChatId[chatId] = [];
+    updateStickerHideBtn();
+
+    const stickersRef = ref(db, `${STICKERS_DB_ROOT}/${chatId}`);
+
+    unsubscribeStickers = onChildAdded(stickersRef, (snap) => {
+        if (chatId !== currentChatId) return;
+        if ((stickersByChatId[chatId] || []).some(x => x.id === snap.key)) return; // our own optimistic write
+        const s = { id: snap.key, ...snap.val() };
+        if (!stickersByChatId[chatId]) stickersByChatId[chatId] = [];
+        stickersByChatId[chatId].push(s);
+        appendStickerEl(s);
+        updateStickerHideBtn();
+    });
+
+    unsubscribeStickersChanged = onChildChanged(stickersRef, (snap) => {
+        if (chatId !== currentChatId) return;
+        const updated = { id: snap.key, ...snap.val() };
+        const list = stickersByChatId[chatId] || [];
+        const idx = list.findIndex(x => x.id === snap.key);
+        if (idx >= 0) list[idx] = updated; else list.push(updated);
+        updateStickerElFromData(updated);
+    });
+
+    unsubscribeStickersRemoved = onChildRemoved(stickersRef, (snap) => {
+        if (chatId !== currentChatId) return;
+        stickersByChatId[chatId] = (stickersByChatId[chatId] || []).filter(x => x.id !== snap.key);
+        document.querySelector(`.emoji-sticker[data-sticker-id="${CSS.escape(snap.key)}"]`)?.remove();
+        updateStickerHideBtn();
+    });
+}
+
+// ---- Place a new sticker. `anchor` comes from resolveAnchor(). ----
+function placeSticker(emoji, isCustom, customUrl, anchor, size, rot) {
+    if (!currentChatId || !anchor) return;
     if (!stickersByChatId[currentChatId]) stickersByChatId[currentChatId] = [];
+    const newRef = push(ref(db, `${STICKERS_DB_ROOT}/${currentChatId}`));
     const s = {
-        id: Date.now() + '_' + Math.random(),
-        emoji, isCustom, customUrl,
-        x, y,
-        size: size || 52,
-        rot: rot || 0,
+        id: newRef.key,
+        emoji, isCustom: !!isCustom, customUrl: customUrl || null,
+        anchorMsgId: anchor.anchorMsgId || null,
+        ax: anchor.ax ?? null, ay: anchor.ay ?? null,
+        fx: anchor.fx ?? null, fy: anchor.fy ?? null,
+        size: size || 52, rot: rot || 0,
+        placedBy: currentUserSafeEmail,
     };
     stickersByChatId[currentChatId].push(s);
     appendStickerEl(s);
     updateStickerHideBtn();
+
+    const { id, ...payload } = s;
+    set(newRef, payload).catch(err => console.error('Failed to sync sticker placement:', err));
 }
 
 function removeSticker(id) {
-    if (!currentChatId || !stickersByChatId[currentChatId]) return;
-    stickersByChatId[currentChatId] = stickersByChatId[currentChatId].filter(s => s.id !== id);
+    if (!currentChatId) return;
+    stickersByChatId[currentChatId] = (stickersByChatId[currentChatId] || []).filter(s => s.id !== id);
     document.querySelector(`.emoji-sticker[data-sticker-id="${CSS.escape(id)}"]`)?.remove();
     updateStickerHideBtn();
+    remove(ref(db, `${STICKERS_DB_ROOT}/${currentChatId}/${id}`)).catch(err => console.error('Failed to sync sticker removal:', err));
+}
+
+// Persists a moved/resized/rotated sticker's new anchor + size/rot to Firebase.
+function commitStickerUpdate(s, fields) {
+    Object.assign(s, fields);
+    update(ref(db, `${STICKERS_DB_ROOT}/${currentChatId}/${s.id}`), fields).catch(err => console.error('Failed to sync sticker update:', err));
 }
 
 function applyTransform(el, s) {
     el.style.transform = `rotate(${s.rot}deg)`;
+}
+
+// Applies fresh data (from another client) to an already-rendered sticker element.
+function updateStickerElFromData(s) {
+    const el = document.querySelector(`.emoji-sticker[data-sticker-id="${CSS.escape(s.id)}"]`);
+    if (!el) { appendStickerEl(s); return; }
+    if (s.isCustom && s.customUrl) {
+        const img = el.querySelector('img');
+        if (img) { img.style.width = s.size + 'px'; img.style.height = s.size + 'px'; }
+    } else {
+        el.style.fontSize = s.size + 'px';
+    }
+    applyTransform(el, s);
+    const { x, y } = computeStickerPixelPos(s);
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
 }
 
 // ---- Build and attach a sticker DOM element ----
@@ -3472,9 +3675,9 @@ function appendStickerEl(s) {
         el.style.fontSize = s.size + 'px';
     }
 
-    el.style.left = s.x + 'px';
-    el.style.top = s.y + 'px';
-    el.style.zIndex = 20 + (stickersByChatId[currentChatId]?.length || 0);
+    const { x, y } = computeStickerPixelPos(s);
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
     applyTransform(el, s);
 
     // ---- Double-click / double-tap to remove ----
@@ -3487,41 +3690,38 @@ function appendStickerEl(s) {
     }, { passive: true });
 
     // ---- PC: left-drag=move, right-drag=rotate, scroll=resize ----
-    // Disable browser context menu on sticker (needed for right-drag rotate)
     el.addEventListener('contextmenu', e => e.preventDefault());
 
     let pcDragging = false;
     let pcRotating = false;
     let pcRotateStartX = 0;
     let pcRotateStartRot = 0;
-    let pcMoveOffX = 0, pcMoveOffY = 0;
+    let dragStartClientX = 0, dragStartClientY = 0, dragStartLeft = 0, dragStartTop = 0;
+    const commitSizeDebounced = debounce(() => commitStickerUpdate(s, { size: s.size }), 350);
 
     el.addEventListener('mousedown', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        const wrapper = getStickerWrapper();
-        const wRect = wrapper.getBoundingClientRect();
 
         if (e.button === 0) {
-            // Left click = move
             pcDragging = true;
             el.classList.add('dragging');
-            pcMoveOffX = e.clientX - wRect.left - s.x;
-            pcMoveOffY = e.clientY - wRect.top - s.y;
+            dragStartClientX = e.clientX; dragStartClientY = e.clientY;
+            dragStartLeft = parseFloat(el.style.left) || 0;
+            dragStartTop = parseFloat(el.style.top) || 0;
         } else if (e.button === 2) {
-            // Right click = rotate
             pcRotating = true;
             pcRotateStartX = e.clientX;
             pcRotateStartRot = s.rot;
         }
 
         function onMouseMove(mv) {
-            const wr = getStickerWrapper().getBoundingClientRect();
             if (pcDragging) {
-                s.x = mv.clientX - wr.left - pcMoveOffX;
-                s.y = mv.clientY - wr.top - pcMoveOffY;
-                el.style.left = s.x + 'px';
-                el.style.top = s.y + 'px';
+                const dx = mv.clientX - dragStartClientX;
+                const dy = mv.clientY - dragStartClientY;
+                el.style.left = (dragStartLeft + dx) + 'px';
+                el.style.top = (dragStartTop + dy) + 'px';
+                updateAnchorHighlight(mv.clientX, mv.clientY);
             }
             if (pcRotating) {
                 const dx = mv.clientX - pcRotateStartX;
@@ -3530,11 +3730,25 @@ function appendStickerEl(s) {
             }
         }
 
-        function onMouseUp() {
+        function onMouseUp(up) {
+            const wasDragging = pcDragging, wasRotating = pcRotating;
             pcDragging = false; pcRotating = false;
             el.classList.remove('dragging');
+            clearAnchorHighlight();
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
+
+            if (wasDragging) {
+                const rect = el.getBoundingClientRect();
+                const anchor = resolveAnchor(rect.left + rect.width / 2, rect.top + rect.height / 2);
+                if (anchor) {
+                    commitStickerUpdate(s, anchor);
+                    const { x, y } = computeStickerPixelPos(s);
+                    el.style.left = x + 'px'; el.style.top = y + 'px';
+                }
+            } else if (wasRotating) {
+                commitStickerUpdate(s, { rot: s.rot });
+            }
         }
 
         document.addEventListener('mousemove', onMouseMove);
@@ -3553,23 +3767,23 @@ function appendStickerEl(s) {
         } else {
             el.style.fontSize = s.size + 'px';
         }
+        commitSizeDebounced();
     }, { passive: false });
 
     // ---- Mobile: 1 finger=move, 2 fingers=pinch-resize+rotate ----
-    let t1Start = null, t2Start = null;
+    let t1Start = null;
     let pinchStartDist = null, pinchStartSize = s.size;
     let pinchStartAngle = null, pinchStartRot = s.rot;
+    let movedDuringTouch = false;
 
     el.addEventListener('touchstart', (e) => {
         e.stopPropagation();
         if (e.touches.length === 1) {
-            const wrapper = getStickerWrapper();
-            const wRect = wrapper.getBoundingClientRect();
+            movedDuringTouch = false;
             t1Start = {
-                ox: e.touches[0].clientX - wRect.left - s.x,
-                oy: e.touches[0].clientY - wRect.top - s.y,
+                ox: e.touches[0].clientX - (parseFloat(el.style.left) || 0),
+                oy: e.touches[0].clientY - (parseFloat(el.style.top) || 0),
             };
-            t2Start = null;
         } else if (e.touches.length === 2) {
             t1Start = null;
             const dx = e.touches[0].clientX - e.touches[1].clientX;
@@ -3585,19 +3799,17 @@ function appendStickerEl(s) {
         e.preventDefault();
         e.stopPropagation();
         if (e.touches.length === 1 && t1Start) {
-            const wr = getStickerWrapper().getBoundingClientRect();
-            s.x = e.touches[0].clientX - wr.left - t1Start.ox;
-            s.y = e.touches[0].clientY - wr.top - t1Start.oy;
-            el.style.left = s.x + 'px';
-            el.style.top = s.y + 'px';
+            movedDuringTouch = true;
+            el.style.left = (e.touches[0].clientX - t1Start.ox) + 'px';
+            el.style.top = (e.touches[0].clientY - t1Start.oy) + 'px';
+            updateAnchorHighlight(e.touches[0].clientX, e.touches[0].clientY);
         } else if (e.touches.length === 2 && pinchStartDist !== null) {
+            movedDuringTouch = true;
             const dx = e.touches[0].clientX - e.touches[1].clientX;
             const dy = e.touches[0].clientY - e.touches[1].clientY;
             const dist = Math.hypot(dx, dy);
             const angle = Math.atan2(dy, dx) * 180 / Math.PI;
-            // Resize
             s.size = Math.max(STICKER_MIN, Math.min(STICKER_MAX, Math.round(pinchStartSize * (dist / pinchStartDist))));
-            // Rotate
             s.rot = pinchStartRot + (angle - pinchStartAngle);
             if (s.isCustom && s.customUrl) {
                 const img = el.querySelector('img');
@@ -3611,21 +3823,26 @@ function appendStickerEl(s) {
 
     el.addEventListener('touchend', (e) => {
         e.stopPropagation();
-        if (e.touches.length < 2) { pinchStartDist = null; }
-        if (e.touches.length === 0) { t1Start = null; }
+        clearAnchorHighlight();
+        if (e.touches.length < 2) pinchStartDist = null;
+        if (e.touches.length === 0) {
+            t1Start = null;
+            if (movedDuringTouch) {
+                const rect = el.getBoundingClientRect();
+                const anchor = resolveAnchor(rect.left + rect.width / 2, rect.top + rect.height / 2);
+                if (anchor) {
+                    commitStickerUpdate(s, { ...anchor, size: s.size, rot: s.rot });
+                    const { x, y } = computeStickerPixelPos(s);
+                    el.style.left = x + 'px'; el.style.top = y + 'px';
+                } else {
+                    commitStickerUpdate(s, { size: s.size, rot: s.rot });
+                }
+            }
+            movedDuringTouch = false;
+        }
     }, { passive: true });
 
     layer.appendChild(el);
-}
-
-// ---- KEY FIX: get drop coords relative to the messages-wrapper ----
-function getDropCoords(clientX, clientY) {
-    const wrapper = getStickerWrapper();
-    if (!wrapper) return null;
-    const rect = wrapper.getBoundingClientRect();
-    // Check if point is inside the wrapper
-    if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) return null;
-    return { x: clientX - rect.left, y: clientY - rect.top };
 }
 
 // ---- Drag from picker: PC ----
@@ -3674,9 +3891,11 @@ function initPickerEmojiDrag(el, emoji, isCustom, customUrl) {
                 mv.clientY < pickerRect.top || mv.clientY > pickerRect.bottom)) {
                 emojiPickerEl.style.opacity = '0';
                 emojiPickerEl.style.pointerEvents = 'none';
+                updateAnchorHighlight(mv.clientX, mv.clientY);
             } else {
                 emojiPickerEl.style.opacity = '1';
                 emojiPickerEl.style.pointerEvents = '';
+                clearAnchorHighlight();
             }
         }
 
@@ -3716,14 +3935,15 @@ function initPickerEmojiDrag(el, emoji, isCustom, customUrl) {
             dragGhost.style.transform = 'translate(-50%,-50%)';
             emojiPickerEl.style.opacity = '1';
             emojiPickerEl.style.pointerEvents = '';
+            clearAnchorHighlight();
             document.removeEventListener('mousemove', onMove);
             document.removeEventListener('mouseup', onUp);
             document.removeEventListener('wheel', onScroll, true);
 
             if (didDrag) {
-                const coords = getDropCoords(ue.clientX, ue.clientY);
-                if (coords) {
-                    placeSticker(emoji, isCustom, customUrl, coords.x, coords.y, pickerDragSize, ghostRot);
+                const anchor = resolveAnchor(ue.clientX, ue.clientY);
+                if (anchor) {
+                    placeSticker(emoji, isCustom, customUrl, anchor, pickerDragSize, ghostRot);
                     // Reopen picker
                     setTimeout(() => {
                         emojiPickerEl.style.display = 'flex';
@@ -3743,43 +3963,70 @@ function initPickerEmojiDrag(el, emoji, isCustom, customUrl) {
 }
 
 // ---- Drag from picker: Mobile ----
+// KEY FIX: dragging used to start the instant you touched an emoji, which broke
+// both tapping an emoji into the textbox AND scrolling the picker grid. Now a drag
+// only starts after a short long-press; until then touchmove is left completely
+// alone so the grid scrolls normally, and a quick tap falls through to the
+// regular click handler (insertEmoji).
 function initPickerEmojiTouch(el, emoji, isCustom, customUrl) {
-    let active = false;
+    const LONG_PRESS_MS = 350;
+    const MOVE_CANCEL_PX = 10;
+    let pressTimer = null;
+    let startX = 0, startY = 0;
+    let active = false; // true once a drag has actually begun
     let touchSize = 52, touchRot = 0;
     let pinchStartDist = null, pinchStartSize = 52;
     let pinchStartAngle = null, pinchStartRot = 0;
 
+    function beginDrag(touch) {
+        active = true; touchSize = 52; touchRot = 0;
+        pickerDragEmoji = emoji;
+        el.classList.add('ep-emoji-pressed');
+        dragGhost.innerHTML = '';
+        if (isCustom && customUrl) {
+            const img = document.createElement('img');
+            img.src = customUrl;
+            img.style.cssText = `width:${touchSize}px;height:${touchSize}px;object-fit:contain;display:block;`;
+            dragGhost.appendChild(img);
+            dragGhost.style.fontSize = '';
+        } else {
+            dragGhost.innerHTML = emoji;
+            dragGhost.style.fontSize = touchSize + 'px';
+        }
+        dragGhost.style.display = 'block';
+        dragGhost.style.transform = 'translate(-50%,-50%)';
+        dragGhost.style.left = touch.clientX + 'px';
+        dragGhost.style.top = touch.clientY + 'px';
+        emojiPickerEl.style.opacity = '0.25';
+        emojiPickerEl.style.pointerEvents = 'none';
+        suppressNextClick = true; // a drag happened — the eventual click shouldn't insert
+        if (navigator.vibrate) { try { navigator.vibrate(8); } catch (_) {} }
+    }
+
     el.addEventListener('touchstart', (e) => {
         if (!canPlaceStickers()) return;
-        if (e.touches.length === 1) {
-            active = true; touchSize = 52; touchRot = 0;
-            pickerDragEmoji = emoji;
-            dragGhost.innerHTML = '';
-            if (isCustom && customUrl) {
-                const img = document.createElement('img');
-                img.src = customUrl;
-                img.style.cssText = `width:${touchSize}px;height:${touchSize}px;object-fit:contain;display:block;`;
-                dragGhost.appendChild(img);
-                dragGhost.style.fontSize = '';
-            } else {
-                dragGhost.innerHTML = emoji;
-                dragGhost.style.fontSize = touchSize + 'px';
-            }
-            dragGhost.style.display = 'block';
-            dragGhost.style.transform = 'translate(-50%,-50%)';
-            dragGhost.style.left = e.touches[0].clientX + 'px';
-            dragGhost.style.top = e.touches[0].clientY + 'px';
-            emojiPickerEl.style.opacity = '0.25';
-            emojiPickerEl.style.pointerEvents = 'none';
-        }
+        if (e.touches.length !== 1) return;
+        const touch = e.touches[0];
+        startX = touch.clientX; startY = touch.clientY;
+        clearTimeout(pressTimer);
+        pressTimer = setTimeout(() => beginDrag(touch), LONG_PRESS_MS);
     }, { passive: true });
 
     el.addEventListener('touchmove', (e) => {
-        if (!active) return;
+        if (!active) {
+            // Still deciding whether this is a long-press, a tap, or a scroll.
+            // Never preventDefault here — that's what let the grid scroll again.
+            const t = e.touches[0];
+            if (t && Math.hypot(t.clientX - startX, t.clientY - startY) > MOVE_CANCEL_PX) {
+                clearTimeout(pressTimer); // moved too far/fast — treat as a scroll, not a press
+            }
+            return;
+        }
         e.preventDefault();
         if (e.touches.length === 1) {
             dragGhost.style.left = e.touches[0].clientX + 'px';
             dragGhost.style.top = e.touches[0].clientY + 'px';
+            updateAnchorHighlight(e.touches[0].clientX, e.touches[0].clientY);
             pinchStartDist = null;
         } else if (e.touches.length === 2) {
             const dx = e.touches[0].clientX - e.touches[1].clientX;
@@ -3803,22 +4050,35 @@ function initPickerEmojiTouch(el, emoji, isCustom, customUrl) {
     }, { passive: false });
 
     el.addEventListener('touchend', (e) => {
-        if (!active) return;
-        if (e.touches.length > 0) return; // still touching
+        clearTimeout(pressTimer);
+        el.classList.remove('ep-emoji-pressed');
+        if (!active) return; // a plain tap — let the natural click fire (insertEmoji)
+        if (e.touches.length > 0) return; // still touching with another finger
         active = false;
+        clearAnchorHighlight();
         dragGhost.style.display = 'none';
         dragGhost.style.transform = 'translate(-50%,-50%)';
         emojiPickerEl.style.opacity = '1';
         emojiPickerEl.style.pointerEvents = '';
 
         const touch = e.changedTouches[0];
-        const coords = getDropCoords(touch.clientX, touch.clientY);
-        if (coords) {
-            placeSticker(emoji, isCustom, customUrl, coords.x, coords.y, touchSize, touchRot);
+        const anchor = resolveAnchor(touch.clientX, touch.clientY);
+        if (anchor) {
+            placeSticker(emoji, isCustom, customUrl, anchor, touchSize, touchRot);
             setTimeout(() => { emojiPickerEl.style.display = 'flex'; }, 140);
         }
         pickerDragEmoji = null;
         pinchStartDist = null;
+    }, { passive: true });
+
+    el.addEventListener('touchcancel', () => {
+        clearTimeout(pressTimer);
+        active = false;
+        el.classList.remove('ep-emoji-pressed');
+        clearAnchorHighlight();
+        dragGhost.style.display = 'none';
+        emojiPickerEl.style.opacity = '1';
+        emojiPickerEl.style.pointerEvents = '';
     }, { passive: true });
 }
 
@@ -3846,7 +4106,38 @@ function toggleEmojiPicker() {
     }
     buildEmojiPicker();
     emojiPickerEl.style.display = 'flex';
+    positionFloatingPanel(emojiPickerEl);
 }
+
+// Anchors a fixed-position floating panel (emoji/gif picker) just above the
+// message input bar, clamped to stay fully on-screen. Recomputed on every open
+// and on resize/orientation-change, so it's correct on phone keyboards too —
+// this is also what keeps the panel decisively above the sticker layer
+// regardless of any stacking-context quirks elsewhere in the page.
+function positionFloatingPanel(panelEl) {
+    if (!panelEl) return;
+    const anchorEl = document.getElementById('message-input-area') || document.getElementById('emoji-picker-btn');
+    if (!anchorEl) return;
+    const anchorRect = anchorEl.getBoundingClientRect();
+    const margin = 8;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const width = Math.min(340, vw - margin * 2);
+    const bottom = Math.max(margin, vh - anchorRect.top + margin);
+    const maxHeight = Math.min(380, vh - bottom - margin * 2);
+    let left = anchorRect.right - width;
+    left = Math.max(margin, Math.min(left, vw - width - margin));
+
+    panelEl.style.width = width + 'px';
+    panelEl.style.height = Math.max(220, maxHeight) + 'px';
+    panelEl.style.left = left + 'px';
+    panelEl.style.right = 'auto';
+    panelEl.style.bottom = bottom + 'px';
+    panelEl.style.top = 'auto';
+}
+window.addEventListener('resize', debounce(() => {
+    if (emojiPickerEl.style.display === 'flex') positionFloatingPanel(emojiPickerEl);
+    if (gifPickerEl && gifPickerEl.style.display === 'flex') positionFloatingPanel(gifPickerEl);
+}, 100));
 
 function buildEmojiPicker() {
     const tabsContainer = document.getElementById('emoji-picker-tabs');
@@ -3867,7 +4158,7 @@ function buildEmojiPicker() {
         if (!gifEl) return;
         const isOpen = gifEl.style.display === 'flex';
         gifEl.style.display = isOpen ? 'none' : 'flex';
-        if (!isOpen) loadTrendingGifs();
+        if (!isOpen) { positionFloatingPanel(gifEl); loadTrendingGifs(); }
     };
     tabsContainer.appendChild(gifTab);
 
@@ -4010,7 +4301,10 @@ function insertEmoji(idOrChar, name, isCustom) {
 
 document.addEventListener('click', (e) => {
     if (!e.target.closest('#emoji-picker') && !e.target.closest('#emoji-picker-btn') && !e.target.closest('.react')) emojiPickerEl.style.display = 'none';
-    if (!e.target.closest('#gif-picker') && !e.target.closest('#gif-picker-btn') && !e.target.closest('#emoji-picker-btn')) closeGifPicker();
+    // KEY FIX: the GIF "button" is actually the .ep-gif-tab living *inside* #emoji-picker,
+    // not inside #gif-picker. Without this exclusion, clicking it opened the GIF picker
+    // and then this very same click (bubbling up from the tab) immediately closed it again.
+    if (!e.target.closest('#gif-picker') && !e.target.closest('.ep-gif-tab') && !e.target.closest('#emoji-picker-btn')) closeGifPicker();
 });
 
 // Disable right-click context menu globally while picker drag is active
