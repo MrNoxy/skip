@@ -935,8 +935,17 @@ button:disabled { background: var(--bg-tertiary); cursor: not-allowed; color: va
     .fs-close-btn-mobile { display: block; }
     .desktop-only { display: none !important; }
 
-    #emoji-picker, #gif-picker { width: calc(100vw - 32px); right: 16px; }
-    .fs-content-area { padding: 20px 18px; }
+    #unified-picker { width: calc(100vw - 24px); right: 12px; height: 380px; }
+    .fs-content-area { padding: 20px 16px; }
+
+    /* My Account mobile layout */
+    .profile-fields-row { flex-direction: column; gap: 0; }
+    .profile-field-col { min-width: 100%; }
+    .profile-images-grid { grid-template-columns: 1fr; }
+    .profile-image-card { padding: 12px; }
+    #profile-studio { overflow-x: auto; }
+    #profile-studio > div { flex-direction: column !important; }
+    #studio-canvas { width: 100% !important; min-width: 280px; height: 220px !important; }
 
     /* Better touch targets on mobile */
     .channel-item { padding: 11px 8px; }
