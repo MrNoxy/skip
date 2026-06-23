@@ -204,7 +204,14 @@
                     <svg class="loading-spinner" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right:5px;"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a10 10 0 0 1 10 10"></path></svg> Loading older messages...
                 </div>
 
-                <div id="messages"></div>
+                <div id="messages">
+                    <!-- Floating emoji stickers layer — sits inside messages so position:relative works -->
+                    <div id="emoji-sticker-layer" aria-hidden="true"></div>
+                    <!-- Sticker visibility toggle -->
+                    <button id="sticker-hide-btn" title="Hide/show emoji stickers" style="display:none;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                    </button>
+                </div>
 
                 <div id="typing-indicator" style="display: none;"></div>
 
@@ -238,11 +245,6 @@
 
                         <textarea id="msg-input" placeholder="Message..." disabled autocomplete="off" rows="1"></textarea>
                         
-                        <!-- GIF button -->
-                        <button id="gif-picker-btn" disabled title="Send a GIF" class="input-action-btn gif-btn">
-                            GIF
-                        </button>
-
                         <!-- Emoji button -->
                         <button id="emoji-picker-btn" disabled title="Add Emoji" class="input-action-btn">
                             <span id="ep-icon-span"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg></span>
@@ -253,37 +255,26 @@
                         </button>
                     </div>
                     
-                    <!-- Unified Media Picker (GIF + Emoji) -->
-                    <div id="unified-picker" style="display: none;">
-                        <!-- Top tab bar: GIFs / Emoji -->
-                        <div id="unified-picker-tabs">
-                            <button class="unified-tab active" data-tab="emoji">😀 Emoji</button>
-                            <button class="unified-tab" data-tab="gif">GIF</button>
-                        </div>
-
-                        <!-- GIF Panel -->
-                        <div id="unified-gif-panel" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
-                            <div id="gif-picker-header">
-                                <input type="text" id="gif-search-input" placeholder="Search GIFs…" autocomplete="off">
-                            </div>
-                            <div id="gif-grid"></div>
-                            <div id="gif-loading" style="display:none; text-align:center; padding:14px; color:var(--text-muted); font-size:12px;">Loading…</div>
-                            <div id="gif-picker-footer"><p>Powered by KLIPY</p></div>
-                        </div>
-
-                        <!-- Emoji Panel -->
-                        <div id="unified-emoji-panel" style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
-                            <div id="emoji-picker-search-wrap">
-                                <input type="text" id="emoji-search" placeholder="Search emoji or :shortcode:" autocomplete="off">
-                            </div>
-                            <div id="emoji-picker-tabs"></div>
-                            <div id="emoji-picker-content"></div>
-                        </div>
+                    <!-- Emoji Picker -->
+                    <div id="emoji-picker" style="display: none;">
+                        <div id="emoji-picker-tabs"></div>
+                        <input type="text" id="emoji-search" placeholder="Search emojis..." autocomplete="off">
+                        <div id="emoji-picker-content"></div>
                     </div>
 
-                    <!-- keep legacy ids so JS still finds them -->
-                    <div id="emoji-picker" style="display:none;"></div>
-                    <div id="gif-picker" style="display:none;"></div>
+                    <div id="gif-picker" style="display: none;">
+    <div id="gif-picker-header">
+        <input type="text" id="gif-search-input" placeholder="Search GIFs (powered by KLIPY)..." autocomplete="off">
+        <button id="gif-search-btn">🔍</button>
+    </div>
+    
+    <div id="gif-grid"></div>
+    <div id="gif-loading" style="display:none; text-align:center; padding:20px; color:var(--text-muted);">Loading GIFs...</div>
+    
+    <div id="gif-picker-footer">
+        <p>Powered by KLIPY</p>
+    </div>
+</div>
                 </div>
             </div>
 
@@ -409,7 +400,10 @@
                 <div style="height: 1px; background: var(--border-color); margin: 10px 0;"></div>
                 <div class="fs-tab" id="us-logout-btn" style="color: var(--accent-danger);">Log Out</div>
 
-
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; position: absolute; bottom: 0px;">
+                    <h3><span style="color: var(--text-muted); font-size: 11px; font-weight:bold; text-transform:uppercase; letter-spacing: 0.05em;">Version 2.2.5-may005B</span></h3>
+                    <button id="close-user-settings-btn" class="fs-close-btn-mobile" title="Close">✖</button>
+                </div>
 
             </div>
             
@@ -460,14 +454,14 @@
 <div class="ss-pane" id="pane-us-account" style="display: block;">
     
     <!-- 1. PROFILE INFO (Grouped at the top for quick access) -->
-    <h3 class="settings-section-label">Profile Info</h3>
+    <h3 style="color:var(--text-muted); font-size:11px; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:15px;">Profile Info</h3>
     
-    <div class="profile-fields-row">
-        <div class="profile-field-col">
+    <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 0;">
+        <div style="flex: 1; min-width: 150px;">
             <label class="fs-label">Username</label>
             <input type="text" id="edit-username" placeholder="Username" autocomplete="off" class="fs-input" style="margin-bottom: 15px;">
         </div>
-        <div class="profile-field-col">
+        <div style="flex: 1; min-width: 150px;">
             <label class="fs-label">Tag (4 digits)</label>
             <input type="number" id="edit-tag" placeholder="6996" autocomplete="off" class="fs-input" min="1000" max="9999" style="margin-bottom: 15px;">
         </div>
@@ -476,12 +470,12 @@
     <label class="fs-label">About Me</label>
     <textarea id="edit-bio" placeholder="Write a little about yourself..." class="fs-input" style="resize:vertical; min-height:70px; margin-bottom: 25px;"></textarea>
 
-    <!-- 2. IMAGES (Side-by-side on desktop, stacked on mobile) -->
-    <h3 class="settings-section-label">Profile Images</h3>
-    <div class="profile-images-grid">
+    <!-- 2. IMAGES (Side-by-side on desktop) -->
+    <h3 style="color:var(--text-muted); font-size:11px; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:15px;">Profile Images</h3>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; margin-bottom: 25px;">
         
         <!-- Avatar -->
-        <div class="profile-image-card">
+        <div style="display: flex; align-items: center; gap: 15px; padding: 15px; background:var(--bg-main); border-radius:8px; border:1px solid var(--border-color);">
             <div style="position:relative; flex-shrink: 0;">
                 <img id="profile-preview" class="avatar-large" src="https://cdn.pixabay.com/photo/2023/02/18/11/00/icon-7797704_640.png" alt="Avatar" style="object-fit:cover;">
                 <div class="avatar-edit-badge" onclick="document.getElementById('avatar-upload').click()" title="Change Avatar">
@@ -497,7 +491,7 @@
         </div>
 
         <!-- Banner -->
-        <div class="profile-image-card">
+        <div style="display: flex; align-items: center; gap: 15px; padding: 15px; background:var(--bg-main); border-radius:8px; border:1px solid var(--border-color);">
             <div id="settings-banner-preview" style="width: 100px; height: 56px; background-color: var(--bg-tertiary); border-radius: 6px; background-size: cover; background-position: center; border: 1px dashed var(--border-color); flex-shrink: 0;"></div>
             <div>
                 <div style="font-weight:600; color:var(--text-bright); margin-bottom:2px; font-size:13px;">Banner</div>
@@ -509,10 +503,10 @@
                 </div>
             </div>
         </div>
-    </div><!-- .profile-images-grid -->
+    </div>
 
     <!-- PROFILE BACKGROUND STUDIO -->
-    <h3 class="settings-section-label">Profile Background Studio</h3>
+    <h3 style="color:var(--text-muted); font-size:11px; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:15px;">Profile Background Studio</h3>
     <div id="profile-studio" style="display:flex; flex-direction:column; gap:15px; margin-bottom: 25px; padding: 15px; background:var(--bg-main); border-radius:8px; border:1px solid var(--border-color);">
         <div style="display:flex; gap: 20px;">
             <!-- Left: Preview Canvas -->
@@ -670,6 +664,7 @@
                             <h4 style="color: var(--text-muted); text-transform: uppercase; font-size: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px; margin-top: 30px;">General Permissions</h4>
                             <label class="toggle-row"><div><strong style="color: var(--text-bright);">View Channels</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to view channels by default.</span></div><input type="checkbox" id="p-viewChannels"></label>
                             <label class="toggle-row"><div><strong style="color: var(--text-bright);">Send Messages</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to send text messages.</span></div><input type="checkbox" id="p-sendMessages"></label>
+                            <label class="toggle-row"><div><strong style="color: var(--text-bright);">Place Emoji Stickers</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to drag and drop floating emoji stickers anywhere in the chat.</span></div><input type="checkbox" id="p-placeEmojiStickers"></label>
                             <h4 style="color: var(--text-muted); text-transform: uppercase; font-size: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px; margin-top: 30px;">Moderation Permissions</h4>
                             <label class="toggle-row"><div><strong style="color: var(--text-bright);">Kick Members</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to remove other users from the server.</span></div><input type="checkbox" id="p-kickMembers"></label>
                             <label class="toggle-row"><div><strong style="color: var(--text-bright);">Ban Members</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to permanently ban other users.</span></div><input type="checkbox" id="p-banMembers"></label>

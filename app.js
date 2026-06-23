@@ -33,7 +33,7 @@ let chatType = 'home';
 let currentHomeTab = 'news';
 let currentUserSafeEmail = null;
 let myProfile = {};
-let myServerPerms = { viewChannels: true, sendMessages: true, manageChannels: false, manageServerSettings: false, manageServerProfile: false, manageServerOverview: false, manageRoles: false, manageMessages: false, kickMembers: false, banMembers: false, timeoutMembers: false, manageDownloadChannel: false };
+let myServerPerms = { viewChannels: true, sendMessages: true, placeEmojiStickers: true, manageChannels: false, manageServerSettings: false, manageServerProfile: false, manageServerOverview: false, manageRoles: false, manageMessages: false, kickMembers: false, banMembers: false, timeoutMembers: false, manageDownloadChannel: false };
 let myServerRoles = [];
 let myServerMemberData = {};
 
@@ -1545,11 +1545,12 @@ function openDM(dmId, friendEmail) {
     leaveDownloadChannel();
     chatType = 'dm'; currentChatId = dmId;
     const uData = globalUsersCache[friendEmail]; currentDMOtherUser = uData;
-    myServerPerms = { viewChannels: true, sendMessages: true, manageMessages: false };
+    myServerPerms = { viewChannels: true, sendMessages: true, placeEmojiStickers: true, manageMessages: false };
     myServerMemberData = {};
     update(ref(db, `users/${currentUserSafeEmail}/friends/${friendEmail}`), { hidden: false });
     document.getElementById('home-area').style.display = 'none';
     document.getElementById('chat-area').style.display = 'flex';
+    setTimeout(onChatSwitched, 50);
     document.getElementById('chat-title').innerText = `@${uData.username}#${uData.tag}`;
     document.getElementById('chat-title').style.cursor = "pointer";
     document.getElementById('chat-title').onclick = (e) => showGlobalUserProfile(friendEmail, e);
@@ -1593,7 +1594,7 @@ document.getElementById('create-server-btn')?.addEventListener('click', () => {
     openInputModal("Create Server", "Server Name", "Give your server a name:", (serverName) => {
         if (serverName) {
             const serverId = generateCode();
-            const everyonePerms = { viewChannels: true, sendMessages: true, manageChannels: false, manageServerSettings: false, manageServerProfile: false, manageServerOverview: false, manageRoles: false, manageMessages: false, kickMembers: false, banMembers: false, timeoutMembers: false, manageDownloadChannel: false };
+            const everyonePerms = { viewChannels: true, sendMessages: true, placeEmojiStickers: true, manageChannels: false, manageServerSettings: false, manageServerProfile: false, manageServerOverview: false, manageRoles: false, manageMessages: false, kickMembers: false, banMembers: false, timeoutMembers: false, manageDownloadChannel: false };
             set(ref(db, `servers/${serverId}`), { name: serverName, owner: auth.currentUser.email });
             set(ref(db, `servers/${serverId}/roles/everyone`), { name: 'everyone', color: '#abb2bf', order: -1, hoist: false, mentionable: true, perms: everyonePerms });
             set(ref(db, `server_members/${serverId}/${currentUserSafeEmail}`), { role: 'owner' });
@@ -1682,7 +1683,7 @@ function loadMyServers() {
                     });
                     if (sData.owner === auth.currentUser.email || myServerRoles.includes('owner') || resolvedPerms.manageServerSettings) {
                         if (!myServerRoles.includes('owner')) myServerRoles.push('owner');
-                        resolvedPerms = { viewChannels: true, sendMessages: true, manageChannels: true, manageServerSettings: true, manageServerProfile: true, manageServerOverview: true, manageRoles: true, manageMessages: true, kickMembers: true, banMembers: true, timeoutMembers: true, manageDownloadChannel: true };
+                        resolvedPerms = { viewChannels: true, sendMessages: true, placeEmojiStickers: true, manageChannels: true, manageServerSettings: true, manageServerProfile: true, manageServerOverview: true, manageRoles: true, manageMessages: true, kickMembers: true, banMembers: true, timeoutMembers: true, manageDownloadChannel: true };
                     }
                     myServerPerms = resolvedPerms;
 
@@ -1922,7 +1923,7 @@ function editRole(roleId, noSwitch = false) {
     document.getElementById('er-hoist').checked = !!rData.hoist;
     document.getElementById('er-mentionable').checked = !!rData.mentionable;
     const p = rData.perms || {};
-    ['viewChannels', 'sendMessages', 'manageChannels', 'manageServerSettings', 'manageServerProfile', 'manageServerOverview', 'manageRoles', 'manageMessages', 'kickMembers', 'banMembers', 'timeoutMembers', 'manageDownloadChannel'].forEach(perm => {
+    ['viewChannels', 'sendMessages', 'placeEmojiStickers', 'manageChannels', 'manageServerSettings', 'manageServerProfile', 'manageServerOverview', 'manageRoles', 'manageMessages', 'kickMembers', 'banMembers', 'timeoutMembers', 'manageDownloadChannel'].forEach(perm => {
         const el = document.getElementById(`p-${perm}`); if (el) el.checked = !!p[perm];
     });
     document.getElementById('delete-role-btn').style.display = roleId === 'everyone' ? 'none' : 'block';
@@ -1945,7 +1946,7 @@ document.getElementById('ss-create-role-btn')?.addEventListener('click', () => {
 document.getElementById('save-role-settings-btn')?.addEventListener('click', () => {
     if (currentServerId && currentEditingRoleId) {
         const perms = {};
-        ['viewChannels', 'sendMessages', 'manageChannels', 'manageServerSettings', 'manageServerProfile', 'manageServerOverview', 'manageRoles', 'manageMessages', 'kickMembers', 'banMembers', 'timeoutMembers', 'manageDownloadChannel'].forEach(perm => {
+        ['viewChannels', 'sendMessages', 'placeEmojiStickers', 'manageChannels', 'manageServerSettings', 'manageServerProfile', 'manageServerOverview', 'manageRoles', 'manageMessages', 'kickMembers', 'banMembers', 'timeoutMembers', 'manageDownloadChannel'].forEach(perm => {
             const el = document.getElementById(`p-${perm}`); if (el) perms[perm] = el.checked;
         });
         update(ref(db, `servers/${currentServerId}/roles/${currentEditingRoleId}`), { name: document.getElementById('er-name').value, color: document.getElementById('er-color').value, hoist: document.getElementById('er-hoist').checked, mentionable: document.getElementById('er-mentionable').checked, perms });
@@ -2229,6 +2230,7 @@ function renderChannels(serverId) {
                     document.body.classList.remove('mobile-home-active');
                     document.body.classList.add('mobile-chat-active');
                     enableChat(); loadMessages(`messages/${channelData.id}`, `# ${channelData.name}`);
+                    setTimeout(onChatSwitched, 60);
                 }
             });
             if (chatType === 'server' && currentChatId === channelData.id) div.classList.add('active');
@@ -2803,7 +2805,6 @@ function enableChat() {
     document.getElementById('send-btn').disabled = !canSend;
     document.getElementById('upload-file-btn').disabled = !canSend;
     document.getElementById('emoji-picker-btn').disabled = !canSend;
-    document.getElementById('gif-picker-btn').disabled = !canSend;
 }
 
 // ==========================================
@@ -3337,57 +3338,370 @@ function showMentionMenu(term) {
 }
 
 // ==========================================
+// --- EMOJI PICKER + STICKER DRAG SYSTEM ---
 // ==========================================
-// --- UNIFIED MEDIA PICKER (GIF + EMOJI) ---
-// ==========================================
-const emojiPickerEl = document.getElementById('emoji-picker'); // legacy stub (kept for compat)
+const emojiPickerEl = document.getElementById('emoji-picker');
+const emojiBtn = document.getElementById('emoji-picker-btn');
 const epIconSpan = document.getElementById('ep-icon-span');
 let emojiHoverInterval = null;
 let currentReactionMsgId = null;
 
-const unifiedPickerEl = document.getElementById('unified-picker');
-let unifiedPickerActiveTab = 'emoji'; // 'emoji' | 'gif'
-let unifiedPickerOpen = false;
+// ---- EMOJI STICKER DRAG ENGINE ----
+// Stores stickers per chatId so switching chats hides/reloads them
+const stickersByChatId = {}; // { chatId: [{emoji,x,y,size,id}] }
+let stickerLayerVisible = true;
 
-// ---- Emoji shortcode map (Discord-style :name: -> char) ----
-const emojiShortcodes = {
-    'smile':'😊','grinning':'😀','joy':'😂','rofl':'🤣','heart_eyes':'😍','kissing_heart':'😘',
-    'wink':'😉','thinking':'🤔','shushing':'🤫','lying':'🤥','no_mouth':'😶','neutral_face':'😐',
-    'expressionless':'😑','grimacing':'😬','rolling_eyes':'🙄','hushed':'😯','open_mouth':'😮',
-    'astonished':'😲','flushed':'😳','pleading':'🥺','cry':'😢','sob':'😭','angry':'😡',
-    'rage':'🤬','skull':'💀','ghost':'👻','fire':'🔥','star':'⭐','sparkles':'✨','tada':'🎉',
-    'thumbsup':'👍','thumbsdown':'👎','clap':'👏','pray':'🙏','muscle':'💪','eyes':'👀',
-    'wave':'👋','ok_hand':'👌','v':'✌️','raised_hands':'🙌','heart':'❤️','broken_heart':'💔',
-    'blue_heart':'💙','green_heart':'💚','yellow_heart':'💛','purple_heart':'💜',
-    'white_heart':'🤍','black_heart':'🖤','100':'💯','zap':'⚡','boom':'💥','dizzy':'💫',
-    'zzz':'💤','sweat_drops':'💦','dash':'💨','poop':'💩','monkey':'🐵','dog':'🐶',
-    'cat':'🐱','pig':'🐷','frog':'🐸','penguin':'🐧','bird':'🐦','hamster':'🐹',
-    'rabbit':'🐰','fox':'🦊','bear':'🐻','panda':'🐼','koala':'🐨','tiger':'🐯',
-    'lion':'🦁','cow':'🐮','pizza':'🍕','hamburger':'🍔','fries':'🍟','taco':'🌮',
-    'sushi':'🍣','ramen':'🍜','spaghetti':'🍝','rice':'🍚','bread':'🍞','cake':'🎂',
-    'cupcake':'🧁','cookie':'🍪','candy':'🍬','lollipop':'🍭','chocolate':'🍫',
-    'coffee':'☕','tea':'🍵','beer':'🍺','wine':'🍷','cocktail':'🍸','tropical_drink':'🍹',
-    'soccer':'⚽','basketball':'🏀','football':'🏈','tennis':'🎾','ping_pong':'🏓',
-    'guitar':'🎸','musical_note':'🎵','notes':'🎶','microphone':'🎤','headphones':'🎧',
-    'trophy':'🏆','medal':'🏅','crown':'👑','gem':'💎','money':'💰','rocket':'🚀',
-    'earth':'🌍','sun':'☀️','moon':'🌙','rainbow':'🌈','cloud':'☁️','snowflake':'❄️',
-    'umbrella':'☂️','lightning':'⚡','cyclone':'🌀','see_no_evil':'🙈','hear_no_evil':'🙉',
-    'speak_no_evil':'🙊','sweat_smile':'😅','upside_down':'🙃','partying':'🥳','cowboy':'🤠',
-    'nerd':'🤓','sunglasses':'😎','monocle':'🧐','confused':'😕','worried':'😟',
-    'disappointed':'😞','pensive':'😔','persevere':'😣','tired_face':'😫','weary':'😩',
-    'fearful':'😨','cold_sweat':'😰','scream':'😱','hot_face':'🥵','cold_face':'🥶',
-    'exploding_head':'🤯','hugging':'🤗','shrug':'🤷','facepalm':'🤦','no_good':'🙅',
-    'ok_person':'🙆','information_desk_person':'💁','raising_hand':'🙋','bow':'🙇',
-    'saluting':'🫡','melting':'🫠','dotted_line_face':'🫥','salad':'🥗','avocado':'🥑',
-    'broccoli':'🥦','cucumber':'🥒','hot_pepper':'🌶️','eggplant':'🍆','tomato':'🍅',
-    'peach':'🍑','cherry':'🍒','strawberry':'🍓','grapes':'🍇','watermelon':'🍉',
-    'lemon':'🍋','banana':'🍌','pineapple':'🍍','mango':'🥭','apple':'🍎','pear':'🍐',
-    'tangerine':'🍊','kiwi':'🥝','melon':'🍈','coconut':'🥥','dragon':'🐉','unicorn':'🦄',
-    'butterfly':'🦋','bee':'🐝','bug':'🐛','snail':'🐌','turtle':'🐢','snake':'🐍',
-    'hatched_chick':'🐥','duck':'🦆','whale':'🐳','dolphin':'🐬','shark':'🦈',
-    'octopus':'🐙','crab':'🦀','shrimp':'🦐','lobster':'🦞','sneezing':'🤧','sick':'🤒',
-    'mask':'😷','thermometer_face':'🤒','bandage':'🩹','pill':'💊','syringe':'💉',
-};
+// The floating ghost shown while dragging from picker
+const dragGhost = document.createElement('div');
+dragGhost.id = 'sticker-drag-ghost';
+document.body.appendChild(dragGhost);
+
+// Track current drag-from-picker state
+let pickerDragActive = false;
+let pickerDragEmoji = null;
+let pickerDragSize = 52;        // px, adjustable via scroll / pinch
+const STICKER_MIN = 24;
+const STICKER_MAX = 180;
+
+function canPlaceStickers() {
+    if (chatType === 'dm') return true;
+    return !!(myServerPerms.placeEmojiStickers || myServerPerms.manageServerSettings);
+}
+
+// ---- Build sticker layer for current chat ----
+function renderStickerLayer() {
+    const layer = document.getElementById('emoji-sticker-layer');
+    if (!layer) return;
+    layer.innerHTML = '';
+    const hideBtn = document.getElementById('sticker-hide-btn');
+
+    const list = stickersByChatId[currentChatId] || [];
+    list.forEach(s => appendStickerEl(s));
+
+    if (hideBtn) {
+        hideBtn.style.display = list.length > 0 ? 'flex' : 'none';
+        hideBtn.classList.toggle('has-stickers', list.length > 0);
+    }
+}
+
+function appendStickerEl(s) {
+    const layer = document.getElementById('emoji-sticker-layer');
+    if (!layer) return;
+    const el = document.createElement('div');
+    el.className = 'emoji-sticker';
+    el.dataset.stickerId = s.id;
+    el.innerText = s.emoji;
+    el.style.fontSize = s.size + 'px';
+    el.style.left = s.x + 'px';
+    el.style.top = s.y + 'px';
+    el.style.zIndex = 20 + (stickersByChatId[currentChatId]?.length || 0);
+
+    // Double-click / double-tap to remove
+    let tapCount = 0;
+    el.addEventListener('dblclick', () => removeSticker(s.id));
+    el.addEventListener('touchend', () => {
+        tapCount++;
+        if (tapCount === 1) setTimeout(() => { tapCount = 0; }, 350);
+        if (tapCount >= 2) { tapCount = 0; removeSticker(s.id); }
+    });
+
+    // ---- PC: left-click drag to reposition, scroll to resize ----
+    el.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        el.classList.add('dragging');
+        const layerRect = layer.getBoundingClientRect();
+        const offsetX = e.clientX - layerRect.left - s.x;
+        const offsetY = e.clientY - layerRect.top - s.y;
+
+        function onMove(mv) {
+            s.x = mv.clientX - layerRect.left - offsetX;
+            s.y = mv.clientY - layerRect.top - offsetY;
+            el.style.left = s.x + 'px';
+            el.style.top = s.y + 'px';
+        }
+        function onUp() {
+            el.classList.remove('dragging');
+            updateStickerHideBtn();
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+        }
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+    });
+
+    // scroll-to-resize on placed sticker
+    el.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const delta = e.deltaY > 0 ? -4 : 4;
+        s.size = Math.max(STICKER_MIN, Math.min(STICKER_MAX, s.size + delta));
+        el.style.fontSize = s.size + 'px';
+    }, { passive: false });
+
+    // ---- Mobile: 1 finger = drag, 2 fingers = pinch-resize ----
+    let touchStartPos = null;
+    let pinchStartDist = null;
+    let pinchStartSize = s.size;
+
+    el.addEventListener('touchstart', (e) => {
+        e.stopPropagation();
+        // Don't prevent default here to allow the touchmove to work
+        if (e.touches.length === 1) {
+            const layerRect = layer.getBoundingClientRect();
+            touchStartPos = {
+                ox: e.touches[0].clientX - layerRect.left - s.x,
+                oy: e.touches[0].clientY - layerRect.top - s.y,
+            };
+            pinchStartDist = null;
+        } else if (e.touches.length === 2) {
+            pinchStartDist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+            pinchStartSize = s.size;
+            touchStartPos = null;
+        }
+    }, { passive: true });
+
+    el.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.touches.length === 1 && touchStartPos) {
+            const layerRect = layer.getBoundingClientRect();
+            s.x = e.touches[0].clientX - layerRect.left - touchStartPos.ox;
+            s.y = e.touches[0].clientY - layerRect.top - touchStartPos.oy;
+            el.style.left = s.x + 'px';
+            el.style.top = s.y + 'px';
+        } else if (e.touches.length === 2 && pinchStartDist !== null) {
+            const dist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+            const ratio = dist / pinchStartDist;
+            s.size = Math.max(STICKER_MIN, Math.min(STICKER_MAX, Math.round(pinchStartSize * ratio)));
+            el.style.fontSize = s.size + 'px';
+        }
+    }, { passive: false });
+
+    el.addEventListener('touchend', (e) => {
+        e.stopPropagation();
+        touchStartPos = null;
+        updateStickerHideBtn();
+    }, { passive: true });
+
+    layer.appendChild(el);
+}
+
+function placeSticker(emoji, xPct, yPct, size) {
+    if (!currentChatId) return;
+    if (!stickersByChatId[currentChatId]) stickersByChatId[currentChatId] = [];
+    const layer = document.getElementById('emoji-sticker-layer');
+    const rect = layer ? layer.getBoundingClientRect() : { width: 400, height: 400 };
+    const s = {
+        id: Date.now() + Math.random(),
+        emoji,
+        x: xPct * rect.width,
+        y: yPct * rect.height,
+        size: size || 52,
+    };
+    stickersByChatId[currentChatId].push(s);
+    appendStickerEl(s);
+    updateStickerHideBtn();
+}
+
+function removeSticker(id) {
+    if (!currentChatId || !stickersByChatId[currentChatId]) return;
+    stickersByChatId[currentChatId] = stickersByChatId[currentChatId].filter(s => s.id !== id);
+    document.querySelector(`.emoji-sticker[data-sticker-id="${id}"]`)?.remove();
+    updateStickerHideBtn();
+}
+
+function updateStickerHideBtn() {
+    const hideBtn = document.getElementById('sticker-hide-btn');
+    if (!hideBtn) return;
+    const list = stickersByChatId[currentChatId] || [];
+    hideBtn.style.display = list.length > 0 ? 'flex' : 'none';
+    hideBtn.classList.toggle('has-stickers', list.length > 0);
+}
+
+// Hide/show stickers toggle
+document.getElementById('sticker-hide-btn')?.addEventListener('click', () => {
+    const layer = document.getElementById('emoji-sticker-layer');
+    const btn = document.getElementById('sticker-hide-btn');
+    if (!layer) return;
+    stickerLayerVisible = !stickerLayerVisible;
+    layer.classList.toggle('stickers-hidden', !stickerLayerVisible);
+    btn.classList.toggle('stickers-hidden', !stickerLayerVisible);
+    btn.title = stickerLayerVisible ? 'Hide emoji stickers' : 'Show emoji stickers';
+});
+
+// ---- Drag from picker: PC ----
+// Called from ep-emoji elements inside the picker
+function initPickerEmojiDrag(el, emoji) {
+    el.setAttribute('draggable', false); // we handle drag ourselves
+
+    el.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        if (!canPlaceStickers()) return; // fall through to normal insert
+        e.preventDefault();
+        e.stopPropagation();
+
+        pickerDragActive = true;
+        pickerDragEmoji = emoji;
+        pickerDragSize = 52;
+
+        dragGhost.innerText = emoji;
+        dragGhost.style.fontSize = pickerDragSize + 'px';
+        dragGhost.style.display = 'block';
+        dragGhost.style.left = e.clientX + 'px';
+        dragGhost.style.top = e.clientY + 'px';
+
+        function onMove(mv) {
+            dragGhost.style.left = mv.clientX + 'px';
+            dragGhost.style.top = mv.clientY + 'px';
+
+            const pickerEl = document.getElementById('emoji-picker');
+            const pickerRect = pickerEl?.getBoundingClientRect();
+            if (pickerRect &&
+                mv.clientX >= pickerRect.left && mv.clientX <= pickerRect.right &&
+                mv.clientY >= pickerRect.top && mv.clientY <= pickerRect.bottom) {
+                // still inside picker — keep it visible
+                pickerEl.style.opacity = '1';
+            } else {
+                // left the picker — hide it so user can see where to drop
+                if (pickerEl) pickerEl.style.opacity = '0';
+            }
+        }
+
+        function onScroll(se) {
+            if (!pickerDragActive) return;
+            se.preventDefault();
+            const delta = se.deltaY > 0 ? -6 : 6;
+            pickerDragSize = Math.max(STICKER_MIN, Math.min(STICKER_MAX, pickerDragSize + delta));
+            dragGhost.style.fontSize = pickerDragSize + 'px';
+        }
+
+        function onUp(ue) {
+            pickerDragActive = false;
+            dragGhost.style.display = 'none';
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            document.removeEventListener('wheel', onScroll, { passive: false });
+
+            const pickerEl = document.getElementById('emoji-picker');
+            if (pickerEl) pickerEl.style.opacity = '1';
+
+            // Check if dropped onto the messages / chat area
+            const layer = document.getElementById('emoji-sticker-layer');
+            const layerRect = layer?.getBoundingClientRect();
+            if (layerRect &&
+                ue.clientX >= layerRect.left && ue.clientX <= layerRect.right &&
+                ue.clientY >= layerRect.top && ue.clientY <= layerRect.bottom) {
+                const xPct = (ue.clientX - layerRect.left) / layerRect.width;
+                const yPct = (ue.clientY - layerRect.top) / layerRect.height;
+                placeSticker(pickerDragEmoji, xPct, yPct, pickerDragSize);
+                // Reopen picker after short delay
+                setTimeout(() => {
+                    if (emojiPickerEl.style.display === 'none' || emojiPickerEl.style.display === '') toggleEmojiPicker();
+                }, 120);
+            } else {
+                // dropped outside chat area — just insert as text
+                insertEmojiAsText(emoji);
+            }
+            pickerDragEmoji = null;
+        }
+
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+        document.addEventListener('wheel', onScroll, { capture: true, passive: false });
+    });
+}
+
+// ---- Drag from picker: Mobile (touch) ----
+function initPickerEmojiTouch(el, emoji) {
+    let touchDragActive = false;
+    let pinchActive = false;
+    let touchDragSize = 52;
+    let pinchStartDist = null;
+    let pinchStartSize = 52;
+
+    el.addEventListener('touchstart', (e) => {
+        if (!canPlaceStickers()) return;
+        if (e.touches.length === 1) {
+            touchDragActive = true;
+            touchDragSize = 52;
+            pickerDragEmoji = emoji;
+
+            dragGhost.innerText = emoji;
+            dragGhost.style.fontSize = touchDragSize + 'px';
+            dragGhost.style.display = 'block';
+            dragGhost.style.left = e.touches[0].clientX + 'px';
+            dragGhost.style.top = e.touches[0].clientY + 'px';
+
+            const pickerEl = document.getElementById('emoji-picker');
+            if (pickerEl) pickerEl.style.opacity = '0.3';
+        }
+    }, { passive: true });
+
+    el.addEventListener('touchmove', (e) => {
+        if (!touchDragActive) return;
+        e.preventDefault();
+
+        if (e.touches.length === 1) {
+            dragGhost.style.left = e.touches[0].clientX + 'px';
+            dragGhost.style.top = e.touches[0].clientY + 'px';
+        } else if (e.touches.length === 2) {
+            if (!pinchActive) {
+                pinchActive = true;
+                pinchStartDist = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+                pinchStartSize = touchDragSize;
+            }
+            const dist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+            touchDragSize = Math.max(STICKER_MIN, Math.min(STICKER_MAX, Math.round(pinchStartSize * (dist / pinchStartDist))));
+            dragGhost.style.fontSize = touchDragSize + 'px';
+        }
+    }, { passive: false });
+
+    el.addEventListener('touchend', (e) => {
+        if (!touchDragActive) return;
+        touchDragActive = false;
+        pinchActive = false;
+        dragGhost.style.display = 'none';
+
+        const pickerEl = document.getElementById('emoji-picker');
+        if (pickerEl) pickerEl.style.opacity = '1';
+
+        const touch = e.changedTouches[0];
+        const layer = document.getElementById('emoji-sticker-layer');
+        const layerRect = layer?.getBoundingClientRect();
+        if (layerRect &&
+            touch.clientX >= layerRect.left && touch.clientX <= layerRect.right &&
+            touch.clientY >= layerRect.top && touch.clientY <= layerRect.bottom) {
+            const xPct = (touch.clientX - layerRect.left) / layerRect.width;
+            const yPct = (touch.clientY - layerRect.top) / layerRect.height;
+            placeSticker(emoji, xPct, yPct, touchDragSize);
+            setTimeout(() => {
+                if (emojiPickerEl.style.display === 'none' || emojiPickerEl.style.display === '') toggleEmojiPicker();
+            }, 160);
+        } else {
+            insertEmojiAsText(emoji);
+        }
+        pickerDragEmoji = null;
+    }, { passive: true });
+}
+
+// Re-render stickers when chat is switched
+const _origRenderStickerLayer = renderStickerLayer;
+// Hook into chat loading — call renderStickerLayer() after currentChatId changes
+// (this is done inside the existing loadChat logic via a wrapper below)
+
 
 const emojiCategories = {
     '😀': ['😀','😃','😄','😁','😆','😅','😂','🤣','😊','😇','🙂','🙃','😉','😌','😍','🥰','😘','😗','😙','😚','😋','😛','😝','😜','🤪','🤨','🧐','🤓','😎','🤩','🥳','😏','😒','😞','😔','😟','😕','🙁','☹️','😣','😖','😫','😩','🥺','😢','😭','😤','😠','😡','🤬','🤯','😳','🥵','🥶','😱','😨','😰','😥','😓','🤗','🤔','🤭','🤫','🤥','😶','😐','😑','😬','🙄','😯','😦','😧','😮','😲','🥱','😴','🤤','😪','😵','🤐','🥴','🤢','🤮','🤧','😷','🤒','🤕'],
@@ -3401,142 +3715,103 @@ const emojiCategories = {
     '❤️': ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💘','💝','💟','☮️','✝️','☪️','🕉️','☸️','✡️','🔯','🕎','☯️','☦️','🛐','⛎','♈','♉','♊','♋','♌','♍','♎','♏','♐','♑','♒','♓','⚕️','♻️','⚜️','🔱','📛','🔰','⭕','✅','☑️','✔️','❌','❎','➕','➖','➗','➰','➿','〽️','✳️','✴️','❇️','💯','🔅','🔆','🔶','🔷','🔸','🔹','🔺','🔻','💠','🔘','🔳','🔲'],
 };
 
-// ---- Unified Picker Open/Close ----
-function openUnifiedPicker(tab = 'emoji') {
-    unifiedPickerEl.style.display = 'flex';
-    unifiedPickerOpen = true;
-    switchUnifiedTab(tab);
-}
-
-function closeUnifiedPicker() {
-    unifiedPickerEl.style.display = 'none';
-    unifiedPickerOpen = false;
-}
-
-function switchUnifiedTab(tab) {
-    unifiedPickerActiveTab = tab;
-    document.querySelectorAll('.unified-tab').forEach(t => {
-        t.classList.toggle('active', t.dataset.tab === tab);
-    });
-    const gifPanel = document.getElementById('unified-gif-panel');
-    const emojiPanel = document.getElementById('unified-emoji-panel');
-    if (tab === 'gif') {
-        gifPanel.style.display = 'flex';
-        emojiPanel.style.display = 'none';
-        if (!isFetchingGifs) loadTrendingGifs();
-    } else {
-        gifPanel.style.display = 'none';
-        emojiPanel.style.display = 'flex';
-        buildEmojiPicker();
-    }
-}
-
-// Wire up tab buttons
-document.querySelectorAll('.unified-tab').forEach(btn => {
-    btn.addEventListener('click', () => switchUnifiedTab(btn.dataset.tab));
-});
-
-// Emoji button opens unified picker on emoji tab
-const emojiBtn = document.getElementById('emoji-picker-btn');
 emojiBtn?.addEventListener('mouseenter', () => {
     const allEmojis = Object.values(emojiCategories).flat();
-    emojiHoverInterval = setInterval(() => {
-        epIconSpan.innerHTML = `<span style="font-size:20px;line-height:1;">${allEmojis[Math.floor(Math.random() * allEmojis.length)]}</span>`;
-    }, 300);
+    emojiHoverInterval = setInterval(() => { epIconSpan.innerHTML = `<span style="font-size:20px;line-height:1;">${allEmojis[Math.floor(Math.random() * allEmojis.length)]}</span>`; }, 300);
 });
 emojiBtn?.addEventListener('mouseleave', () => { clearInterval(emojiHoverInterval); epIconSpan.innerHTML = icons.smile; });
-emojiBtn?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    currentReactionMsgId = null;
-    if (unifiedPickerOpen && unifiedPickerActiveTab === 'emoji') { closeUnifiedPicker(); return; }
-    openUnifiedPicker('emoji');
-});
-
-// GIF button opens unified picker on gif tab
-document.getElementById('gif-picker-btn')?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (unifiedPickerOpen && unifiedPickerActiveTab === 'gif') { closeUnifiedPicker(); return; }
-    openUnifiedPicker('gif');
-});
+emojiBtn?.addEventListener('click', (e) => { e.stopPropagation(); currentReactionMsgId = null; toggleEmojiPicker(); });
 
 window.openEmojiPickerForReaction = function (msgId, event) {
     if (event) event.stopPropagation();
     currentReactionMsgId = msgId;
-    openUnifiedPicker('emoji');
+    toggleEmojiPicker();
 };
 
-// Close on outside click
-document.addEventListener('click', (e) => {
-    if (!e.target.closest('#unified-picker') &&
-        !e.target.closest('#emoji-picker-btn') &&
-        !e.target.closest('#gif-picker-btn') &&
-        !e.target.closest('.react')) {
-        closeUnifiedPicker();
+function toggleEmojiPicker() {
+    if (emojiPickerEl.style.display !== 'none' && emojiPickerEl.style.display !== '') {
+        emojiPickerEl.style.display = 'none'; return;
     }
-});
+    buildEmojiPicker();
+    emojiPickerEl.style.display = 'flex';
+    emojiPickerEl.style.opacity = '1';
+}
 
-// Legacy stubs (other code may call these)
-function closeGifPicker() { closeUnifiedPicker(); }
-function toggleEmojiPicker() { if (unifiedPickerOpen) closeUnifiedPicker(); else openUnifiedPicker('emoji'); }
+// Ensure renderStickerLayer is hooked after each chat load
+// Patch currentChatId setter via a small helper called from loadChannel / openDM
+function onChatSwitched() {
+    renderStickerLayer();
+    stickerLayerVisible = true;
+    const layer = document.getElementById('emoji-sticker-layer');
+    if (layer) layer.classList.remove('stickers-hidden');
+    const btn = document.getElementById('sticker-hide-btn');
+    if (btn) btn.classList.remove('stickers-hidden');
+}
 
-// ---- Emoji Picker Build ----
 function buildEmojiPicker() {
     const tabsContainer = document.getElementById('emoji-picker-tabs');
     const contentContainer = document.getElementById('emoji-picker-content');
     const searchInput = document.getElementById('emoji-search');
 
+    // ---- Top bar: GIF tab + emoji category tabs ----
     tabsContainer.innerHTML = '';
+
+    // GIF tab (opens gif-picker inline)
+    const gifTab = document.createElement('div');
+    gifTab.className = 'ep-tab ep-gif-tab';
+    gifTab.innerText = 'GIF';
+    gifTab.title = 'Browse GIFs';
+    gifTab.onclick = () => {
+        emojiPickerEl.style.display = 'none';
+        // open the separate gif picker
+        const gifEl = document.getElementById('gif-picker');
+        if (!gifEl) return;
+        gifEl.style.display = gifEl.style.display === 'none' || gifEl.style.display === '' ? 'flex' : 'none';
+        if (gifEl.style.display === 'flex') loadTrendingGifs();
+    };
+    tabsContainer.appendChild(gifTab);
+
     const catNames = Object.keys(emojiCategories);
 
-    // Custom/favorites tab
+    // ⭐ Custom/Favorites tab
     const customTab = document.createElement('div');
     customTab.className = 'ep-tab active';
     customTab.innerText = '⭐';
     customTab.title = 'Custom & Favorites';
-    customTab.onclick = () => { document.querySelectorAll('.ep-tab').forEach(t => t.classList.remove('active')); customTab.classList.add('active'); showEmojiSection('custom'); };
+    customTab.onclick = () => { document.querySelectorAll('#emoji-picker-tabs .ep-tab').forEach(t => t.classList.remove('active')); customTab.classList.add('active'); showEmojiSection('custom'); };
     tabsContainer.appendChild(customTab);
 
-    catNames.forEach(catEmoji => {
+    catNames.forEach((catEmoji) => {
         const tab = document.createElement('div');
         tab.className = 'ep-tab';
         tab.innerText = catEmoji;
         tab.title = catEmoji;
-        tab.onclick = () => { document.querySelectorAll('.ep-tab').forEach(t => t.classList.remove('active')); tab.classList.add('active'); showEmojiSection(catEmoji); };
+        tab.onclick = () => { document.querySelectorAll('#emoji-picker-tabs .ep-tab').forEach(t => t.classList.remove('active')); tab.classList.add('active'); showEmojiSection(catEmoji); };
         tabsContainer.appendChild(tab);
     });
 
-    // Search: supports both plain text and :shortcode: matching
-    if (!searchInput._skipListenerBound) {
-        searchInput._skipListenerBound = true;
+    // ---- Search ----
+    if (!searchInput._epBound) {
+        searchInput._epBound = true;
         searchInput.oninput = () => {
             const raw = searchInput.value;
-            const term = raw.replace(/^:/, '').toLowerCase(); // strip leading colon
+            const term = raw.replace(/^:/, '').toLowerCase();
             if (!term) { showEmojiSection('custom'); return; }
             contentContainer.innerHTML = '';
             const label = document.createElement('div'); label.className = 'ep-section-label'; label.innerText = 'Search Results';
             const grid = document.createElement('div'); grid.className = 'ep-grid';
-
-            // 1. Search shortcode map
+            const seen = new Set();
             Object.entries(emojiShortcodes).forEach(([code, char]) => {
-                if (code.includes(term)) {
-                    const s = document.createElement('div'); s.className = 'ep-emoji'; s.innerText = char; s.title = `:${code}:`; s.onclick = () => insertEmoji(char, char, false); grid.appendChild(s);
-                }
+                if (code.includes(term) && !seen.has(char)) { seen.add(char); const s = makeEpEmoji(char, char, false); grid.appendChild(s); }
             });
-
-            // 2. Also scan unicode emoji lists (emoji character can't be searched by name, so just include all)
-            if (term.length <= 2) {
-                Object.values(emojiCategories).flat().forEach(e => {
-                    const s = document.createElement('div'); s.className = 'ep-emoji'; s.innerText = e; s.onclick = () => insertEmoji(e, e, false); grid.appendChild(s);
-                });
-            }
-
-            // 3. Custom emoji name search
-            Object.entries(globalEmojisCache).forEach(([eid, edata]) => {
+            Object.entries(emojiCategories).forEach(([, emojis]) => {
+                emojis.forEach(e => { if (!seen.has(e)) { seen.add(e); const s = makeEpEmoji(e, e, false); grid.appendChild(s); } });
+            });
+            Object.entries(globalEmojisCache || {}).forEach(([eid, edata]) => {
                 if (edata.name && edata.name.toLowerCase().includes(term)) {
                     const img = document.createElement('img'); img.src = edata.url; img.className = 'ep-custom-img'; img.title = `:${edata.name}:`; img.onclick = () => insertEmoji(eid, edata.name, true); grid.appendChild(img);
                 }
             });
-
             contentContainer.appendChild(label);
             contentContainer.appendChild(grid);
         };
@@ -3544,7 +3819,35 @@ function buildEmojiPicker() {
         searchInput.value = '';
     }
 
+    // ---- Sticker drag hint ----
+    let hintEl = emojiPickerEl.querySelector('.ep-sticker-hint');
+    if (!hintEl) {
+        hintEl = document.createElement('div');
+        hintEl.className = 'ep-sticker-hint';
+        emojiPickerEl.appendChild(hintEl);
+    }
+    if (canPlaceStickers()) {
+        hintEl.style.display = '';
+        hintEl.innerText = '💡 Drag any emoji into the chat to place it as a sticker';
+    } else {
+        hintEl.style.display = 'none';
+    }
+
     showEmojiSection('custom');
+}
+
+// Helper: create a draggable ep-emoji cell
+function makeEpEmoji(char, name, isCustom) {
+    const s = document.createElement('div');
+    s.className = 'ep-emoji';
+    s.innerText = char;
+    s.title = name;
+    s.onclick = () => insertEmoji(char, name, isCustom);
+    if (canPlaceStickers()) {
+        initPickerEmojiDrag(s, char);
+        initPickerEmojiTouch(s, char);
+    }
+    return s;
 }
 
 function showEmojiSection(catKey) {
@@ -3585,7 +3888,7 @@ function showEmojiSection(catKey) {
         const favLabel = document.createElement('div'); favLabel.className = 'ep-section-label'; favLabel.innerText = 'Frequently Used';
         const favGrid = document.createElement('div'); favGrid.className = 'ep-grid';
         ['😀','😂','😍','😭','😎','👍','🙏','🔥','✨','🎉','💀','👀','💯','❤️','🥺','😤','🤡','🐛','🤌','🫡'].forEach(e => {
-            const s = document.createElement('div'); s.className = 'ep-emoji'; s.innerText = e; s.onclick = () => insertEmoji(e, e, false); favGrid.appendChild(s);
+            favGrid.appendChild(makeEpEmoji(e, e, false));
         });
         contentContainer.appendChild(favLabel);
         contentContainer.appendChild(favGrid);
@@ -3595,9 +3898,17 @@ function showEmojiSection(catKey) {
     const emojis = emojiCategories[catKey] || [];
     const label = document.createElement('div'); label.className = 'ep-section-label'; label.innerText = catKey;
     const grid = document.createElement('div'); grid.className = 'ep-grid';
-    emojis.forEach(e => { const s = document.createElement('div'); s.className = 'ep-emoji'; s.innerText = e; s.title = e; s.onclick = () => insertEmoji(e, e, false); grid.appendChild(s); });
+    emojis.forEach(e => grid.appendChild(makeEpEmoji(e, e, false)));
     contentContainer.appendChild(label);
     contentContainer.appendChild(grid);
+}
+
+function insertEmojiAsText(char) {
+    const input = document.getElementById('msg-input');
+    if (!input) return;
+    input.value += char;
+    input.focus();
+    input.dispatchEvent(new Event('input'));
 }
 
 function insertEmoji(idOrChar, name, isCustom) {
@@ -3611,91 +3922,13 @@ function insertEmoji(idOrChar, name, isCustom) {
         input.focus();
         input.dispatchEvent(new Event('input'));
     }
-    closeUnifiedPicker();
+    emojiPickerEl.style.display = 'none';
 }
 
-// ---- Discord-style :shortcode: inline autocomplete in message input ----
-(function setupEmojiAutocomplete() {
-    const input = document.getElementById('msg-input');
-    if (!input) return;
-    let acMenu = null;
-    let acItems = [];
-    let acSelected = 0;
-
-    function closeAC() { if (acMenu) { acMenu.remove(); acMenu = null; acItems = []; acSelected = 0; } }
-
-    function buildAC(query) {
-        closeAC();
-        const matches = [];
-        // Standard shortcodes
-        Object.entries(emojiShortcodes).forEach(([code, char]) => {
-            if (code.startsWith(query)) matches.push({ label: `:${code}:`, char, isCustom: false });
-        });
-        // Custom emojis
-        Object.entries(globalEmojisCache).forEach(([eid, edata]) => {
-            if (edata.name && edata.name.toLowerCase().startsWith(query)) matches.push({ label: `:${edata.name}:`, char: `[:${edata.name}:${eid}] `, img: edata.url, isCustom: true });
-        });
-        if (!matches.length) return;
-
-        acMenu = document.createElement('div');
-        acMenu.className = 'emoji-autocomplete-menu';
-        const wrapper = input.closest('#message-input-area') || input.parentElement;
-        wrapper.appendChild(acMenu);
-
-        acItems = matches.slice(0, 10);
-        acItems.forEach((item, idx) => {
-            const row = document.createElement('div');
-            row.className = 'emoji-ac-item' + (idx === 0 ? ' selected' : '');
-            if (item.img) row.innerHTML = `<img src="${item.img}" alt="${item.label}"><span>${item.label}</span>`;
-            else row.innerHTML = `<span class="emoji-ac-native">${item.char}</span><span>${item.label}</span>`;
-            row.addEventListener('mousedown', (e) => { e.preventDefault(); applyAC(idx); });
-            acMenu.appendChild(row);
-        });
-        acSelected = 0;
-    }
-
-    function updateACSelection(delta) {
-        if (!acMenu) return;
-        const rows = acMenu.querySelectorAll('.emoji-ac-item');
-        rows[acSelected]?.classList.remove('selected');
-        acSelected = (acSelected + delta + rows.length) % rows.length;
-        rows[acSelected]?.classList.add('selected');
-        rows[acSelected]?.scrollIntoView({ block: 'nearest' });
-    }
-
-    function applyAC(idx) {
-        if (!acItems[idx]) return;
-        const item = acItems[idx];
-        // Replace the :query part in the input
-        const val = input.value;
-        const colonIdx = val.lastIndexOf(':');
-        if (colonIdx === -1) return;
-        input.value = val.slice(0, colonIdx) + item.char;
-        closeAC();
-        input.focus();
-        input.dispatchEvent(new Event('input'));
-    }
-
-    input.addEventListener('input', () => {
-        const val = input.value;
-        const colonIdx = val.lastIndexOf(':');
-        if (colonIdx === -1 || colonIdx === val.length - 1 && val.length > 1) { closeAC(); return; }
-        const after = val.slice(colonIdx + 1);
-        // Only show if no space after the colon and at least 1 char
-        if (after.length === 0 || after.includes(' ')) { closeAC(); return; }
-        buildAC(after.toLowerCase());
-    });
-
-    input.addEventListener('keydown', (e) => {
-        if (!acMenu) return;
-        if (e.key === 'ArrowDown') { e.preventDefault(); updateACSelection(1); }
-        else if (e.key === 'ArrowUp') { e.preventDefault(); updateACSelection(-1); }
-        else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); applyAC(acSelected); }
-        else if (e.key === 'Escape') closeAC();
-    });
-
-    document.addEventListener('click', (e) => { if (!e.target.closest('.emoji-autocomplete-menu')) closeAC(); });
-})();
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('#emoji-picker') && !e.target.closest('#emoji-picker-btn') && !e.target.closest('.react')) emojiPickerEl.style.display = 'none';
+    if (!e.target.closest('#gif-picker') && !e.target.closest('#emoji-picker-btn')) closeGifPicker();
+});
 
 
 // ==========================================
@@ -3764,9 +3997,13 @@ mainViewEl.addEventListener('touchend', (e) => {
 
 
 // ==========================================
+// --- GIF PICKER (KLIPY API) ---
 // ==========================================
-// --- GIF SYSTEM (KLIPY) — fixed infinite scroll ---
-// ==========================================
+const gifPickerEl = document.getElementById('gif-picker');
+
+function closeGifPicker() { if (gifPickerEl) gifPickerEl.style.display = 'none'; }
+
+// GIF picker is now opened via the GIF tab inside the emoji picker (buildEmojiPicker)
 
 let currentGifQuery = '';
 let gifPage = 1;
@@ -3774,52 +4011,33 @@ let isFetchingGifs = false;
 let hasMoreGifs = true;
 let seenGifIds = new Set();
 
-// Attach infinite-scroll to the GIF grid element (which is the scrollable container)
-// We do this once after DOM is ready via a delegated scroll on the panel
-document.getElementById('unified-gif-panel')?.addEventListener('scroll', onGifScroll, { passive: true });
-// Also watch the grid itself (it has overflow-y:auto inside the flex panel)
-document.getElementById('gif-grid')?.addEventListener('scroll', onGifScroll, { passive: true });
-
-function onGifScroll(e) {
-    const el = e.currentTarget;
-    const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 120;
-    if (nearBottom && hasMoreGifs && !isFetchingGifs) {
-        if (currentGifQuery) searchGifs(currentGifQuery, true);
-        else loadTrendingGifs(true);
-    }
-}
-
 async function loadTrendingGifs(loadMore = false) {
     if (isFetchingGifs || (!hasMoreGifs && loadMore)) return;
     isFetchingGifs = true;
-
-    const grid = document.getElementById('gif-grid');
-    const loadingEl = document.getElementById('gif-loading');
-
+    
     if (!loadMore) {
-        grid.innerHTML = '';
+        document.getElementById('gif-grid').innerHTML = '';
         gifPage = 1;
         hasMoreGifs = true;
         seenGifIds.clear();
     }
-    if (loadingEl) loadingEl.style.display = 'block';
+    document.getElementById('gif-loading').style.display = 'block';
 
     try {
+        // FIX: Reverted back to using page=${gifPage} so Klipy actually gives us new GIFs!
         const res = await fetch(`https://api.klipy.com/v2/featured?key=${KLIPY_API_KEY}&limit=20&page=${gifPage}&media_filter=gif`);
         const data = await res.json();
-        if (loadingEl) loadingEl.style.display = 'none';
-
+        document.getElementById('gif-loading').style.display = 'none';
+        
         if (data.results && data.results.length > 0) {
-            renderGifResults(data.results);
+            renderGifResults(data.results, loadMore);
             gifPage++;
-            // If we got fewer than requested, assume no more pages
-            if (data.results.length < 20) hasMoreGifs = false;
         } else {
             hasMoreGifs = false;
         }
     } catch (err) {
-        if (loadingEl) loadingEl.style.display = 'none';
-        if (!loadMore) grid.innerHTML = `<p style="color:var(--text-muted);font-size:12px;padding:10px;grid-column:span 2;">GIFs unavailable.</p>`;
+        document.getElementById('gif-loading').style.display = 'none';
+        if (!loadMore) document.getElementById('gif-grid').innerHTML = `<p style="color:var(--text-muted); font-size:12px; padding:10px; grid-column:span 2;">GIFs unavailable. Check your KLIPY API key.</p>`;
     }
     isFetchingGifs = false;
 }
@@ -3827,93 +4045,104 @@ async function loadTrendingGifs(loadMore = false) {
 async function searchGifs(query, loadMore = false) {
     if (isFetchingGifs || (!hasMoreGifs && loadMore)) return;
     isFetchingGifs = true;
-
-    const grid = document.getElementById('gif-grid');
-    const loadingEl = document.getElementById('gif-loading');
-
+    
     if (!loadMore) {
-        grid.innerHTML = '';
+        document.getElementById('gif-grid').innerHTML = '';
         gifPage = 1;
         hasMoreGifs = true;
         seenGifIds.clear();
     }
-    if (loadingEl) loadingEl.style.display = 'block';
+    document.getElementById('gif-loading').style.display = 'block';
 
     try {
+        // FIX: Reverted back to using page=${gifPage} here too
         const res = await fetch(`https://api.klipy.com/v2/search?key=${KLIPY_API_KEY}&q=${encodeURIComponent(query)}&limit=20&page=${gifPage}&media_filter=gif`);
         const data = await res.json();
-        if (loadingEl) loadingEl.style.display = 'none';
-
+        document.getElementById('gif-loading').style.display = 'none';
+        
         if (data.results && data.results.length > 0) {
-            renderGifResults(data.results);
+            renderGifResults(data.results, loadMore);
             gifPage++;
-            if (data.results.length < 20) hasMoreGifs = false;
         } else {
             hasMoreGifs = false;
-            if (!loadMore) grid.innerHTML = `<p style="color:var(--text-muted);font-size:12px;padding:10px;grid-column:span 2;">No GIFs found.</p>`;
+            if (!loadMore) document.getElementById('gif-grid').innerHTML = `<p style="color:var(--text-muted); font-size:12px; padding:10px; grid-column:span 2;">No GIFs found.</p>`;
         }
     } catch (err) {
-        if (loadingEl) loadingEl.style.display = 'none';
+        document.getElementById('gif-loading').style.display = 'none';
     }
     isFetchingGifs = false;
 }
 
-function renderGifResults(results) {
+function renderGifResults(results, append = false) {
     const grid = document.getElementById('gif-grid');
+    if (!append) grid.innerHTML = '';
+    
     results.forEach(gif => {
-        const uid = gif.id || gif.url || Math.random();
-        if (seenGifIds.has(uid)) return;
-        seenGifIds.add(uid);
+        // FIX: Prevent identical GIFs from stacking
+        const uniqueId = gif.id || gif.url;
+        if (seenGifIds.has(uniqueId)) return;
+        seenGifIds.add(uniqueId);
 
-        const item = document.createElement('div');
+        const item = document.createElement('div'); 
         item.className = 'gif-item';
-
+        
         const preview = gif.media_formats?.tinygif?.url || gif.media_formats?.gif?.url || gif.url;
-        const full    = gif.media_formats?.gif?.url   || gif.url;
-
-        const img = document.createElement('img');
-        img.src = preview;
-        img.alt = 'gif';
-        img.loading = 'lazy';
-        item.appendChild(img);
-
+        const full = gif.media_formats?.gif?.url || gif.url;
+        
+        item.innerHTML = `<img src="${preview}" alt="gif" loading="lazy">`;
+        
+        // --- KLIPY ADVERTISEMENT HANDLING ---
         if (gif.is_ad || gif.type === 'ad') {
-            const badge = document.createElement('div');
-            badge.innerText = 'Ad';
-            badge.style.cssText = 'position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,.75);color:#fff;font-size:9px;font-weight:700;padding:2px 5px;border-radius:3px;pointer-events:none;';
-            item.appendChild(badge);
+            const adBadge = document.createElement('div');
+            adBadge.innerText = 'Ad';
+            adBadge.style.cssText = 'position:absolute; bottom:6px; right:6px; background:rgba(0,0,0,0.7); color:white; font-size:10px; font-weight:bold; padding:2px 6px; border-radius:4px; pointer-events:none; z-index: 10;';
+            item.appendChild(adBadge);
         }
 
         item.onclick = () => {
-            if (gif.is_ad && gif.tracking_url) navigator.sendBeacon(gif.tracking_url);
+            if (gif.is_ad && gif.tracking_url) {
+                navigator.sendBeacon(gif.tracking_url);
+            }
             sendGif(full);
         };
         grid.appendChild(item);
     });
 }
 
-// Search input debounce
 let gifSearchTimeout = null;
 document.getElementById('gif-search-input')?.addEventListener('input', (e) => {
     clearTimeout(gifSearchTimeout);
     currentGifQuery = e.target.value.trim();
-    gifSearchTimeout = setTimeout(() => {
-        if (currentGifQuery) searchGifs(currentGifQuery, false);
-        else loadTrendingGifs(false);
-    }, 450);
+    gifSearchTimeout = setTimeout(() => { 
+        if (currentGifQuery) searchGifs(currentGifQuery, false); 
+        else loadTrendingGifs(false); 
+    }, 500);
 });
-document.getElementById('gif-search-input')?.addEventListener('keydown', (e) => {
+
+document.getElementById('gif-search-btn')?.addEventListener('click', () => {
+    if (currentGifQuery) searchGifs(currentGifQuery, false); 
+    else loadTrendingGifs(false);
+});
+
+document.getElementById('gif-search-input')?.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
-        clearTimeout(gifSearchTimeout);
         currentGifQuery = e.target.value.trim();
         if (currentGifQuery) searchGifs(currentGifQuery, false);
-        else loadTrendingGifs(false);
+    }
+});
+
+// Infinite Scroll Listener
+document.getElementById('gif-grid')?.addEventListener('scroll', (e) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.target;
+    if (scrollTop + clientHeight >= scrollHeight - 50) {
+        if (currentGifQuery) searchGifs(currentGifQuery, true);
+        else loadTrendingGifs(true);
     }
 });
 
 async function sendGif(gifUrl) {
     if (!currentChatId) return;
-    closeUnifiedPicker();
+    closeGifPicker();
     const path = chatType === 'server' ? `messages/${currentChatId}` : `dms/${currentChatId}`;
     let roleId = 'member';
     if (chatType === 'server') { const mSnap = await get(ref(db, `server_members/${currentServerId}/${currentUserSafeEmail}/role`)); roleId = mSnap.val() || 'member'; }
