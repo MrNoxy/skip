@@ -204,11 +204,13 @@
                     <svg class="loading-spinner" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right:5px;"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a10 10 0 0 1 10 10"></path></svg> Loading older messages...
                 </div>
 
-                <div id="messages">
-                    <!-- Floating emoji stickers layer — sits inside messages so position:relative works -->
+                <!-- Messages + sticker overlay wrapper -->
+                <div id="messages-wrapper">
+                    <div id="messages"></div>
+                    <!-- Sticker layer — absolutely positioned over the messages, ignores scroll -->
                     <div id="emoji-sticker-layer" aria-hidden="true"></div>
-                    <!-- Sticker visibility toggle -->
-                    <button id="sticker-hide-btn" title="Hide/show emoji stickers" style="display:none;">
+                    <!-- Sticker visibility toggle (appears on hover) -->
+                    <button id="sticker-hide-btn" title="Hide emoji stickers" style="display:none;">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
                     </button>
                 </div>
@@ -245,7 +247,7 @@
 
                         <textarea id="msg-input" placeholder="Message..." disabled autocomplete="off" rows="1"></textarea>
                         
-                        <!-- Emoji button -->
+                        <!-- Emoji / GIF button (GIF accessible via emoji picker tab) -->
                         <button id="emoji-picker-btn" disabled title="Add Emoji" class="input-action-btn">
                             <span id="ep-icon-span"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg></span>
                         </button>
@@ -664,7 +666,7 @@
                             <h4 style="color: var(--text-muted); text-transform: uppercase; font-size: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px; margin-top: 30px;">General Permissions</h4>
                             <label class="toggle-row"><div><strong style="color: var(--text-bright);">View Channels</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to view channels by default.</span></div><input type="checkbox" id="p-viewChannels"></label>
                             <label class="toggle-row"><div><strong style="color: var(--text-bright);">Send Messages</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to send text messages.</span></div><input type="checkbox" id="p-sendMessages"></label>
-                            <label class="toggle-row"><div><strong style="color: var(--text-bright);">Place Emoji Stickers</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to drag and drop floating emoji stickers anywhere in the chat.</span></div><input type="checkbox" id="p-placeEmojiStickers"></label>
+                            <label class="toggle-row"><div><strong style="color: var(--text-bright);">Place Emoji Stickers</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to drag and drop floating emoji stickers in the chat.</span></div><input type="checkbox" id="p-placeEmojiStickers"></label>
                             <h4 style="color: var(--text-muted); text-transform: uppercase; font-size: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px; margin-top: 30px;">Moderation Permissions</h4>
                             <label class="toggle-row"><div><strong style="color: var(--text-bright);">Kick Members</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to remove other users from the server.</span></div><input type="checkbox" id="p-kickMembers"></label>
                             <label class="toggle-row"><div><strong style="color: var(--text-bright);">Ban Members</strong><span style="color: var(--text-muted); font-size: 12px; display:block;">Allows members to permanently ban other users.</span></div><input type="checkbox" id="p-banMembers"></label>
