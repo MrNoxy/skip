@@ -3478,6 +3478,57 @@ function findAnchorNear(clientY) {
     return best;
 }
 
+// KEY FIX for cross-device alignment: `.message` (and its `.msg-content-wrapper`)
+// is a plain block element, so it's always 100% of the chat column's width — a
+// narrow phone screen and a wide desktop window. Anchoring stickers as "% across
+// the message" was therefore really "% across the whole chat column," which is
+// why the same placement landed right next to a card on mobile but far out in
+// empty space on desktop. This instead measures the bounding box of what's
+// *actually rendered* inside the message (the card, the text run, the image) by
+// unioning the rects of its real content — stable, narrow, and roughly the same
+// in pixel terms on any screen.
+function getVisualContentRect(msgEl) {
+    const root = msgEl.querySelector('.msg-content-wrapper') || msgEl;
+    let rect = null;
+    const grow = (r) => {
+        if (!r || (r.width === 0 && r.height === 0)) return;
+        if (!rect) { rect = { left: r.left, right: r.right, top: r.top, bottom: r.bottom }; return; }
+        rect.left = Math.min(rect.left, r.left);
+        rect.right = Math.max(rect.right, r.right);
+        rect.top = Math.min(rect.top, r.top);
+        rect.bottom = Math.max(rect.bottom, r.bottom);
+    };
+    const walk = (node) => {
+        if (node.nodeType === 3) { // text node — measure the actual glyphs, not a parent box
+            if (!node.textContent || !node.textContent.trim()) return;
+            const range = document.createRange();
+            range.selectNodeContents(node);
+            grow(range.getBoundingClientRect());
+        } else if (node.nodeType === 1) {
+            const el = node;
+            if (el.classList && (el.classList.contains('msg-actions') || el.classList.contains('reactions'))) return;
+            if (['IMG', 'VIDEO', 'CANVAS', 'SVG', 'AUDIO'].includes(el.tagName)) {
+                // Atomic visual elements: their own box is the real visual size
+                // (these never stretch full-width like a plain div does).
+                grow(el.getBoundingClientRect());
+            } else if (el.childNodes.length === 0) {
+                grow(el.getBoundingClientRect()); // genuinely empty element
+            } else {
+                // Includes plain text-only divs (e.g. jumbo emoji-only messages) —
+                // a block div stretches full-width regardless of its text, so we
+                // must measure the text itself, not the div's own box.
+                el.childNodes.forEach(walk);
+            }
+        }
+    };
+    root.childNodes.forEach(walk);
+    if (!rect) {
+        const r = root.getBoundingClientRect();
+        return r;
+    }
+    return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.right - rect.left, height: rect.bottom - rect.top };
+}
+
 // Briefly highlights the message a sticker is about to attach to.
 function updateAnchorHighlight(clientX, clientY) {
     document.querySelectorAll('.sticker-anchor-target').forEach(el => el.classList.remove('sticker-anchor-target'));
@@ -3501,11 +3552,11 @@ function resolveAnchor(clientX, clientY) {
     }
     const anchorEl = findAnchorNear(clientY);
     if (anchorEl) {
-        const r = anchorEl.getBoundingClientRect();
+        const r = getVisualContentRect(anchorEl);
         return {
             anchorMsgId: anchorEl.id,
             ax: (clientX - r.left) / Math.max(1, r.width),
-            ay: clientY - r.top, // px offset from the message's top edge (negative = floats above it)
+            ay: clientY - r.top, // px offset from the content's top edge (negative = floats above it)
             fx: null, fy: null,
         };
     }
@@ -3526,7 +3577,7 @@ function computeStickerPixelPos(s) {
     if (s.anchorMsgId) {
         const anchorEl = document.getElementById(s.anchorMsgId);
         if (anchorEl) {
-            const r = anchorEl.getBoundingClientRect();
+            const r = getVisualContentRect(anchorEl);
             x = (r.left - messagesRect.left) + messagesDiv.scrollLeft + (s.ax || 0) * r.width;
             y = (r.top - messagesRect.top) + messagesDiv.scrollTop + (s.ay || 0);
         }
@@ -3538,7 +3589,8 @@ function computeStickerPixelPos(s) {
         y = (s.fy != null ? s.fy : 0.5) * messagesRect.height + (s.anchorMsgId ? messagesDiv.scrollTop : 0);
     }
     // Auto-corrective clamp: never let a sticker render fully off the (possibly much
-    // narrower, e.g. mobile) visible width.
+    // narrower, e.g. mobile) visible width. This only kicks in at the screen edges —
+    // it does not constrain placement anywhere within the visible chat pane.
     const half = (s.size || 52) / 2;
     const maxX = Math.max(half, messagesRect.width - half);
     x = Math.max(half, Math.min(maxX, x));
