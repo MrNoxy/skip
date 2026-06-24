@@ -125,7 +125,19 @@ const badgeNames = {
 
 // Image Compressor
 function compressImage(file, maxWidth, maxHeight, quality) {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
+        // KEY FIX: <canvas> can only ever capture a single frame of an animated
+        // GIF, so running one through drawImage()/toDataURL() — which every
+        // caller below used to do unconditionally — silently flattened it to a
+        // static image. GIFs are passed through as-is instead, so the animation
+        // survives all the way to custom emojis and stickers.
+        if (file.type === 'image/gif') {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve({ compressed: e.target.result, original: e.target.result });
+            reader.onerror = () => reject(new Error('Could not read that GIF.'));
+            reader.readAsDataURL(file);
+            return;
+        }
         const reader = new FileReader();
         reader.onload = (e) => {
             const originalDataUrl = e.target.result;
@@ -938,6 +950,9 @@ document.getElementById('us-upload-emoji-btn')?.addEventListener('click', async 
     const file = document.getElementById('us-emoji-file').files[0];
     const name = document.getElementById('us-emoji-name').value.trim().replace(/[^a-zA-Z0-9_]/g, '');
     if (!file || !name) return customAlert("Please select an image and enter a valid name.");
+    if (file.type === 'image/gif' && file.size > 2 * 1024 * 1024) {
+        return customAlert("That GIF is a bit large (max 2MB) — try a smaller or shorter one so it animates as a custom emoji.");
+    }
     const result = await compressImage(file, 128, 128, 0.9);
     const emojiId = push(ref(db, 'emojis')).key;
     await set(ref(db, `emojis/${emojiId}`), { name, url: result.compressed });
@@ -1989,6 +2004,9 @@ document.getElementById('ss-upload-emoji-btn')?.addEventListener('click', async 
     const file = document.getElementById('ss-emoji-file').files[0];
     const name = document.getElementById('ss-emoji-name').value.trim().replace(/[^a-zA-Z0-9_]/g, '');
     if (!file || !name) return customAlert("Please select an image and enter a valid name.");
+    if (file.type === 'image/gif' && file.size > 2 * 1024 * 1024) {
+        return customAlert("That GIF is a bit large (max 2MB) — try a smaller or shorter one so it animates as a custom emoji.");
+    }
     const result = await compressImage(file, 128, 128, 0.9);
     const emojiId = push(ref(db, 'emojis')).key;
     await set(ref(db, `emojis/${emojiId}`), { name, url: result.compressed });
@@ -3457,6 +3475,35 @@ function debounce(fn, ms) {
     return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
 }
 
+// Shows the small "✕" badge that appears on a placed sticker once it's been
+// long-pressed ("armed"). Tapping the badge deletes it; tapping anywhere else
+// dismisses it (see the global listener below).
+function showStickerDeleteBadge(el, s) {
+    if (el.querySelector('.sticker-delete-badge')) return;
+    const badge = document.createElement('div');
+    badge.className = 'sticker-delete-badge';
+    badge.innerHTML = '✕';
+    badge.style.transform = `rotate(${-(s.rot || 0)}deg)`; // stay upright regardless of sticker rotation
+    badge.addEventListener('touchend', (e) => { e.preventDefault(); e.stopPropagation(); removeSticker(s.id); }, { passive: false });
+    badge.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); removeSticker(s.id); });
+    el.appendChild(badge);
+    el.classList.add('armed');
+}
+function hideStickerDeleteBadge(el) {
+    el.querySelector('.sticker-delete-badge')?.remove();
+    el.classList.remove('armed');
+}
+document.addEventListener('touchstart', (e) => {
+    document.querySelectorAll('.emoji-sticker.armed').forEach(armedEl => {
+        if (!armedEl.contains(e.target)) hideStickerDeleteBadge(armedEl);
+    });
+}, { passive: true, capture: true });
+document.addEventListener('mousedown', (e) => {
+    document.querySelectorAll('.emoji-sticker.armed').forEach(armedEl => {
+        if (!armedEl.contains(e.target)) hideStickerDeleteBadge(armedEl);
+    });
+}, { capture: true });
+
 // ==========================================
 // --- ANCHOR RESOLUTION (the cross-device fix) ---
 // ==========================================
@@ -3512,7 +3559,11 @@ function getVisualContentRect(msgEl) {
                 // (these never stretch full-width like a plain div does).
                 grow(el.getBoundingClientRect());
             } else if (el.childNodes.length === 0) {
-                grow(el.getBoundingClientRect()); // genuinely empty element
+                // A genuinely empty *block* element (e.g. the caption div on an
+                // image sent with no text) has no meaningful box of its own — it
+                // just defaults to full row width. Measuring it directly was
+                // exactly what reintroduced the full-width bug for caption-less
+                // images/files, so skip it entirely instead.
             } else {
                 // Includes plain text-only divs (e.g. jumbo emoji-only messages) —
                 // a block div stretches full-width regardless of its text, so we
@@ -3689,7 +3740,7 @@ function commitStickerUpdate(s, fields) {
 }
 
 function applyTransform(el, s) {
-    el.style.transform = `rotate(${s.rot}deg)`;
+    el.style.transform = `translate(-50%, -50%) rotate(${s.rot}deg)`;
 }
 
 // Applies fresh data (from another client) to an already-rendered sticker element.
@@ -3732,14 +3783,8 @@ function appendStickerEl(s) {
     el.style.top = y + 'px';
     applyTransform(el, s);
 
-    // ---- Double-click / double-tap to remove ----
-    let tapTimer = null, tapCount = 0;
+    // ---- Double-click (PC) to remove. Mobile uses the long-press delete badge below. ----
     el.addEventListener('dblclick', (e) => { e.preventDefault(); removeSticker(s.id); });
-    el.addEventListener('touchend', () => {
-        tapCount++;
-        if (tapCount === 1) tapTimer = setTimeout(() => { tapCount = 0; }, 320);
-        if (tapCount >= 2) { clearTimeout(tapTimer); tapCount = 0; removeSticker(s.id); }
-    }, { passive: true });
 
     // ---- PC: left-drag=move, right-drag=rotate, scroll=resize ----
     el.addEventListener('contextmenu', e => e.preventDefault());
@@ -3822,21 +3867,47 @@ function appendStickerEl(s) {
         commitSizeDebounced();
     }, { passive: false });
 
-    // ---- Mobile: 1 finger=move, 2 fingers=pinch-resize+rotate ----
+    // ---- Mobile: long-press to arm (then 1 finger=move, badge tap=delete); 2 fingers=pinch resize+rotate ----
+    // KEY FIX: stickers used to grab the touch instantly, which both caused
+    // accidental nudges from a passing finger and could leak the gesture into
+    // the browser's native text-selection on whatever was underneath. Now a
+    // quick touch-and-release or touch-and-scroll does nothing — only a
+    // genuine hold "arms" the sticker (with a little haptic tick + a delete
+    // badge), and from then on it moves with your finger immediately.
+    const LONG_PRESS_ARM_MS = 550;
+    const MOVE_CANCEL_PX = 10;
+    let armTimer = null;
+    let touchStartX = 0, touchStartY = 0;
     let t1Start = null;
     let pinchStartDist = null, pinchStartSize = s.size;
     let pinchStartAngle = null, pinchStartRot = s.rot;
     let movedDuringTouch = false;
 
+    function arm(touch) {
+        if (navigator.vibrate) { try { navigator.vibrate(8); } catch (_) {} }
+        showStickerDeleteBadge(el, s); // also adds the .armed class — the single source of truth
+        t1Start = {
+            ox: touch.clientX - (parseFloat(el.style.left) || 0),
+            oy: touch.clientY - (parseFloat(el.style.top) || 0),
+        };
+    }
+
     el.addEventListener('touchstart', (e) => {
-        e.stopPropagation();
         if (e.touches.length === 1) {
             movedDuringTouch = false;
-            t1Start = {
-                ox: e.touches[0].clientX - (parseFloat(el.style.left) || 0),
-                oy: e.touches[0].clientY - (parseFloat(el.style.top) || 0),
-            };
+            touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY;
+            clearTimeout(armTimer);
+            if (el.classList.contains('armed')) {
+                // Already armed from a moment ago — pick it straight back up
+                t1Start = {
+                    ox: e.touches[0].clientX - (parseFloat(el.style.left) || 0),
+                    oy: e.touches[0].clientY - (parseFloat(el.style.top) || 0),
+                };
+            } else {
+                armTimer = setTimeout(() => arm(e.touches[0]), LONG_PRESS_ARM_MS);
+            }
         } else if (e.touches.length === 2) {
+            clearTimeout(armTimer);
             t1Start = null;
             const dx = e.touches[0].clientX - e.touches[1].clientX;
             const dy = e.touches[0].clientY - e.touches[1].clientY;
@@ -3848,9 +3919,20 @@ function appendStickerEl(s) {
     }, { passive: true });
 
     el.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 1 && !el.classList.contains('armed') && pinchStartDist === null) {
+            // Not armed yet — a moving finger here was trying to scroll the
+            // chat, not grab the sticker. Let go completely (no preventDefault,
+            // no stopPropagation) so the scroll/native gesture behaves normally.
+            const t = e.touches[0];
+            if (Math.hypot(t.clientX - touchStartX, t.clientY - touchStartY) > MOVE_CANCEL_PX) {
+                clearTimeout(armTimer);
+            }
+            return;
+        }
         e.preventDefault();
         e.stopPropagation();
         if (e.touches.length === 1 && t1Start) {
+            if (!movedDuringTouch) hideStickerDeleteBadge(el);
             movedDuringTouch = true;
             el.style.left = (e.touches[0].clientX - t1Start.ox) + 'px';
             el.style.top = (e.touches[0].clientY - t1Start.oy) + 'px';
@@ -3874,10 +3956,11 @@ function appendStickerEl(s) {
     }, { passive: false });
 
     el.addEventListener('touchend', (e) => {
-        e.stopPropagation();
-        clearAnchorHighlight();
+        clearTimeout(armTimer);
         if (e.touches.length < 2) pinchStartDist = null;
         if (e.touches.length === 0) {
+            e.stopPropagation();
+            clearAnchorHighlight();
             t1Start = null;
             if (movedDuringTouch) {
                 const rect = el.getBoundingClientRect();
@@ -3891,6 +3974,8 @@ function appendStickerEl(s) {
                 }
             }
             movedDuringTouch = false;
+            // If armed but not moved, the delete badge stays up — dismissed by
+            // tapping it (delete) or tapping anywhere else (handled globally below).
         }
     }, { passive: true });
 
@@ -3908,32 +3993,45 @@ function initPickerEmojiDrag(el, emoji, isCustom, customUrl) {
         e.preventDefault();
 
         let didDrag = false;
-        pickerDragActive = true;
-        pickerDragEmoji = emoji;
-        pickerDragIsCustom = isCustom || false;
-        pickerDragCustomUrl = customUrl || null;
-        pickerDragSize = 52;
+        const startX = e.clientX, startY = e.clientY;
+        let ghostRot = 0;
+        let rcDragging = false, rcStartX = 0, rcStartRot = 0;
 
-        // Build ghost content
-        dragGhost.innerHTML = '';
-        if (isCustom && customUrl) {
-            dragGhost.style.fontSize = '';
-            const img = document.createElement('img');
-            img.src = customUrl;
-            img.style.cssText = `width:${pickerDragSize}px;height:${pickerDragSize}px;object-fit:contain;display:block;`;
-            dragGhost.appendChild(img);
-        } else {
-            dragGhost.innerHTML = emoji;
-            dragGhost.style.fontSize = pickerDragSize + 'px';
+        // KEY FIX: this used to build/show the drag ghost unconditionally on
+        // mousedown, so even a plain click that just wanted to type the emoji
+        // into the textbox would flash the "about to drop a sticker" preview.
+        // Now nothing happens until the cursor actually moves past the drag
+        // threshold below.
+        function beginDrag() {
+            didDrag = true;
+            suppressNextClick = true;
+            pickerDragActive = true;
+            pickerDragEmoji = emoji;
+            pickerDragIsCustom = isCustom || false;
+            pickerDragCustomUrl = customUrl || null;
+            pickerDragSize = 52;
+
+            dragGhost.innerHTML = '';
+            if (isCustom && customUrl) {
+                dragGhost.style.fontSize = '';
+                const img = document.createElement('img');
+                img.src = customUrl;
+                img.style.cssText = `width:${pickerDragSize}px;height:${pickerDragSize}px;object-fit:contain;display:block;`;
+                dragGhost.appendChild(img);
+            } else {
+                dragGhost.innerHTML = emoji;
+                dragGhost.style.fontSize = pickerDragSize + 'px';
+            }
+            dragGhost.style.display = 'block';
+            dragGhost.style.transform = 'translate(-50%,-50%)';
+            dragGhost.style.left = startX + 'px';
+            dragGhost.style.top = startY + 'px';
         }
-        dragGhost.style.display = 'block';
-        dragGhost.style.left = e.clientX + 'px';
-        dragGhost.style.top = e.clientY + 'px';
 
         function onMove(mv) {
-            if (!didDrag && Math.hypot(mv.clientX - e.clientX, mv.clientY - e.clientY) > 4) {
-                didDrag = true;
-                suppressNextClick = true;
+            if (!didDrag) {
+                if (Math.hypot(mv.clientX - startX, mv.clientY - startY) > 4) beginDrag();
+                else return;
             }
             dragGhost.style.left = mv.clientX + 'px';
             dragGhost.style.top = mv.clientY + 'px';
@@ -3952,7 +4050,7 @@ function initPickerEmojiDrag(el, emoji, isCustom, customUrl) {
         }
 
         function onScroll(se) {
-            if (!pickerDragActive) return;
+            if (!didDrag) return;
             se.preventDefault();
             pickerDragSize = Math.max(STICKER_MIN, Math.min(STICKER_MAX, pickerDragSize + (se.deltaY > 0 ? -6 : 6)));
             if (isCustom && customUrl) {
@@ -3964,10 +4062,8 @@ function initPickerEmojiDrag(el, emoji, isCustom, customUrl) {
         }
 
         // Right-click while dragging = rotate ghost
-        let ghostRot = 0;
-        let rcDragging = false, rcStartX = 0, rcStartRot = 0;
         function onRightDown(re) {
-            if (!pickerDragActive) return;
+            if (!didDrag || re.button !== 2) return;
             re.preventDefault();
             rcDragging = true; rcStartX = re.clientX; rcStartRot = ghostRot;
         }
@@ -3977,11 +4073,10 @@ function initPickerEmojiDrag(el, emoji, isCustom, customUrl) {
             dragGhost.style.transform = `translate(-50%,-50%) rotate(${ghostRot}deg)`;
         }
         function onRightUp() { rcDragging = false; }
-        document.addEventListener('mousedown', onRightDown); // button=2 handled inside
-        // Actually filter for button 2:
-        document.addEventListener('contextmenu', e => { if (pickerDragActive) e.preventDefault(); });
+        function onContextMenu(ce) { if (didDrag) ce.preventDefault(); }
 
         function onUp(ue) {
+            const wasDragging = didDrag;
             pickerDragActive = false;
             dragGhost.style.display = 'none';
             dragGhost.style.transform = 'translate(-50%,-50%)';
@@ -3991,8 +4086,12 @@ function initPickerEmojiDrag(el, emoji, isCustom, customUrl) {
             document.removeEventListener('mousemove', onMove);
             document.removeEventListener('mouseup', onUp);
             document.removeEventListener('wheel', onScroll, true);
+            document.removeEventListener('mousedown', onRightDown);
+            document.removeEventListener('mousemove', onRightMove);
+            document.removeEventListener('mouseup', onRightUp);
+            document.removeEventListener('contextmenu', onContextMenu);
 
-            if (didDrag) {
+            if (wasDragging) {
                 const anchor = resolveAnchor(ue.clientX, ue.clientY);
                 if (anchor) {
                     placeSticker(emoji, isCustom, customUrl, anchor, pickerDragSize, ghostRot);
@@ -4003,14 +4102,17 @@ function initPickerEmojiDrag(el, emoji, isCustom, customUrl) {
                 }
                 // If dropped outside chat, do nothing (no text insert)
             }
-            // If no drag happened, let the click handler fire normally (insertEmoji)
-            ghostRot = 0; rcDragging = false;
+            // If no drag happened, the click handler fires normally (insertEmoji)
             pickerDragEmoji = null;
         }
 
         document.addEventListener('mousemove', onMove);
         document.addEventListener('mouseup', onUp);
         document.addEventListener('wheel', onScroll, { capture: true, passive: false });
+        document.addEventListener('mousedown', onRightDown);
+        document.addEventListener('mousemove', onRightMove);
+        document.addEventListener('mouseup', onRightUp);
+        document.addEventListener('contextmenu', onContextMenu);
     });
 }
 
@@ -4277,7 +4379,13 @@ function makeEpEmoji(char, isCustom, customUrl, name) {
     // Click = insert as text (only if NOT dragged)
     s.addEventListener('click', () => {
         if (suppressNextClick) { suppressNextClick = false; return; }
-        if (isCustom) insertEmoji(name, name, true);
+        // KEY FIX: `char` holds the emoji's real database id for custom emojis
+        // (see the makeEpEmoji(eid, true, edata.url, edata.name) call sites below);
+        // `name` is only the display name. Passing name/name here stored shortcodes
+        // like [:scubbacat:scubbacat] instead of [:scubbacat:-OvqK...], and reactions
+        // under the display-name key instead of the real id — neither of which
+        // exists in globalEmojisCache, so both rendering paths broke.
+        if (isCustom) insertEmoji(char, name, true);
         else insertEmoji(char, char, false);
     });
 
