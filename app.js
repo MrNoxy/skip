@@ -1682,36 +1682,52 @@ function loadMyServers() {
                     document.getElementById('home-btn').classList.remove('active');
 
                     if (unsubscribeMyMemberData) unsubscribeMyMemberData();
-                    unsubscribeMyMemberData = onValue(ref(db, `server_members/${serverId}/${currentUserSafeEmail}`), (memLiveSnap) => {
+                    // KEY FIX: this used to read myServerMemberData (and derive
+                    // myServerRoles/myServerPerms from it) synchronously, right
+                    // here, immediately after subscribing — but onValue's callback
+                    // is asynchronous, so myServerMemberData was still whatever the
+                    // *previous* server had left in it. Worse, the callback below
+                    // only ever updated myServerMemberData itself, never the
+                    // derived roles/perms — so once that race was lost, permissions
+                    // from the old server stuck around permanently (only a full
+                    // refresh reset them). Everything that depends on the member
+                    // record now lives inside this callback, recomputed from only
+                    // the freshly-arrived data, every time it fires — including on
+                    // live role changes while you're already browsing the server.
+                    unsubscribeMyMemberData = onValue(ref(db, `server_members/${serverId}/${currentUserSafeEmail}`), async (memLiveSnap) => {
+                        if (serverId !== currentServerId) return; // switched again before this arrived
                         myServerMemberData = memLiveSnap.val() || {};
+
+                        let userRoles = myServerMemberData.roles ? Object.keys(myServerMemberData.roles) : (myServerMemberData.role && myServerMemberData.role !== 'member' ? [myServerMemberData.role] : []);
+                        myServerRoles = ['everyone', ...userRoles];
+                        const rolesSnap = await get(ref(db, `servers/${serverId}/roles`));
+                        if (serverId !== currentServerId) return; // guard again after the await
+                        serverRolesCache = rolesSnap.val() || {};
+                        let resolvedPerms = { ...(serverRolesCache['everyone']?.perms || { viewChannels: true, sendMessages: true }) };
+                        myServerRoles.forEach(roleId => {
+                            if (roleId !== 'everyone' && roleId !== 'owner' && serverRolesCache[roleId]) {
+                                const rPerms = serverRolesCache[roleId].perms;
+                                if (rPerms) for (let p in rPerms) { if (rPerms[p]) resolvedPerms[p] = true; }
+                            }
+                        });
+                        if (sData.owner === auth.currentUser.email || myServerRoles.includes('owner') || resolvedPerms.manageServerSettings) {
+                            if (!myServerRoles.includes('owner')) myServerRoles.push('owner');
+                            resolvedPerms = { viewChannels: true, sendMessages: true, placeEmojiStickers: true, manageChannels: true, manageServerSettings: true, manageServerProfile: true, manageServerOverview: true, manageRoles: true, manageMessages: true, kickMembers: true, banMembers: true, timeoutMembers: true, manageDownloadChannel: true };
+                        }
+                        myServerPerms = resolvedPerms;
+
+                        const anySettings = myServerPerms.manageServerSettings || myServerPerms.manageServerProfile || myServerPerms.manageServerOverview || myServerPerms.manageRoles;
+                        document.getElementById('menu-server-settings').style.display = anySettings ? 'flex' : 'none';
+                        document.getElementById('menu-add-category').style.display = myServerPerms.manageChannels ? 'flex' : 'none';
+                        document.getElementById('menu-add-text').style.display = myServerPerms.manageChannels ? 'flex' : 'none';
+                        document.getElementById('menu-add-voice').style.display = myServerPerms.manageChannels ? 'flex' : 'none';
+                        document.getElementById('menu-add-download').style.display = myServerPerms.manageChannels ? 'flex' : 'none';
+                        document.getElementById('menu-leave-server').style.display = sData.owner === auth.currentUser.email ? 'none' : 'flex';
+
+                        renderChannels(serverId);
                         enableChat();
                     });
 
-                    const memberInfo = myServerMemberData;
-                    let userRoles = memberInfo.roles ? Object.keys(memberInfo.roles) : (memberInfo.role && memberInfo.role !== 'member' ? [memberInfo.role] : []);
-                    myServerRoles = ['everyone', ...userRoles];
-                    const rolesSnap = await get(ref(db, `servers/${serverId}/roles`));
-                    serverRolesCache = rolesSnap.val() || {};
-                    let resolvedPerms = { ...(serverRolesCache['everyone']?.perms || { viewChannels: true, sendMessages: true }) };
-                    myServerRoles.forEach(roleId => {
-                        if (roleId !== 'everyone' && roleId !== 'owner' && serverRolesCache[roleId]) {
-                            const rPerms = serverRolesCache[roleId].perms;
-                            if (rPerms) for (let p in rPerms) { if (rPerms[p]) resolvedPerms[p] = true; }
-                        }
-                    });
-                    if (sData.owner === auth.currentUser.email || myServerRoles.includes('owner') || resolvedPerms.manageServerSettings) {
-                        if (!myServerRoles.includes('owner')) myServerRoles.push('owner');
-                        resolvedPerms = { viewChannels: true, sendMessages: true, placeEmojiStickers: true, manageChannels: true, manageServerSettings: true, manageServerProfile: true, manageServerOverview: true, manageRoles: true, manageMessages: true, kickMembers: true, banMembers: true, timeoutMembers: true, manageDownloadChannel: true };
-                    }
-                    myServerPerms = resolvedPerms;
-
-                    const anySettings = myServerPerms.manageServerSettings || myServerPerms.manageServerProfile || myServerPerms.manageServerOverview || myServerPerms.manageRoles;
-                    document.getElementById('menu-server-settings').style.display = anySettings ? 'flex' : 'none';
-                    document.getElementById('menu-add-category').style.display = myServerPerms.manageChannels ? 'flex' : 'none';
-                    document.getElementById('menu-add-text').style.display = myServerPerms.manageChannels ? 'flex' : 'none';
-                    document.getElementById('menu-add-voice').style.display = myServerPerms.manageChannels ? 'flex' : 'none';
-                    document.getElementById('menu-add-download').style.display = myServerPerms.manageChannels ? 'flex' : 'none';
-                    document.getElementById('menu-leave-server').style.display = sData.owner === auth.currentUser.email ? 'none' : 'flex';
                     document.getElementById('server-stats-display').style.display = 'none';
 
                     initChannelSync(serverId);

@@ -38,6 +38,27 @@ html, body {
 input, textarea, select { font-family: inherit; font-size: 14px !important; }
 * { box-sizing: border-box; }
 
+/* KEY FIX: text selection/highlighting was getting triggered by drag gestures
+   meant for reordering/editing channels (and other UI chrome), on both PC and
+   mobile. Per the explicit ask — if it's not a textbox you can type in, it
+   shouldn't be selectable at all — selection is now off everywhere by default,
+   and explicitly re-enabled only for the handful of elements that are actually
+   meant to be typed into. */
+html, body, * {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+}
+input, textarea {
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+    user-select: text;
+    -webkit-touch-callout: default;
+}
+
 /* Custom Scrollbars */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -204,7 +225,12 @@ input, textarea, select { font-family: inherit; font-size: 14px !important; }
     padding: 14px; display: flex; align-items: flex-start;
     border-bottom: 1px solid var(--border-color); position: relative;
     min-height: 52px; box-sizing: border-box;
-    transition: background 0.3s; background-position: center; background-size: cover;
+    /* FIX: no transition on background — the browser was attempting to
+       cross-fade/interpolate between the old and new server's banner image,
+       which (since they're cropped to different aspect ratios) reads as a
+       sudden "zoom" the instant you switch servers. The swap is now instant. */
+    background-position: center; background-size: cover;
+    transform: none !important;
 }
 #sidebar-header.server-header-banner { height: 110px; }
 #server-header-clickable {
