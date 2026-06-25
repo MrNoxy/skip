@@ -4545,6 +4545,7 @@ document.getElementById('emojigg-modal-search')?.addEventListener('input', debou
 document.getElementById('emojigg-modal-category')?.addEventListener('change', applyEmojiGGModalFilter);
 document.getElementById('emojigg-modal-loadmore')?.addEventListener('click', renderEmojiGGModalPage);
 
+function buildEmojiPicker() {
 
     const tabsContainer = document.getElementById('emoji-picker-tabs');
     const contentContainer = document.getElementById('emoji-picker-content');
