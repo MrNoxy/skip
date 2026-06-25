@@ -373,6 +373,25 @@
         </div>
     </div>
 
+    <!-- Browse Emoji.gg Modal -->
+    <div id="emojigg-modal" class="modal-overlay" style="display: none; z-index: 6500;">
+        <div class="modal-content emojigg-modal-content">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                <h3 style="color: var(--text-bright); margin:0;">Browse Emoji.gg</h3>
+                <button id="emojigg-modal-close" class="fs-close-btn-mobile" title="Close" style="position:static;">✖</button>
+            </div>
+            <p style="color: var(--text-muted); font-size: 13px; margin: 4px 0 12px;">
+                Search thousands of community emojis and add your favorites straight to
+                <strong id="emojigg-target-label" style="color: var(--text-main);">your personal library</strong>.
+                Data provided by <a href="https://emoji.gg" target="_blank" rel="noopener" style="color: var(--accent-primary);">emoji.gg</a>.
+            </p>
+            <input type="text" id="emojigg-modal-search" class="fs-input" placeholder="Search by name…" style="margin-bottom: 10px;">
+            <div id="emojigg-modal-grid" class="emojigg-grid"></div>
+            <button id="emojigg-modal-loadmore" class="small-btn" style="display:none; margin: 10px auto 0; display:block;">Load more</button>
+        </div>
+    </div>
+
+
     <!-- Image / File Viewer -->
     <div id="image-modal" style="display: none;">
         <div id="close-image-modal" title="Close">✖</div>
@@ -396,6 +415,7 @@
                 <div class="fs-tab" data-tab="security" id="tab-us-security">Security</div>
                 <div class="fs-tab" data-tab="emojis" id="tab-us-emojis">Personal Emojis</div>
 		        <div class="fs-tab" data-tab="decorations" id="tab-us-decorations">Avatar Decorations</div>
+                <div class="fs-tab" data-tab="advanced" id="tab-us-advanced">Advanced</div>
 
                 <div class="fs-tab" data-tab="admin" id="tab-us-admin" style="display: none; color: var(--accent-purple);">👑 Admin Dashboard</div>
 
@@ -425,6 +445,21 @@
     			<div id="us-decorations-grid" style="display: flex; flex-wrap: wrap; gap: 15px;">
         		</div>
 		</div>
+
+        <div class="ss-pane" id="pane-us-advanced" style="display: none;">
+            <h3 style="color:var(--text-muted); font-size:11px; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:15px;">Emoji.gg</h3>
+            <label class="toggle-row">
+                <div>
+                    <strong style="color: var(--text-bright);">Preload Emoji.gg Library</strong>
+                    <span style="color: var(--text-muted); font-size: 12px; display:block; max-width: 420px;">
+                        Adds a 🌐 tab to your Emoji Picker with the full Emoji.gg library (thousands of emojis) ready
+                        to search, send, react with, or drag in as stickers — without permanently adding any of them
+                        to your personal emoji list. Nothing downloads until you actually open that tab.
+                    </span>
+                </div>
+                <input type="checkbox" id="us-preload-emojigg-toggle">
+            </label>
+        </div>
 
 
                 <!-- Admin Dashboard Tab -->
@@ -579,6 +614,7 @@
                         <button id="us-upload-emoji-btn" style="margin:0; white-space:nowrap;">Upload</button>
                     </div>
                     <div id="us-emoji-filename" style="font-size:12px; color:var(--text-muted); margin-bottom:10px;"></div>
+                    <button id="us-browse-emojigg-btn" style="background: var(--bg-tertiary); margin-bottom: 20px;">🌐 Browse Emoji.gg Library</button>
                     <h3 style="color: var(--text-bright); border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">Your Emojis</h3>
                     <div id="us-emojis-list" style="display: flex; flex-direction: column; gap: 5px;"></div>
                 </div>
@@ -695,6 +731,7 @@
                         <input type="text" id="ss-emoji-name" placeholder="Emoji Name (no spaces)" class="fs-input" style="flex:1; margin:0; min-width:150px;">
                         <button id="ss-upload-emoji-btn" style="margin:0;">Upload</button>
                     </div>
+                    <button id="ss-browse-emojigg-btn" style="background: var(--bg-tertiary); margin-bottom: 20px;">🌐 Browse Emoji.gg Library</button>
                     <h3 style="color: var(--text-bright); border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">Server Emojis</h3>
                     <div id="ss-emojis-list" style="display: flex; flex-direction: column; gap: 5px;"></div>
                 </div>

@@ -51,6 +51,9 @@ let unsubscribeMessagesChanged = null;
 let unsubscribeStickers = null;
 let unsubscribeStickersChanged = null;
 let unsubscribeStickersRemoved = null;
+let userPreloadEmojiGG = false;
+let emojiGGLibraryCache = null; // null = not fetched yet; [] = fetched but empty/failed
+let emojiGGFetchPromise = null;
 let unsubscribeMembers = null;
 let unsubscribeChannels = null;
 let unsubscribeCategories = null;
@@ -758,6 +761,11 @@ if (user.email === MY_ADMIN_EMAIL) {
              if (oldAvatar) {
                  oldAvatar.outerHTML = getAvatarHTML(myProfile, 'avatar-small');
              }
+
+                // 4. Emoji.gg preload setting — reflect into the Advanced settings toggle if it's mounted
+                userPreloadEmojiGG = !!myProfile.preloadEmojiGG;
+                const preloadToggle = document.getElementById('us-preload-emojigg-toggle');
+                if (preloadToggle) preloadToggle.checked = userPreloadEmojiGG;
             }
         });
 
@@ -944,6 +952,14 @@ function loadPersonalEmojis() {
 document.getElementById('us-emoji-file')?.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (file) document.getElementById('us-emoji-filename').innerText = `Selected: ${file.name}`;
+});
+
+document.getElementById('us-preload-emojigg-toggle')?.addEventListener('change', (e) => {
+    set(ref(db, `users/${currentUserSafeEmail}/preloadEmojiGG`), e.target.checked).catch(err => {
+        console.error('Failed to save preload setting:', err);
+        showToast('Could not save that setting — try again.', 'error');
+    });
+    showToast(e.target.checked ? 'Emoji.gg library will appear in your picker 🌐' : 'Emoji.gg picker tab removed.', 'success');
 });
 
 document.getElementById('us-upload-emoji-btn')?.addEventListener('click', async () => {
@@ -4309,7 +4325,168 @@ window.addEventListener('resize', debounce(() => {
     if (gifPickerEl && gifPickerEl.style.display === 'flex') positionFloatingPanel(gifPickerEl);
 }, 100));
 
-function buildEmojiPicker() {
+// ==========================================
+// --- EMOJI.GG INTEGRATION ---
+// ==========================================
+// Public, no-auth-required API (https://emoji.gg/developer) — see their dev
+// agreement: this only browses/imports individual emojis a person picks, it
+// doesn't replicate their catalog as a competing list.
+const EMOJIGG_API_URL = 'https://emoji.gg/api';
+
+// Fetches (once per page load) the full ~5000-entry emoji.gg catalog and
+// caches it in memory. Safe to call repeatedly — concurrent callers share the
+// same in-flight request.
+function fetchEmojiGGLibrary() {
+    if (emojiGGLibraryCache) return Promise.resolve(emojiGGLibraryCache);
+    if (emojiGGFetchPromise) return emojiGGFetchPromise;
+    emojiGGFetchPromise = fetch(EMOJIGG_API_URL)
+        .then(r => { if (!r.ok) throw new Error('Bad response'); return r.json(); })
+        .then(data => { emojiGGLibraryCache = Array.isArray(data) ? data : []; return emojiGGLibraryCache; })
+        .catch(err => { console.error('Failed to load Emoji.gg library:', err); emojiGGLibraryCache = []; return emojiGGLibraryCache; })
+        .finally(() => { emojiGGFetchPromise = null; });
+    return emojiGGFetchPromise;
+}
+
+// Every emoji.gg-sourced emoji gets a deterministic key (rather than a random
+// push() id) so if two different people add/use the same emoji.gg emoji, they
+// converge on the exact same shared `emojis/{key}` record instead of creating
+// duplicates every time.
+function emojiGGKey(eggEntry) { return `egg_${eggEntry.id}`; }
+
+// Sanitized title → a valid emoji name, matching the same rule the manual
+// upload forms already enforce.
+function emojiGGSafeName(title) {
+    return (title || 'emoji').replace(/[^a-zA-Z0-9_]/g, '') || 'emoji';
+}
+
+// Permanently adds an emoji.gg emoji to a real library (personal or server) —
+// from this point on it behaves exactly like a manually-uploaded custom emoji:
+// it appears in the management list, counts toward that library, etc.
+// `ownerPath` is either `users/{email}/emojis` or `servers/{id}/emojis`.
+async function addEmojiGGToLibrary(eggEntry, ownerPath) {
+    const key = emojiGGKey(eggEntry);
+    const name = emojiGGSafeName(eggEntry.title);
+    await set(ref(db, `emojis/${key}`), { name, url: eggEntry.image, source: 'emojigg' });
+    await set(ref(db, `${ownerPath}/${key}`), true);
+    globalEmojisCache[key] = { name, url: eggEntry.image, source: 'emojigg' };
+    return key;
+}
+
+// ---- Browse Emoji.gg modal (used from both Personal Emojis and Server Emojis settings) ----
+const EMOJIGG_MODAL_PAGE_SIZE = 48;
+let emojiggModalOwnerPath = null;
+let emojiggModalOwnedSnapshot = {}; // keys already in that library, so we can show "Added" instead of "+"
+let emojiggModalFiltered = [];
+let emojiggModalShown = 0;
+
+function openEmojiGGModal(ownerPath, targetLabel) {
+    emojiggModalOwnerPath = ownerPath;
+    document.getElementById('emojigg-target-label').innerText = targetLabel;
+    document.getElementById('emojigg-modal').style.display = 'flex';
+    document.getElementById('emojigg-modal-search').value = '';
+
+    const grid = document.getElementById('emojigg-modal-grid');
+    grid.innerHTML = '<div style="padding:24px; text-align:center; color:var(--text-muted); font-size:13px; grid-column: 1/-1;">Loading Emoji.gg library…</div>';
+    document.getElementById('emojigg-modal-loadmore').style.display = 'none';
+
+    get(ref(db, ownerPath)).then(snap => {
+        emojiggModalOwnedSnapshot = snap.val() || {};
+        return fetchEmojiGGLibrary();
+    }).then(() => {
+        if (!emojiGGLibraryCache || !emojiGGLibraryCache.length) {
+            grid.innerHTML = '<div style="padding:24px; text-align:center; color:var(--text-muted); font-size:13px; grid-column: 1/-1;">Couldn\'t reach Emoji.gg right now — try again in a bit.</div>';
+            return;
+        }
+        applyEmojiGGModalFilter();
+    });
+}
+
+function applyEmojiGGModalFilter() {
+    const grid = document.getElementById('emojigg-modal-grid');
+    grid.innerHTML = '';
+    emojiggModalShown = 0;
+    const term = document.getElementById('emojigg-modal-search').value.trim().toLowerCase();
+    emojiggModalFiltered = term ? emojiGGLibraryCache.filter(e => e.title.toLowerCase().includes(term)) : emojiGGLibraryCache;
+    if (!emojiggModalFiltered.length) {
+        grid.innerHTML = `<div style="padding:24px; text-align:center; color:var(--text-muted); font-size:13px; grid-column: 1/-1;">No matches for "${term}".</div>`;
+        document.getElementById('emojigg-modal-loadmore').style.display = 'none';
+        return;
+    }
+    renderEmojiGGModalPage();
+}
+
+function renderEmojiGGModalPage() {
+    const grid = document.getElementById('emojigg-modal-grid');
+    const loadMoreBtn = document.getElementById('emojigg-modal-loadmore');
+    const next = emojiggModalFiltered.slice(emojiggModalShown, emojiggModalShown + EMOJIGG_MODAL_PAGE_SIZE);
+    next.forEach(e => grid.appendChild(makeEmojiGGModalCell(e)));
+    emojiggModalShown += next.length;
+    loadMoreBtn.style.display = emojiggModalShown < emojiggModalFiltered.length ? 'block' : 'none';
+}
+
+function makeEmojiGGModalCell(e) {
+    const key = emojiGGKey(e);
+    const alreadyAdded = !!emojiggModalOwnedSnapshot[key];
+
+    const cell = document.createElement('div');
+    cell.className = 'emojigg-cell';
+    cell.title = e.title;
+
+    const img = document.createElement('img');
+    img.src = e.image;
+    img.loading = 'lazy';
+    cell.appendChild(img);
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'emojigg-cell-name';
+    nameEl.innerText = e.title;
+    cell.appendChild(nameEl);
+
+    const addBtn = document.createElement('button');
+    addBtn.className = 'emojigg-cell-add';
+    addBtn.innerText = alreadyAdded ? '✓' : '+';
+    if (alreadyAdded) addBtn.classList.add('added');
+    addBtn.disabled = alreadyAdded;
+    addBtn.onclick = async (ev) => {
+        ev.stopPropagation();
+        if (addBtn.disabled) return;
+        addBtn.disabled = true;
+        addBtn.innerText = '…';
+        try {
+            await addEmojiGGToLibrary(e, emojiggModalOwnerPath);
+            emojiggModalOwnedSnapshot[key] = true;
+            addBtn.innerText = '✓';
+            addBtn.classList.add('added');
+            showToast(`Added :${emojiGGSafeName(e.title)}: to your library!`, 'success');
+        } catch (err) {
+            console.error('Failed to add Emoji.gg emoji:', err);
+            addBtn.disabled = false;
+            addBtn.innerText = '+';
+            showToast('Could not add that emoji — try again.', 'error');
+        }
+    };
+    cell.appendChild(addBtn);
+
+    return cell;
+}
+
+document.getElementById('us-browse-emojigg-btn')?.addEventListener('click', () => {
+    openEmojiGGModal(`users/${currentUserSafeEmail}/emojis`, 'your personal library');
+});
+document.getElementById('ss-browse-emojigg-btn')?.addEventListener('click', () => {
+    if (!currentServerId) return;
+    openEmojiGGModal(`servers/${currentServerId}/emojis`, 'this server\'s library');
+});
+document.getElementById('emojigg-modal-close')?.addEventListener('click', () => {
+    document.getElementById('emojigg-modal').style.display = 'none';
+});
+document.getElementById('emojigg-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'emojigg-modal') e.target.style.display = 'none';
+});
+document.getElementById('emojigg-modal-search')?.addEventListener('input', debounce(applyEmojiGGModalFilter, 200));
+document.getElementById('emojigg-modal-loadmore')?.addEventListener('click', renderEmojiGGModalPage);
+
+
     const tabsContainer = document.getElementById('emoji-picker-tabs');
     const contentContainer = document.getElementById('emoji-picker-content');
     const searchInput = document.getElementById('emoji-search');
@@ -4348,6 +4525,18 @@ function buildEmojiPicker() {
         tab.onclick = () => { document.querySelectorAll('#emoji-picker-tabs .ep-tab').forEach(t => t.classList.remove('active')); tab.classList.add('active'); showEmojiSection(catEmoji); };
         tabsContainer.appendChild(tab);
     });
+
+    // 🌐 Emoji.gg tab — only shown if the person opted into preloading it
+    // (Advanced settings). Lets them browse/use the whole library straight
+    // from the picker without it permanently bloating their personal library.
+    if (userPreloadEmojiGG) {
+        const eggTab = document.createElement('div');
+        eggTab.className = 'ep-tab';
+        eggTab.innerText = '🌐';
+        eggTab.title = 'Emoji.gg Library';
+        eggTab.onclick = () => { document.querySelectorAll('#emoji-picker-tabs .ep-tab').forEach(t => t.classList.remove('active')); eggTab.classList.add('active'); showEmojiSection('emojigg'); };
+        tabsContainer.appendChild(eggTab);
+    }
 
     searchInput.value = '';
     searchInput.oninput = () => {
@@ -4401,7 +4590,7 @@ function makeEpEmoji(char, isCustom, customUrl, name) {
         // like [:scubbacat:scubbacat] instead of [:scubbacat:-OvqK...], and reactions
         // under the display-name key instead of the real id — neither of which
         // exists in globalEmojisCache, so both rendering paths broke.
-        if (isCustom) insertEmoji(char, name, true);
+        if (isCustom) insertEmoji(char, name, true, customUrl);
         else insertEmoji(char, char, false);
     });
 
@@ -4416,6 +4605,11 @@ function makeEpEmoji(char, isCustom, customUrl, name) {
 function showEmojiSection(catKey) {
     const contentContainer = document.getElementById('emoji-picker-content');
     contentContainer.innerHTML = '';
+
+    if (catKey === 'emojigg') {
+        renderEmojiGGPickerSection(contentContainer);
+        return;
+    }
 
     if (catKey === 'custom') {
         if (currentServerId) {
@@ -4461,7 +4655,78 @@ function showEmojiSection(catKey) {
     contentContainer.appendChild(grid);
 }
 
-function insertEmoji(idOrChar, name, isCustom) {
+// Renders the picker's 🌐 Emoji.gg tab: a small local search box + a
+// paginated grid (the full catalog is ~5000 entries, so everything renders in
+// pages of 60 instead of all at once, which would be rough on mobile).
+const EMOJIGG_PICKER_PAGE_SIZE = 60;
+function renderEmojiGGPickerSection(contentContainer) {
+    const label = document.createElement('div'); label.className = 'ep-section-label'; label.innerText = 'Emoji.gg Library';
+    const searchWrap = document.createElement('div');
+    searchWrap.style.cssText = 'padding: 0 10px 8px;';
+    const miniSearch = document.createElement('input');
+    miniSearch.type = 'text';
+    miniSearch.placeholder = 'Search Emoji.gg…';
+    miniSearch.className = 'fs-input';
+    miniSearch.style.cssText = 'margin: 0; font-size: 13px;';
+    searchWrap.appendChild(miniSearch);
+
+    const grid = document.createElement('div'); grid.className = 'ep-grid';
+    const loadMoreBtn = document.createElement('button');
+    loadMoreBtn.innerText = 'Load more';
+    loadMoreBtn.className = 'small-btn';
+    loadMoreBtn.style.cssText = 'margin: 8px auto 4px; display: block;';
+    loadMoreBtn.style.display = 'none';
+
+    contentContainer.appendChild(label);
+    contentContainer.appendChild(searchWrap);
+    contentContainer.appendChild(grid);
+    contentContainer.appendChild(loadMoreBtn);
+
+    let filtered = [];
+    let shown = 0;
+
+    function renderNextPage() {
+        const next = filtered.slice(shown, shown + EMOJIGG_PICKER_PAGE_SIZE);
+        next.forEach(e => grid.appendChild(makeEpEmoji(emojiGGKey(e), true, e.image, emojiGGSafeName(e.title))));
+        shown += next.length;
+        loadMoreBtn.style.display = shown < filtered.length ? 'block' : 'none';
+    }
+
+    function applyFilter() {
+        grid.innerHTML = '';
+        shown = 0;
+        const term = miniSearch.value.trim().toLowerCase();
+        filtered = term ? emojiGGLibraryCache.filter(e => e.title.toLowerCase().includes(term)) : emojiGGLibraryCache;
+        if (!filtered.length) {
+            grid.innerHTML = `<div style="padding:16px; color:var(--text-muted); font-size:13px;">No matches for "${term}".</div>`;
+            loadMoreBtn.style.display = 'none';
+            return;
+        }
+        renderNextPage();
+    }
+
+    loadMoreBtn.onclick = renderNextPage;
+    miniSearch.oninput = debounce(applyFilter, 200);
+
+    grid.innerHTML = '<div style="padding:20px; color:var(--text-muted); font-size:13px;">Loading Emoji.gg library…</div>';
+    fetchEmojiGGLibrary().then(() => {
+        if (!emojiGGLibraryCache || !emojiGGLibraryCache.length) {
+            grid.innerHTML = '<div style="padding:20px; color:var(--text-muted); font-size:13px;">Couldn\'t reach Emoji.gg right now — try again in a bit.</div>';
+            return;
+        }
+        applyFilter();
+    });
+}
+
+function insertEmoji(idOrChar, name, isCustom, ggUrl) {
+    // KEY: virtual emoji.gg picker entries (id like "egg_1234") are never written
+    // to the shared `emojis/` node until actually used — this lazily promotes one
+    // the moment it's sent/reacted with, so the shortcode/reaction key resolves
+    // for every viewer, not just people who have it cached locally.
+    if (isCustom && ggUrl && typeof idOrChar === 'string' && idOrChar.startsWith('egg_') && !globalEmojisCache[idOrChar]) {
+        globalEmojisCache[idOrChar] = { name, url: ggUrl, source: 'emojigg' }; // optimistic, avoids re-writing on rapid re-use
+        set(ref(db, `emojis/${idOrChar}`), { name, url: ggUrl, source: 'emojigg' }).catch(err => console.error('Failed to promote Emoji.gg emoji:', err));
+    }
     if (currentReactionMsgId) {
         const dbPath = `${chatType === 'server' ? 'messages' : 'dms'}/${currentChatId}/${currentReactionMsgId}/reactions/${idOrChar}/users/${currentUserSafeEmail}`;
         set(ref(db, dbPath), true);
