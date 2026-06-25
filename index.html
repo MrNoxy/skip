@@ -385,7 +385,12 @@
                 <strong id="emojigg-target-label" style="color: var(--text-main);">your personal library</strong>.
                 Data provided by <a href="https://emoji.gg" target="_blank" rel="noopener" style="color: var(--accent-primary);">emoji.gg</a>.
             </p>
-            <input type="text" id="emojigg-modal-search" class="fs-input" placeholder="Search by name…" style="margin-bottom: 10px;">
+            <div style="display:flex; gap:8px; margin-bottom: 10px; flex-wrap: wrap;">
+                <input type="text" id="emojigg-modal-search" class="fs-input" placeholder="Search by name…" style="margin:0; flex:1; min-width: 140px;">
+                <select id="emojigg-modal-category" class="fs-input" style="margin:0; width: 130px; flex-shrink:0;">
+                    <option value="">All categories</option>
+                </select>
+            </div>
             <div id="emojigg-modal-grid" class="emojigg-grid"></div>
             <button id="emojigg-modal-loadmore" class="small-btn" style="display:none; margin: 10px auto 0; display:block;">Load more</button>
         </div>
@@ -731,6 +736,13 @@
                         <input type="text" id="ss-emoji-name" placeholder="Emoji Name (no spaces)" class="fs-input" style="flex:1; margin:0; min-width:150px;">
                         <button id="ss-upload-emoji-btn" style="margin:0;">Upload</button>
                     </div>
+                    <label class="toggle-row" style="margin-bottom: 16px;">
+                        <div>
+                            <strong style="color: var(--text-bright);">Disable Emoji.gg Browsing</strong>
+                            <span style="color: var(--text-muted); font-size: 12px; display:block;">Stops anyone (including other managers) from adding Emoji.gg emojis to this server's library.</span>
+                        </div>
+                        <input type="checkbox" id="ss-disable-emojigg-toggle">
+                    </label>
                     <button id="ss-browse-emojigg-btn" style="background: var(--bg-tertiary); margin-bottom: 20px;">🌐 Browse Emoji.gg Library</button>
                     <h3 style="color: var(--text-bright); border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">Server Emojis</h3>
                     <div id="ss-emojis-list" style="display: flex; flex-direction: column; gap: 5px;"></div>

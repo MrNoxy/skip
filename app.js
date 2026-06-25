@@ -52,6 +52,7 @@ let unsubscribeStickers = null;
 let unsubscribeStickersChanged = null;
 let unsubscribeStickersRemoved = null;
 let userPreloadEmojiGG = false;
+let currentServerDisableEmojiGG = false;
 let emojiGGLibraryCache = null; // null = not fetched yet; [] = fetched but empty/failed
 let emojiGGFetchPromise = null;
 let unsubscribeMembers = null;
@@ -1886,6 +1887,11 @@ document.getElementById('menu-server-settings')?.addEventListener('click', async
         if (currentChannelsData[cId].type === 'text') { joinSel.innerHTML += `<option value="${cId}"># ${currentChannelsData[cId].name}</option>`; leaveSel.innerHTML += `<option value="${cId}"># ${currentChannelsData[cId].name}</option>`; }
     });
     if (sData.engagement) { if (sData.engagement.joinChannel) joinSel.value = sData.engagement.joinChannel; if (sData.engagement.leaveChannel) leaveSel.value = sData.engagement.leaveChannel; }
+    currentServerDisableEmojiGG = !!sData.disableEmojiGG;
+    const eggToggle = document.getElementById('ss-disable-emojigg-toggle');
+    if (eggToggle) eggToggle.checked = currentServerDisableEmojiGG;
+    const eggBrowseBtn = document.getElementById('ss-browse-emojigg-btn');
+    if (eggBrowseBtn) eggBrowseBtn.style.display = currentServerDisableEmojiGG ? 'none' : 'block';
     document.getElementById('server-settings-modal').style.display = 'flex';
     document.querySelector('#server-settings-modal .fs-modal-layout').classList.remove('mobile-viewing-content');
     const firstTab = document.querySelector('#server-settings-modal .fs-tab[style*="block"]') || document.querySelector('#server-settings-modal .fs-tab');
@@ -4341,10 +4347,27 @@ function fetchEmojiGGLibrary() {
     if (emojiGGFetchPromise) return emojiGGFetchPromise;
     emojiGGFetchPromise = fetch(EMOJIGG_API_URL)
         .then(r => { if (!r.ok) throw new Error('Bad response'); return r.json(); })
-        .then(data => { emojiGGLibraryCache = Array.isArray(data) ? data : []; return emojiGGLibraryCache; })
+        .then(data => {
+            const list = Array.isArray(data) ? data : [];
+            emojiGGLibraryCache = list.filter(e => !EMOJIGG_EXCLUDED_CATEGORIES.has(e.category));
+            return emojiGGLibraryCache;
+        })
         .catch(err => { console.error('Failed to load Emoji.gg library:', err); emojiGGLibraryCache = []; return emojiGGLibraryCache; })
         .finally(() => { emojiGGFetchPromise = null; });
     return emojiGGFetchPromise;
+}
+
+// Fetches & caches the category id->name map. Category 9 is emoji.gg's NSFW
+// bucket — excluded everywhere (dropdown + results) since this is a general
+// chat app, not just from the dropdown list.
+const EMOJIGG_EXCLUDED_CATEGORIES = new Set([9]);
+let emojiGGCategoriesCache = null;
+function fetchEmojiGGCategories() {
+    if (emojiGGCategoriesCache) return Promise.resolve(emojiGGCategoriesCache);
+    return fetch(`${EMOJIGG_API_URL}?request=categories`)
+        .then(r => r.json())
+        .then(data => { emojiGGCategoriesCache = data || {}; return emojiGGCategoriesCache; })
+        .catch(err => { console.error('Failed to load Emoji.gg categories:', err); emojiGGCategoriesCache = {}; return emojiGGCategoriesCache; });
 }
 
 // Every emoji.gg-sourced emoji gets a deterministic key (rather than a random
@@ -4384,6 +4407,7 @@ function openEmojiGGModal(ownerPath, targetLabel) {
     document.getElementById('emojigg-target-label').innerText = targetLabel;
     document.getElementById('emojigg-modal').style.display = 'flex';
     document.getElementById('emojigg-modal-search').value = '';
+    document.getElementById('emojigg-modal-category').value = '';
 
     const grid = document.getElementById('emojigg-modal-grid');
     grid.innerHTML = '<div style="padding:24px; text-align:center; color:var(--text-muted); font-size:13px; grid-column: 1/-1;">Loading Emoji.gg library…</div>';
@@ -4391,14 +4415,30 @@ function openEmojiGGModal(ownerPath, targetLabel) {
 
     get(ref(db, ownerPath)).then(snap => {
         emojiggModalOwnedSnapshot = snap.val() || {};
-        return fetchEmojiGGLibrary();
+        return Promise.all([fetchEmojiGGLibrary(), fetchEmojiGGCategories()]);
     }).then(() => {
         if (!emojiGGLibraryCache || !emojiGGLibraryCache.length) {
             grid.innerHTML = '<div style="padding:24px; text-align:center; color:var(--text-muted); font-size:13px; grid-column: 1/-1;">Couldn\'t reach Emoji.gg right now — try again in a bit.</div>';
             return;
         }
+        populateEmojiGGCategoryDropdown();
         applyEmojiGGModalFilter();
     });
+}
+
+function populateEmojiGGCategoryDropdown() {
+    const select = document.getElementById('emojigg-modal-category');
+    if (!select || select.dataset.populated) return;
+    Object.keys(emojiGGCategoriesCache || {})
+        .filter(id => !EMOJIGG_EXCLUDED_CATEGORIES.has(parseInt(id, 10)))
+        .sort((a, b) => emojiGGCategoriesCache[a].localeCompare(emojiGGCategoriesCache[b]))
+        .forEach(id => {
+            const opt = document.createElement('option');
+            opt.value = id;
+            opt.innerText = emojiGGCategoriesCache[id];
+            select.appendChild(opt);
+        });
+    select.dataset.populated = 'true';
 }
 
 function applyEmojiGGModalFilter() {
@@ -4406,9 +4446,14 @@ function applyEmojiGGModalFilter() {
     grid.innerHTML = '';
     emojiggModalShown = 0;
     const term = document.getElementById('emojigg-modal-search').value.trim().toLowerCase();
-    emojiggModalFiltered = term ? emojiGGLibraryCache.filter(e => e.title.toLowerCase().includes(term)) : emojiGGLibraryCache;
+    const categoryId = document.getElementById('emojigg-modal-category').value;
+    emojiggModalFiltered = emojiGGLibraryCache.filter(e => {
+        if (categoryId && String(e.category) !== categoryId) return false;
+        if (term && !e.title.toLowerCase().includes(term)) return false;
+        return true;
+    });
     if (!emojiggModalFiltered.length) {
-        grid.innerHTML = `<div style="padding:24px; text-align:center; color:var(--text-muted); font-size:13px; grid-column: 1/-1;">No matches for "${term}".</div>`;
+        grid.innerHTML = `<div style="padding:24px; text-align:center; color:var(--text-muted); font-size:13px; grid-column: 1/-1;">No matches${term ? ` for "${term}"` : ''}.</div>`;
         document.getElementById('emojigg-modal-loadmore').style.display = 'none';
         return;
     }
@@ -4470,11 +4515,24 @@ function makeEmojiGGModalCell(e) {
     return cell;
 }
 
+document.getElementById('ss-disable-emojigg-toggle')?.addEventListener('change', (e) => {
+    if (!currentServerId) return;
+    currentServerDisableEmojiGG = e.target.checked;
+    set(ref(db, `servers/${currentServerId}/disableEmojiGG`), e.target.checked).catch(err => {
+        console.error('Failed to save Emoji.gg server setting:', err);
+        showToast('Could not save that setting — try again.', 'error');
+    });
+    const eggBrowseBtn = document.getElementById('ss-browse-emojigg-btn');
+    if (eggBrowseBtn) eggBrowseBtn.style.display = e.target.checked ? 'none' : 'block';
+    showToast(e.target.checked ? 'Emoji.gg browsing disabled for this server.' : 'Emoji.gg browsing re-enabled for this server.', 'success');
+});
+
 document.getElementById('us-browse-emojigg-btn')?.addEventListener('click', () => {
     openEmojiGGModal(`users/${currentUserSafeEmail}/emojis`, 'your personal library');
 });
 document.getElementById('ss-browse-emojigg-btn')?.addEventListener('click', () => {
     if (!currentServerId) return;
+    if (currentServerDisableEmojiGG) { showToast('Emoji.gg browsing is disabled for this server.', 'error'); return; }
     openEmojiGGModal(`servers/${currentServerId}/emojis`, 'this server\'s library');
 });
 document.getElementById('emojigg-modal-close')?.addEventListener('click', () => {
@@ -4484,9 +4542,9 @@ document.getElementById('emojigg-modal')?.addEventListener('click', (e) => {
     if (e.target.id === 'emojigg-modal') e.target.style.display = 'none';
 });
 document.getElementById('emojigg-modal-search')?.addEventListener('input', debounce(applyEmojiGGModalFilter, 200));
+document.getElementById('emojigg-modal-category')?.addEventListener('change', applyEmojiGGModalFilter);
 document.getElementById('emojigg-modal-loadmore')?.addEventListener('click', renderEmojiGGModalPage);
 
-function buildEmojiPicker() {
 
     const tabsContainer = document.getElementById('emoji-picker-tabs');
     const contentContainer = document.getElementById('emoji-picker-content');
@@ -4628,16 +4686,27 @@ function showEmojiSection(catKey) {
             });
         }
         get(ref(db, `users/${currentUserSafeEmail}/emojis`)).then(snap => {
+            const label = document.createElement('div'); label.className = 'ep-section-label'; label.innerText = 'Personal Emojis';
+            const grid = document.createElement('div'); grid.className = 'ep-grid';
             if (snap.exists()) {
-                const label = document.createElement('div'); label.className = 'ep-section-label'; label.innerText = 'Personal Emojis';
-                const grid = document.createElement('div'); grid.className = 'ep-grid';
                 Object.keys(snap.val()).forEach(eid => {
                     const edata = globalEmojisCache[eid];
                     if (edata) grid.appendChild(makeEpEmoji(eid, true, edata.url, edata.name));
                 });
-                contentContainer.appendChild(label);
-                contentContainer.appendChild(grid);
             }
+            // Quick shortcut straight to the Emoji.gg browser — always present,
+            // even with zero personal emojis yet, so it's easy to discover.
+            const shortcut = document.createElement('div');
+            shortcut.className = 'ep-emoji ep-emojigg-shortcut';
+            shortcut.title = 'Browse Emoji.gg';
+            shortcut.innerText = '+';
+            shortcut.onclick = () => {
+                emojiPickerEl.style.display = 'none';
+                openEmojiGGModal(`users/${currentUserSafeEmail}/emojis`, 'your personal library');
+            };
+            grid.appendChild(shortcut);
+            contentContainer.appendChild(label);
+            contentContainer.appendChild(grid);
         });
 
         const favLabel = document.createElement('div'); favLabel.className = 'ep-section-label'; favLabel.innerText = 'Frequently Used';
