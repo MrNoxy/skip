@@ -211,7 +211,7 @@ input, textarea {
     /* FIX: Absolute lockdown on transforms */
     transform: none !important; 
 }
-.server-icon.active { border-radius: var(--radius-lg); background-color: var(--accent-primary); color: white; transform: none !important; }
+.server-icon.active { border-radius: var(--radius-lg); background-color: #2d2331; color: white; transform: none !important; }
 .server-icon.drag-over { border: 2px dashed var(--accent-primary); opacity: 0.5; transform: none !important; }
 
 /* === CHANNEL SIDEBAR === */
