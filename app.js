@@ -960,7 +960,7 @@ document.getElementById('us-preload-emojigg-toggle')?.addEventListener('change',
         console.error('Failed to save preload setting:', err);
         showToast('Could not save that setting — try again.', 'error');
     });
-    showToast(e.target.checked ? 'Emoji.gg library will appear in your picker 🌐' : 'Emoji.gg picker tab removed.', 'success');
+    showToast(e.target.checked ? 'Emoji.gg library will appear in your picker.' : 'Emoji.gg picker tab removed.', 'success');
 });
 
 document.getElementById('us-upload-emoji-btn')?.addEventListener('click', async () => {
@@ -4339,6 +4339,21 @@ window.addEventListener('resize', debounce(() => {
 // doesn't replicate their catalog as a competing list.
 const EMOJIGG_API_URL = 'https://emoji.gg/api';
 
+// A small smiley-with-a-"+"-badge icon used everywhere Emoji.gg is referenced
+// in the UI (picker tab, modal header, settings buttons) instead of the plain
+// 🌐 emoji. Uses currentColor so it inherits whatever it's placed inside
+// (tab text color, button text color, etc.) automatically.
+const EMOJIGG_ICON_SVG = `<svg viewBox="0 0 24 24" width="1em" height="1em" style="vertical-align:-0.18em;" fill="none" xmlns="http://www.w3.org/2000/svg">
+<circle cx="10.5" cy="12.5" r="8" fill="currentColor" opacity="0.14"/>
+<circle cx="10.5" cy="12.5" r="8" stroke="currentColor" stroke-width="1.6"/>
+<circle cx="7.6" cy="10.6" r="1.15" fill="currentColor"/>
+<circle cx="13.4" cy="10.6" r="1.15" fill="currentColor"/>
+<path d="M7 14.2c1 1.3 2.3 2 3.5 2s2.5-.7 3.5-2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/>
+<circle cx="18.5" cy="5.8" r="3.4" fill="var(--bg-secondary, #1e1f22)"/>
+<circle cx="18.5" cy="5.8" r="3.4" stroke="currentColor" stroke-width="1.3" fill="none"/>
+<path d="M18.5 4.1v3.4M16.8 5.8h3.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+</svg>`;
+
 // Fetches (once per page load) the full ~5000-entry emoji.gg catalog and
 // caches it in memory. Safe to call repeatedly — concurrent callers share the
 // same in-flight request.
@@ -4543,16 +4558,53 @@ document.getElementById('emojigg-modal')?.addEventListener('click', (e) => {
 });
 document.getElementById('emojigg-modal-search')?.addEventListener('input', debounce(applyEmojiGGModalFilter, 200));
 document.getElementById('emojigg-modal-category')?.addEventListener('change', applyEmojiGGModalFilter);
-document.getElementById('emojigg-modal-loadmore')?.addEventListener('click', renderEmojiGGModalPage);
+document.getElementById('emojigg-modal-grid')?.addEventListener('scroll', (e) => {
+    const grid = e.target;
+    if (grid.scrollTop + grid.clientHeight >= grid.scrollHeight - 200) {
+        if (emojiggModalShown < emojiggModalFiltered.length) renderEmojiGGModalPage();
+    }
+});
+
+
+// Shows/hides the tab-bar scroll arrows based on whether there's actually
+// more to scroll to in each direction. Called once after every picker
+// rebuild, and kept in sync live via the scroll/resize listeners below.
+function updateEpTabsArrows() {
+    const tabsContainer = document.getElementById('emoji-picker-tabs');
+    const leftArrow = document.getElementById('ep-tabs-arrow-left');
+    const rightArrow = document.getElementById('ep-tabs-arrow-right');
+    if (!tabsContainer || !leftArrow || !rightArrow) return;
+    const hasOverflow = tabsContainer.scrollWidth > tabsContainer.clientWidth + 2;
+    leftArrow.style.display = hasOverflow && tabsContainer.scrollLeft > 4 ? 'flex' : 'none';
+    rightArrow.style.display = hasOverflow && tabsContainer.scrollLeft < tabsContainer.scrollWidth - tabsContainer.clientWidth - 4 ? 'flex' : 'none';
+}
+(() => {
+    const tabsContainer = document.getElementById('emoji-picker-tabs');
+    const leftArrow = document.getElementById('ep-tabs-arrow-left');
+    const rightArrow = document.getElementById('ep-tabs-arrow-right');
+    if (!tabsContainer || !leftArrow || !rightArrow) return;
+    tabsContainer.addEventListener('scroll', updateEpTabsArrows);
+    window.addEventListener('resize', debounce(updateEpTabsArrows, 100));
+    leftArrow.addEventListener('click', () => tabsContainer.scrollBy({ left: -110, behavior: 'smooth' }));
+    rightArrow.addEventListener('click', () => tabsContainer.scrollBy({ left: 110, behavior: 'smooth' }));
+})();
 
 function buildEmojiPicker() {
-
     const tabsContainer = document.getElementById('emoji-picker-tabs');
     const contentContainer = document.getElementById('emoji-picker-content');
     const searchInput = document.getElementById('emoji-search');
 
     tabsContainer.innerHTML = '';
     const catNames = Object.keys(emojiCategories);
+    let activeEmojiTab = 'custom';
+
+    function selectTab(tabEl, key) {
+        document.querySelectorAll('#emoji-picker-tabs .ep-tab').forEach(t => t.classList.remove('active'));
+        tabEl.classList.add('active');
+        activeEmojiTab = key;
+        searchInput.value = '';
+        showEmojiSection(key);
+    }
 
     // GIF tab
     const gifTab = document.createElement('div');
@@ -4569,12 +4621,25 @@ function buildEmojiPicker() {
     };
     tabsContainer.appendChild(gifTab);
 
+    // 🌐(icon) Emoji.gg tab — 2nd position, right after GIF. Only shown if the
+    // person opted into preloading it (Advanced settings). Lets them browse/use
+    // the whole library straight from the picker without it permanently
+    // bloating their personal library.
+    if (userPreloadEmojiGG) {
+        const eggTab = document.createElement('div');
+        eggTab.className = 'ep-tab';
+        eggTab.innerHTML = EMOJIGG_ICON_SVG;
+        eggTab.title = 'Emoji.gg Library';
+        eggTab.onclick = () => selectTab(eggTab, 'emojigg');
+        tabsContainer.appendChild(eggTab);
+    }
+
     // ⭐ Custom tab
     const customTab = document.createElement('div');
     customTab.className = 'ep-tab active';
     customTab.innerText = '⭐';
     customTab.title = 'Custom & Favorites';
-    customTab.onclick = () => { document.querySelectorAll('#emoji-picker-tabs .ep-tab').forEach(t => t.classList.remove('active')); customTab.classList.add('active'); showEmojiSection('custom'); };
+    customTab.onclick = () => selectTab(customTab, 'custom');
     tabsContainer.appendChild(customTab);
 
     catNames.forEach((catEmoji) => {
@@ -4582,33 +4647,36 @@ function buildEmojiPicker() {
         tab.className = 'ep-tab';
         tab.innerText = catEmoji;
         tab.title = catEmoji;
-        tab.onclick = () => { document.querySelectorAll('#emoji-picker-tabs .ep-tab').forEach(t => t.classList.remove('active')); tab.classList.add('active'); showEmojiSection(catEmoji); };
+        tab.onclick = () => selectTab(tab, catEmoji);
         tabsContainer.appendChild(tab);
     });
 
-    // 🌐 Emoji.gg tab — only shown if the person opted into preloading it
-    // (Advanced settings). Lets them browse/use the whole library straight
-    // from the picker without it permanently bloating their personal library.
-    if (userPreloadEmojiGG) {
-        const eggTab = document.createElement('div');
-        eggTab.className = 'ep-tab';
-        eggTab.innerText = '🌐';
-        eggTab.title = 'Emoji.gg Library';
-        eggTab.onclick = () => { document.querySelectorAll('#emoji-picker-tabs .ep-tab').forEach(t => t.classList.remove('active')); eggTab.classList.add('active'); showEmojiSection('emojigg'); };
-        tabsContainer.appendChild(eggTab);
-    }
+    updateEpTabsArrows();
 
     searchInput.value = '';
     searchInput.oninput = () => {
-        const term = searchInput.value.toLowerCase();
-        if (!term) { showEmojiSection('custom'); return; }
+        const term = searchInput.value.trim().toLowerCase();
+        if (activeEmojiTab === 'emojigg') {
+            filterEmojiGGPicker(term);
+            return;
+        }
+        if (!term) { showEmojiSection(activeEmojiTab); return; }
+        // KEY FIX: this used to ignore `term` entirely and just dump every
+        // built-in emoji into the results regardless of what was typed — which
+        // is why search looked like it "did nothing." Built-in unicode emojis
+        // have no associated names in our data, so they genuinely can't be
+        // keyword-matched (no dictionary to match against) — but custom emojis
+        // (personal + server + Emoji.gg ones already added) do have real names,
+        // so search now actually filters those correctly instead of pretending to.
         contentContainer.innerHTML = '';
         const label = document.createElement('div'); label.className = 'ep-section-label'; label.innerText = 'Search Results';
         const grid = document.createElement('div'); grid.className = 'ep-grid';
-        const seen = new Set();
-        Object.values(emojiCategories).flat().forEach(e => {
-            if (!seen.has(e)) { seen.add(e); grid.appendChild(makeEpEmoji(e, false, null)); }
-        });
+        const matches = Object.entries(globalEmojisCache).filter(([id, data]) => data && data.name && data.name.toLowerCase().includes(term));
+        if (!matches.length) {
+            grid.innerHTML = `<div style="padding:16px; color:var(--text-muted); font-size:13px;">No custom emojis match "${term}". (Built-in emojis can't be searched by name yet.)</div>`;
+        } else {
+            matches.forEach(([id, data]) => grid.appendChild(makeEpEmoji(id, true, data.url, data.name)));
+        }
         contentContainer.appendChild(label);
         contentContainer.appendChild(grid);
     };
@@ -4665,6 +4733,13 @@ function makeEpEmoji(char, isCustom, customUrl, name) {
 function showEmojiSection(catKey) {
     const contentContainer = document.getElementById('emoji-picker-content');
     contentContainer.innerHTML = '';
+
+    // Always tear down the emoji.gg infinite-scroll listener first — it's
+    // attached directly to this persistent container (innerHTML='' above only
+    // clears children, not listeners on the container itself), so leaving the
+    // tab without this would leave it silently firing forever.
+    if (epEmojiGGScrollHandler) { contentContainer.removeEventListener('scroll', epEmojiGGScrollHandler); epEmojiGGScrollHandler = null; }
+    if (catKey !== 'emojigg') epEmojiGGState = null;
 
     if (catKey === 'emojigg') {
         renderEmojiGGPickerSection(contentContainer);
@@ -4726,58 +4801,60 @@ function showEmojiSection(catKey) {
     contentContainer.appendChild(grid);
 }
 
-// Renders the picker's 🌐 Emoji.gg tab: a small local search box + a
+// Renders the picker's Emoji.gg tab: an infinite-scroll, searchable grid
 // paginated grid (the full catalog is ~5000 entries, so everything renders in
-// pages of 60 instead of all at once, which would be rough on mobile).
-const EMOJIGG_PICKER_PAGE_SIZE = 60;
+// pages instead of all at once, which would be rough on mobile). Search comes
+// from the picker's main search bar (see buildEmojiPicker) rather than its own
+// box, and more pages load automatically as you scroll near the bottom.
+const EMOJIGG_PICKER_PAGE_SIZE = 90;
+let epEmojiGGState = null; // { filtered, shown } for the currently-rendered picker grid
+let epEmojiGGScrollHandler = null;
+
 function renderEmojiGGPickerSection(contentContainer) {
     const label = document.createElement('div'); label.className = 'ep-section-label'; label.innerText = 'Emoji.gg Library';
-    const searchWrap = document.createElement('div');
-    searchWrap.style.cssText = 'padding: 0 10px 8px;';
-    const miniSearch = document.createElement('input');
-    miniSearch.type = 'text';
-    miniSearch.placeholder = 'Search Emoji.gg…';
-    miniSearch.className = 'fs-input';
-    miniSearch.style.cssText = 'margin: 0; font-size: 13px;';
-    searchWrap.appendChild(miniSearch);
-
     const grid = document.createElement('div'); grid.className = 'ep-grid';
-    const loadMoreBtn = document.createElement('button');
-    loadMoreBtn.innerText = 'Load more';
-    loadMoreBtn.className = 'small-btn';
-    loadMoreBtn.style.cssText = 'margin: 8px auto 4px; display: block;';
-    loadMoreBtn.style.display = 'none';
+    const loadingMore = document.createElement('div');
+    loadingMore.className = 'ep-emojigg-loading-more';
+    loadingMore.innerText = 'Loading more…';
+    loadingMore.style.display = 'none';
 
     contentContainer.appendChild(label);
-    contentContainer.appendChild(searchWrap);
     contentContainer.appendChild(grid);
-    contentContainer.appendChild(loadMoreBtn);
+    contentContainer.appendChild(loadingMore);
 
-    let filtered = [];
-    let shown = 0;
+    epEmojiGGState = { filtered: [], shown: 0 };
 
     function renderNextPage() {
-        const next = filtered.slice(shown, shown + EMOJIGG_PICKER_PAGE_SIZE);
+        const st = epEmojiGGState;
+        const next = st.filtered.slice(st.shown, st.shown + EMOJIGG_PICKER_PAGE_SIZE);
         next.forEach(e => grid.appendChild(makeEpEmoji(emojiGGKey(e), true, e.image, emojiGGSafeName(e.title))));
-        shown += next.length;
-        loadMoreBtn.style.display = shown < filtered.length ? 'block' : 'none';
+        st.shown += next.length;
+        loadingMore.style.display = st.shown < st.filtered.length ? 'block' : 'none';
     }
+    epEmojiGGState.renderNextPage = renderNextPage;
 
-    function applyFilter() {
+    function applyFilter(term) {
         grid.innerHTML = '';
-        shown = 0;
-        const term = miniSearch.value.trim().toLowerCase();
-        filtered = term ? emojiGGLibraryCache.filter(e => e.title.toLowerCase().includes(term)) : emojiGGLibraryCache;
-        if (!filtered.length) {
-            grid.innerHTML = `<div style="padding:16px; color:var(--text-muted); font-size:13px;">No matches for "${term}".</div>`;
-            loadMoreBtn.style.display = 'none';
+        epEmojiGGState.shown = 0;
+        epEmojiGGState.filtered = term ? emojiGGLibraryCache.filter(e => e.title.toLowerCase().includes(term)) : emojiGGLibraryCache;
+        if (!epEmojiGGState.filtered.length) {
+            grid.innerHTML = `<div style="padding:16px; color:var(--text-muted); font-size:13px;">No matches${term ? ` for "${term}"` : ''}.</div>`;
+            loadingMore.style.display = 'none';
             return;
         }
         renderNextPage();
     }
+    epEmojiGGState.applyFilter = applyFilter;
 
-    loadMoreBtn.onclick = renderNextPage;
-    miniSearch.oninput = debounce(applyFilter, 200);
+    // Infinite scroll: #emoji-picker-content is the actual scrolling element
+    if (epEmojiGGScrollHandler) contentContainer.removeEventListener('scroll', epEmojiGGScrollHandler);
+    epEmojiGGScrollHandler = () => {
+        if (!epEmojiGGState) return;
+        if (contentContainer.scrollTop + contentContainer.clientHeight >= contentContainer.scrollHeight - 200) {
+            if (epEmojiGGState.shown < epEmojiGGState.filtered.length) renderNextPage();
+        }
+    };
+    contentContainer.addEventListener('scroll', epEmojiGGScrollHandler);
 
     grid.innerHTML = '<div style="padding:20px; color:var(--text-muted); font-size:13px;">Loading Emoji.gg library…</div>';
     fetchEmojiGGLibrary().then(() => {
@@ -4785,8 +4862,13 @@ function renderEmojiGGPickerSection(contentContainer) {
             grid.innerHTML = '<div style="padding:20px; color:var(--text-muted); font-size:13px;">Couldn\'t reach Emoji.gg right now — try again in a bit.</div>';
             return;
         }
-        applyFilter();
+        applyFilter('');
     });
+}
+
+// Called by the picker's shared search bar whenever the Emoji.gg tab is active
+function filterEmojiGGPicker(term) {
+    if (epEmojiGGState && epEmojiGGState.applyFilter) epEmojiGGState.applyFilter(term);
 }
 
 function insertEmoji(idOrChar, name, isCustom, ggUrl) {

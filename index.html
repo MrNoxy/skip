@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Chat Em' | Chat</title>
+    <title>Skip | Chat</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
@@ -15,7 +15,7 @@
     <div id="auth-section">
         <div class="auth-logo">
             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-            <span>Chat Em'</span>
+            <span>Skip</span>
         </div>
         <h2>Welcome back</h2>
         <p class="auth-sub">Sign in to continue</p>
@@ -30,7 +30,7 @@
         <!-- Far Left: Server Sidebar -->
         <div id="server-sidebar">
             <div class="server-icon active" id="home-btn" title="Direct Messages">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M10 3H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1zm10 0h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1zM10 13H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1zm7 0a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/></svg>
             </div>
             <div class="server-list-separator"></div>
             <div id="server-list"></div>
@@ -170,7 +170,7 @@
                     </button>
                     <div id="home-header-news" style="display: flex; align-items: center; width: 100%;">
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--text-muted);"><path d="M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1m2 13a2 2 0 0 1-2-2V7m2 13a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/></svg>
-                        <span style="font-weight: 600; margin-left: 10px; font-size: 16px; color: var(--text-bright);">Chat Em' Changelog</span>
+                        <span style="font-weight: 600; margin-left: 10px; font-size: 16px; color: var(--text-bright);">Skip Changelog</span>
                     </div>
                     <div id="home-header-friends" style="display: flex; align-items: center; width: 100%;">
                         <svg width="22" height="22" viewBox="0 0 24 24" style="color: var(--text-muted);"><path fill="currentColor" d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-2.67 0-8 1.34-8 4v3h16v-3c0-2.66-5.33-4-8-4z"/></svg>
@@ -259,7 +259,11 @@
                     
                     <!-- Emoji Picker -->
                     <div id="emoji-picker" style="display: none;">
-                        <div id="emoji-picker-tabs"></div>
+                        <div id="emoji-picker-tabs-wrap">
+                            <button id="ep-tabs-arrow-left" class="ep-tabs-arrow" title="Scroll left" style="display:none;">‹</button>
+                            <div id="emoji-picker-tabs"></div>
+                            <button id="ep-tabs-arrow-right" class="ep-tabs-arrow" title="Scroll right" style="display:none;">›</button>
+                        </div>
                         <input type="text" id="emoji-search" placeholder="Search emojis..." autocomplete="off">
                         <div id="emoji-picker-content"></div>
                     </div>
@@ -377,7 +381,19 @@
     <div id="emojigg-modal" class="modal-overlay" style="display: none; z-index: 6500;">
         <div class="modal-content emojigg-modal-content">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                <h3 style="color: var(--text-bright); margin:0;">Browse Emoji.gg</h3>
+                <h3 style="color: var(--text-bright); margin:0; display:flex; align-items:center; gap:8px;">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="10.5" cy="12.5" r="8" fill="currentColor" opacity="0.14"/>
+                        <circle cx="10.5" cy="12.5" r="8" stroke="currentColor" stroke-width="1.6"/>
+                        <circle cx="7.6" cy="10.6" r="1.15" fill="currentColor"/>
+                        <circle cx="13.4" cy="10.6" r="1.15" fill="currentColor"/>
+                        <path d="M7 14.2c1 1.3 2.3 2 3.5 2s2.5-.7 3.5-2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/>
+                        <circle cx="18.5" cy="5.8" r="3.4" fill="var(--bg-secondary)"/>
+                        <circle cx="18.5" cy="5.8" r="3.4" stroke="currentColor" stroke-width="1.3" fill="none"/>
+                        <path d="M18.5 4.1v3.4M16.8 5.8h3.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                    </svg>
+                    Browse Emoji.gg
+                </h3>
                 <button id="emojigg-modal-close" class="fs-close-btn-mobile" title="Close" style="position:static;">✖</button>
             </div>
             <p style="color: var(--text-muted); font-size: 13px; margin: 4px 0 12px;">
@@ -392,7 +408,7 @@
                 </select>
             </div>
             <div id="emojigg-modal-grid" class="emojigg-grid"></div>
-            <button id="emojigg-modal-loadmore" class="small-btn" style="display:none; margin: 10px auto 0; display:block;">Load more</button>
+            <div id="emojigg-modal-loadmore" class="ep-emojigg-loading-more" style="display:none;">Loading more…</div>
         </div>
     </div>
 
@@ -457,7 +473,7 @@
                 <div>
                     <strong style="color: var(--text-bright);">Preload Emoji.gg Library</strong>
                     <span style="color: var(--text-muted); font-size: 12px; display:block; max-width: 420px;">
-                        Adds a 🌐 tab to your Emoji Picker with the full Emoji.gg library (thousands of emojis) ready
+                        Adds a <svg viewBox="0 0 24 24" width="13" height="13" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align:-2px;"><circle cx="10.5" cy="12.5" r="8" fill="currentColor" opacity="0.14"/><circle cx="10.5" cy="12.5" r="8" stroke="currentColor" stroke-width="1.6"/><circle cx="7.6" cy="10.6" r="1.15" fill="currentColor"/><circle cx="13.4" cy="10.6" r="1.15" fill="currentColor"/><path d="M7 14.2c1 1.3 2.3 2 3.5 2s2.5-.7 3.5-2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/><circle cx="18.5" cy="5.8" r="3.4" fill="var(--bg-secondary)"/><circle cx="18.5" cy="5.8" r="3.4" stroke="currentColor" stroke-width="1.3" fill="none"/><path d="M18.5 4.1v3.4M16.8 5.8h3.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg> tab to your Emoji Picker with the full Emoji.gg library (thousands of emojis) ready
                         to search, send, react with, or drag in as stickers — without permanently adding any of them
                         to your personal emoji list. Nothing downloads until you actually open that tab.
                     </span>
@@ -479,7 +495,7 @@
         
         <label class="fs-label">Select Badge</label>
         <select id="admin-badge-select" class="fs-input">
-            <option value="developer">Chat Em' Developer</option>
+            <option value="developer">Skip Developer</option>
             <option value="early">Early Supporter</option>
             <option value="bug_hunter">Bug Hunter</option>
         </select>
@@ -611,15 +627,42 @@
 
                 <!-- Emojis Tab -->
                 <div class="ss-pane" id="pane-us-emojis" style="display: none;">
-                    <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">Upload custom emojis that you can use in any server or DM!</p>
-                    <div style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center; flex-wrap:wrap;">
-                        <label class="file-btn-label" for="us-emoji-file" style="white-space:nowrap;">Choose Image</label>
-                        <input type="file" id="us-emoji-file" accept="image/*" style="display:none;">
-                        <input type="text" id="us-emoji-name" placeholder="Emoji name (no spaces)" class="fs-input" style="flex:1; margin:0; min-width:150px;">
-                        <button id="us-upload-emoji-btn" style="margin:0; white-space:nowrap;">Upload</button>
+                    <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 18px;">Upload custom emojis that you can use in any server or DM!</p>
+
+                    <div class="emoji-source-cards">
+                        <div class="emoji-source-card">
+                            <div class="emoji-source-card-title">📤 Upload your own</div>
+                            <div class="emoji-source-card-body">
+                                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                                    <label class="file-btn-label" for="us-emoji-file" style="white-space:nowrap; margin:0;">Choose Image</label>
+                                    <input type="file" id="us-emoji-file" accept="image/*" style="display:none;">
+                                    <input type="text" id="us-emoji-name" placeholder="Emoji name (no spaces)" class="fs-input" style="flex:1; margin:0; min-width:130px;">
+                                </div>
+                                <div id="us-emoji-filename" class="emoji-source-filename"></div>
+                                <button id="us-upload-emoji-btn" style="margin:auto 0 0; width:100%;">Upload</button>
+                            </div>
+                        </div>
+                        <div class="emoji-source-card">
+                            <div class="emoji-source-card-title">
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;">
+                                    <circle cx="10.5" cy="12.5" r="8" fill="currentColor" opacity="0.14"/>
+                                    <circle cx="10.5" cy="12.5" r="8" stroke="currentColor" stroke-width="1.6"/>
+                                    <circle cx="7.6" cy="10.6" r="1.15" fill="currentColor"/>
+                                    <circle cx="13.4" cy="10.6" r="1.15" fill="currentColor"/>
+                                    <path d="M7 14.2c1 1.3 2.3 2 3.5 2s2.5-.7 3.5-2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/>
+                                    <circle cx="18.5" cy="5.8" r="3.4" fill="var(--bg-tertiary)"/>
+                                    <circle cx="18.5" cy="5.8" r="3.4" stroke="currentColor" stroke-width="1.3" fill="none"/>
+                                    <path d="M18.5 4.1v3.4M16.8 5.8h3.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                                </svg>
+                                Browse Emoji.gg
+                            </div>
+                            <div class="emoji-source-card-body">
+                                <p style="color: var(--text-muted); font-size: 12px; margin: 0;">Search thousands of community emojis and add your favorites in one click.</p>
+                                <button id="us-browse-emojigg-btn" style="margin:auto 0 0; width:100%; background: var(--bg-secondary);">Browse Library</button>
+                            </div>
+                        </div>
                     </div>
-                    <div id="us-emoji-filename" style="font-size:12px; color:var(--text-muted); margin-bottom:10px;"></div>
-                    <button id="us-browse-emojigg-btn" style="background: var(--bg-tertiary); margin-bottom: 20px;">🌐 Browse Emoji.gg Library</button>
+
                     <h3 style="color: var(--text-bright); border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">Your Emojis</h3>
                     <div id="us-emojis-list" style="display: flex; flex-direction: column; gap: 5px;"></div>
                 </div>
@@ -676,7 +719,7 @@
                 </div>
 
                 <div class="ss-pane" id="pane-ss-engagement">
-                    <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">Let Chat Em' automatically post system messages when users join or leave this server.</p>
+                    <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">Let Skip automatically post system messages when users join or leave this server.</p>
                     <label style="color: var(--text-main); font-weight: bold; margin-bottom:10px; display:block;">System Messages Channel (Join)</label>
                     <select id="ss-join-channel" class="fs-input"></select>
                     <label style="color: var(--text-main); font-weight: bold; margin-bottom:10px; margin-top:20px; display:block;">System Messages Channel (Leave)</label>
@@ -729,21 +772,45 @@
                 </div>
 
                 <div class="ss-pane" id="pane-ss-emojis" style="display: none;">
-                    <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">Upload custom emojis that anyone in this server can use!</p>
-                    <div style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center; flex-wrap:wrap;">
-                        <label class="file-btn-label" for="ss-emoji-file">Choose Image</label>
-                        <input type="file" id="ss-emoji-file" accept="image/*" style="display:none;">
-                        <input type="text" id="ss-emoji-name" placeholder="Emoji Name (no spaces)" class="fs-input" style="flex:1; margin:0; min-width:150px;">
-                        <button id="ss-upload-emoji-btn" style="margin:0;">Upload</button>
-                    </div>
-                    <label class="toggle-row" style="margin-bottom: 16px;">
-                        <div>
-                            <strong style="color: var(--text-bright);">Disable Emoji.gg Browsing</strong>
-                            <span style="color: var(--text-muted); font-size: 12px; display:block;">Stops anyone (including other managers) from adding Emoji.gg emojis to this server's library.</span>
+                    <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 18px;">Upload custom emojis that anyone in this server can use!</p>
+
+                    <div class="emoji-source-cards">
+                        <div class="emoji-source-card">
+                            <div class="emoji-source-card-title">📤 Upload your own</div>
+                            <div class="emoji-source-card-body">
+                                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                                    <label class="file-btn-label" for="ss-emoji-file" style="margin:0;">Choose Image</label>
+                                    <input type="file" id="ss-emoji-file" accept="image/*" style="display:none;">
+                                    <input type="text" id="ss-emoji-name" placeholder="Emoji Name (no spaces)" class="fs-input" style="flex:1; margin:0; min-width:130px;">
+                                </div>
+                                <button id="ss-upload-emoji-btn" style="margin:auto 0 0; width:100%;">Upload</button>
+                            </div>
                         </div>
-                        <input type="checkbox" id="ss-disable-emojigg-toggle">
-                    </label>
-                    <button id="ss-browse-emojigg-btn" style="background: var(--bg-tertiary); margin-bottom: 20px;">🌐 Browse Emoji.gg Library</button>
+                        <div class="emoji-source-card">
+                            <div class="emoji-source-card-title">
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;">
+                                    <circle cx="10.5" cy="12.5" r="8" fill="currentColor" opacity="0.14"/>
+                                    <circle cx="10.5" cy="12.5" r="8" stroke="currentColor" stroke-width="1.6"/>
+                                    <circle cx="7.6" cy="10.6" r="1.15" fill="currentColor"/>
+                                    <circle cx="13.4" cy="10.6" r="1.15" fill="currentColor"/>
+                                    <path d="M7 14.2c1 1.3 2.3 2 3.5 2s2.5-.7 3.5-2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/>
+                                    <circle cx="18.5" cy="5.8" r="3.4" fill="var(--bg-tertiary)"/>
+                                    <circle cx="18.5" cy="5.8" r="3.4" stroke="currentColor" stroke-width="1.3" fill="none"/>
+                                    <path d="M18.5 4.1v3.4M16.8 5.8h3.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                                </svg>
+                                Browse Emoji.gg
+                            </div>
+                            <div class="emoji-source-card-body">
+                                <p style="color: var(--text-muted); font-size: 12px; margin: 0;">Search thousands of community emojis and add your favorites in one click.</p>
+                                <button id="ss-browse-emojigg-btn" style="margin:0; width:100%; background: var(--bg-secondary);">Browse Library</button>
+                                <label class="toggle-row" style="padding: 8px 0 0; border-top: 1px solid var(--border-color); border-bottom: none; margin-top: 4px;">
+                                    <span style="color: var(--text-muted); font-size: 12px;">Disable for this server</span>
+                                    <input type="checkbox" id="ss-disable-emojigg-toggle">
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
                     <h3 style="color: var(--text-bright); border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">Server Emojis</h3>
                     <div id="ss-emojis-list" style="display: flex; flex-direction: column; gap: 5px;"></div>
                 </div>
