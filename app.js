@@ -41,7 +41,8 @@ let currentServerMembersList = [];
 let currentDMOtherUser = null;
 let serverRolesCache = {};
 let globalUsersCache = {};
-let activeFriendsData = [];
+let activeFriendsData = []; // list of { email, since } from `friends/{me}`
+let activeDmsData = [];     // list of { email, dmId, hidden, lastActivity } from `dm_meta/{me}`
 let globalEmojisCache = {};
 let globalDecorationsCache = {};
 
@@ -85,6 +86,48 @@ const appBaseUrl = window.location.href.split('?')[0];
 
 function sanitizeEmail(e) { return e.replace(/\./g, ','); }
 function generateCode() { return Math.random().toString(36).substring(2, 10); }
+
+// ==========================================
+// --- FRIENDS / DMs DATA MODEL HELPERS ---
+// "friends" (mutual friendship truth-table) and "dm_meta" (per-user DM
+// sidebar visibility + ordering) are kept as two SEPARATE Firebase nodes
+// on purpose:
+//   - friends/{me}/{them}      -> true | (missing). Pure friendship state.
+//   - dm_meta/{me}/{them}      -> { dmId, hidden, lastActivity }. Controls
+//                                  what shows in MY dm sidebar list.
+// This means: unfriending someone never deletes the DM thread from view,
+// and DMing someone never silently makes you "friends".
+// Both nodes use a symmetric security rule: a user may write to their OWN
+// node, OR to the specific child of someone else's node that refers back
+// to themselves (see updated database rules).
+// ==========================================
+function getDmId(a, b) { return [a, b].sort().join('_'); }
+
+async function setFriendship(meSafe, otherSafe, isFriend) {
+    if (isFriend) {
+        await set(ref(db, `friends/${meSafe}/${otherSafe}`), true);
+        await set(ref(db, `friends/${otherSafe}/${meSafe}`), true);
+    } else {
+        await remove(ref(db, `friends/${meSafe}/${otherSafe}`));
+        await remove(ref(db, `friends/${otherSafe}/${meSafe}`));
+    }
+}
+
+// Creates/updates a DM thread as visible for BOTH people (used when a DM
+// is opened/started, or when a new message is sent into it).
+async function touchDmMeta(meSafe, otherSafe) {
+    const dmId = getDmId(meSafe, otherSafe);
+    const payload = { dmId, lastActivity: Date.now(), hidden: false };
+    await update(ref(db, `dm_meta/${meSafe}/${otherSafe}`), payload);
+    await update(ref(db, `dm_meta/${otherSafe}/${meSafe}`), payload);
+}
+
+// Hides a DM from MY OWN sidebar only ("Close DM"). Never touches the
+// other person's copy, so it never disappears for them.
+async function hideDmForMe(meSafe, otherSafe) {
+    const dmId = getDmId(meSafe, otherSafe);
+    await update(ref(db, `dm_meta/${meSafe}/${otherSafe}`), { dmId, hidden: true });
+}
 function formatBytes(bytes) {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
@@ -539,12 +582,12 @@ window.showGlobalUserProfile = async function (email, event) {
         }
 
         if (safeEmail !== currentUserSafeEmail) {
-            const friendSnap = await get(ref(db, `users/${currentUserSafeEmail}/friends/${safeEmail}`));
+            const friendSnap = await get(ref(db, `friends/${currentUserSafeEmail}/${safeEmail}`));
             sendMsgBtn.style.display = 'flex';
             sendMsgBtn.onclick = async () => {
                 modal.style.display = 'none';
-                const dmId = [currentUserSafeEmail, safeEmail].sort().join('_');
-                await update(ref(db, `users/${currentUserSafeEmail}/friends/${safeEmail}`), { dmId, hidden: false, lastActivity: Date.now() });
+                const dmId = getDmId(currentUserSafeEmail, safeEmail);
+                await touchDmMeta(currentUserSafeEmail, safeEmail);
                 if (!globalUsersCache[safeEmail]) globalUsersCache[safeEmail] = uData;
                 switchToHomeView(); openDM(dmId, safeEmail);
             };
@@ -553,7 +596,7 @@ window.showGlobalUserProfile = async function (email, event) {
                 addFriendBtn.onclick = async () => { await set(ref(db, `friend_requests/${safeEmail}/${currentUserSafeEmail}`), { username: myProfile.username, avatar: myProfile.avatar, timestamp: Date.now() }); showToast(`Friend request sent to ${uData.username}!`, 'success'); modal.style.display = 'none'; };
             } else {
                 removeFriendBtn.style.display = 'flex';
-                removeFriendBtn.onclick = () => { customConfirm(`Remove ${uData.username} from friends?`, "Remove Friend", async (yes) => { if (yes) { await remove(ref(db, `users/${currentUserSafeEmail}/friends/${safeEmail}`)); await remove(ref(db, `users/${safeEmail}/friends/${currentUserSafeEmail}`)); modal.style.display = 'none'; } }); };
+                removeFriendBtn.onclick = () => { customConfirm(`Remove ${uData.username} from friends?`, "Remove Friend", async (yes) => { if (yes) { await setFriendship(currentUserSafeEmail, safeEmail, false); modal.style.display = 'none'; } }); };
             }
         }
     }
@@ -668,10 +711,10 @@ document.addEventListener('click', (e) => {
 
     if (ctxDel && contextTarget) {
         if (contextTarget.type === 'dm') {
-            update(ref(db, `users/${currentUserSafeEmail}/friends/${contextTarget.id}`), { hidden: true });
+            hideDmForMe(currentUserSafeEmail, contextTarget.id);
         } else if (contextTarget.type === 'friend') {
             customConfirm("Remove this friend?", "Remove Friend", (yes) => {
-                if (yes) { remove(ref(db, `users/${currentUserSafeEmail}/friends/${contextTarget.id}`)); remove(ref(db, `users/${contextTarget.id}/friends/${currentUserSafeEmail}`)); }
+                if (yes) { setFriendship(currentUserSafeEmail, contextTarget.id, false); }
             });
         } else if (currentServerId) {
             customConfirm(`Delete this ${contextTarget.type}?`, "Confirm", (yes) => {
@@ -805,7 +848,7 @@ if (user.email === MY_ADMIN_EMAIL) {
             }
         });
 
-        initVoiceChat(); loadMyServers(); loadFriendsList(); startNotificationListeners(); listenForFriendRequests();
+        initVoiceChat(); loadMyServers(); loadFriendsData(); loadDmList(); startNotificationListeners(); listenForFriendRequests();
         document.getElementById('home-btn').click();
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('invite')) { await joinServerByCode(urlParams.get('invite')); window.history.replaceState({}, document.title, appBaseUrl); }
@@ -1385,16 +1428,24 @@ function renderHomeContent() {
         if (activeFriendsData.length === 0) { content.innerHTML = '<p style="color:var(--text-muted);margin-top:20px;">No friends yet. Add someone by their Username#Tag!</p>'; return; }
         const hdr = document.createElement('div');
         hdr.style.cssText = 'font-size:11px; font-weight:700; text-transform:uppercase; color:var(--text-muted); margin-bottom:12px; letter-spacing:0.05em;';
-        hdr.innerText = `All Friends — ${activeFriendsData.filter(f => !f.hidden).length}`;
+        hdr.innerText = `All Friends — ${activeFriendsData.length}`;
         content.appendChild(hdr);
-        activeFriendsData.filter(f => !f.hidden).forEach(fData => {
+        activeFriendsData.forEach(fData => {
             const fEmail = fData.email;
             const u = globalUsersCache[fEmail] || {};
             const div = document.createElement('div'); div.className = 'friend-card';
             
             div.innerHTML = `<div class="friend-card-left">${getAvatarHTML(u, 'avatar-small')}<div><div style="font-weight:600;color:var(--text-bright);">${u.username || '...'}</div><div style="font-size:12px;color:var(--text-muted);">${u.status || 'offline'}</div></div></div>
-            <div class="friend-card-right"><div class="action-circle" title="Message" onclick="(async()=>{ const dmId='${[currentUserSafeEmail, fEmail].sort().join('_')}'; await update(ref(db,'users/${currentUserSafeEmail}/friends/${fEmail}'),{dmId,hidden:false,lastActivity:Date.now()}); openDM(dmId,'${fEmail}'); })()"><svg width='18' height='18' viewBox='0 0 24 24' fill='currentColor'><path d='M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z'/></svg></div><div class="action-circle red" title="Remove Friend" onclick="customConfirm('Remove this friend?','Remove Friend',(yes)=>{if(yes){remove(ref(db,'users/${currentUserSafeEmail}/friends/${fEmail}'));remove(ref(db,'users/${fEmail}/friends/${currentUserSafeEmail}'));}})"><svg width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2'/><circle cx='8.5' cy='7' r='4'/><line x1='18' y1='8' x2='23' y2='13'/><line x1='23' y1='8' x2='18' y2='13'/></svg></div></div>`;
+            <div class="friend-card-right"><div class="action-circle" title="Message"><svg width='18' height='18' viewBox='0 0 24 24' fill='currentColor'><path d='M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z'/></svg></div><div class="action-circle red" title="Remove Friend"><svg width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2'/><circle cx='8.5' cy='7' r='4'/><line x1='18' y1='8' x2='23' y2='13'/><line x1='23' y1='8' x2='18' y2='13'/></svg></div></div>`;
             
+            div.querySelector('.action-circle:not(.red)').onclick = async () => {
+                const dmId = getDmId(currentUserSafeEmail, fEmail);
+                await touchDmMeta(currentUserSafeEmail, fEmail);
+                openDM(dmId, fEmail);
+            };
+            div.querySelector('.action-circle.red').onclick = () => {
+                customConfirm('Remove this friend?', 'Remove Friend', async (yes) => { if (yes) await setFriendship(currentUserSafeEmail, fEmail, false); });
+            };
             div.addEventListener('contextmenu', (e) => showContextMenu(e, 'friend', fEmail));
             content.appendChild(div);
         });
@@ -1415,12 +1466,15 @@ function renderHomeContent() {
                 div.innerHTML = `<div class="friend-card-left"><div class="avatar-container"><img src="${reqData.avatar || ''}" class="avatar-small" style="background:var(--bg-tertiary);"></div><div><div style="font-weight:600;color:var(--text-bright);">${reqData.username || senderEmail}</div><div style="font-size:12px;color:var(--text-muted);">Incoming Friend Request</div></div></div>
                 <div class="friend-card-right"><button class="accept-fr" style="background:var(--accent-success);color:#0d1117;margin:0;padding:6px 14px;font-size:12px;">Accept</button><button class="decline-fr" style="background:transparent;border:1px solid var(--accent-danger);color:var(--accent-danger);margin:0;margin-left:8px;padding:6px 14px;font-size:12px;">Decline</button></div>`;
                 div.querySelector('.accept-fr').addEventListener('click', async () => {
-                    await remove(ref(db, `friend_requests/${currentUserSafeEmail}/${senderEmail}`));
-                    const dmId = [currentUserSafeEmail, senderEmail].sort().join('_');
-                    await update(ref(db, `users/${currentUserSafeEmail}/friends/${senderEmail}`), { dmId, hidden: false, lastActivity: Date.now() });
-                    await update(ref(db, `users/${senderEmail}/friends/${currentUserSafeEmail}`), { dmId, hidden: false, lastActivity: Date.now() });
-                    showToast(`You and ${reqData.username} are now friends!`, 'success');
-                    renderHomeContent();
+                    try {
+                        await setFriendship(currentUserSafeEmail, senderEmail, true);
+                        await touchDmMeta(currentUserSafeEmail, senderEmail);
+                        await remove(ref(db, `friend_requests/${currentUserSafeEmail}/${senderEmail}`));
+                        showToast(`You and ${reqData.username} are now friends!`, 'success');
+                        renderHomeContent();
+                    } catch (err) {
+                        customAlert(`Couldn't accept this request: ${err.message}`, "Error");
+                    }
                 });
                 div.querySelector('.decline-fr').addEventListener('click', async () => { await remove(ref(db, `friend_requests/${currentUserSafeEmail}/${senderEmail}`)); renderHomeContent(); });
                 content.appendChild(div);
@@ -1446,10 +1500,14 @@ document.getElementById('add-friend-btn-green')?.addEventListener('click', () =>
         if (tagSnap.exists()) {
             const friendSafeEmail = tagSnap.val();
             if (friendSafeEmail === currentUserSafeEmail) return customAlert("You can't add yourself!", "Wait...");
-            const fSnap = await get(ref(db, `users/${currentUserSafeEmail}/friends/${friendSafeEmail}`));
+            const fSnap = await get(ref(db, `friends/${currentUserSafeEmail}/${friendSafeEmail}`));
             if (fSnap.exists()) return customAlert("Already friends!", "Notice");
-            await set(ref(db, `friend_requests/${friendSafeEmail}/${currentUserSafeEmail}`), { username: myProfile.username, avatar: myProfile.avatar, timestamp: Date.now() });
-            showToast(`Friend request sent to ${inputTag}!`, 'success');
+            try {
+                await set(ref(db, `friend_requests/${friendSafeEmail}/${currentUserSafeEmail}`), { username: myProfile.username, avatar: myProfile.avatar, timestamp: Date.now() });
+                showToast(`Friend request sent to ${inputTag}!`, 'success');
+            } catch (err) {
+                customAlert(`Couldn't send that request: ${err.message}`, "Error");
+            }
         } else { customAlert("User not found.", "Error"); }
     });
 });
@@ -1530,14 +1588,34 @@ document.querySelector('.fs-tab[data-tab="decorations"]')?.addEventListener('cli
     loadDecorationsUI();
 });
 
-function loadFriendsList() {
+// Populates activeFriendsData from the `friends` node — used by the Friends tab.
+function loadFriendsData() {
+    onValue(ref(db, `friends/${currentUserSafeEmail}`), (snapshot) => {
+        activeFriendsData = [];
+        snapshot.forEach((childSnapshot) => {
+            const fEmail = childSnapshot.key;
+            activeFriendsData.push({ email: fEmail });
+            // Make sure we have user data cached for rendering, and live-update the tab.
+            onValue(ref(db, `users/${fEmail}`), (userSnap) => {
+                if (userSnap.exists()) {
+                    globalUsersCache[fEmail] = userSnap.val();
+                    if (chatType === 'home' && currentHomeTab === 'friends') renderHomeContent();
+                }
+            });
+        });
+        if (chatType === 'home' && currentHomeTab === 'friends') renderHomeContent();
+    });
+}
+
+// Populates the DM sidebar from the `dm_meta` node — independent of friendship status,
+// and never disappears on unfriend (only "Close DM" hides it, only for the closer).
+function loadDmList() {
     const channelList = document.getElementById('dm-list');
-    onValue(ref(db, `users/${currentUserSafeEmail}/friends`), (snapshot) => {
-        channelList.innerHTML = ''; activeFriendsData = [];
+    onValue(ref(db, `dm_meta/${currentUserSafeEmail}`), (snapshot) => {
+        channelList.innerHTML = '';
         let dmsArray = [];
         snapshot.forEach((childSnapshot) => {
             const data = childSnapshot.val(); data.email = childSnapshot.key;
-            activeFriendsData.push(data);
             if (!data.hidden) dmsArray.push(data);
         });
         dmsArray.sort((a, b) => (b.lastActivity || 0) - (a.lastActivity || 0));
@@ -1566,13 +1644,11 @@ function loadFriendsList() {
                     
                     const name = document.getElementById(`f-name-${fEmail}`); if (name) name.innerText = uData.username;
                     div.onclick = () => openDM(fDataStatic.dmId, fEmail);
-                    if (chatType === 'home' && currentHomeTab === 'friends') renderHomeContent();
                 }
             });
             channelList.appendChild(div);
             if (unreadState.dms.has(fDataStatic.dmId)) updateBadge(`dm-${fDataStatic.dmId}`, true, false, false);
         });
-        if (chatType === 'home' && currentHomeTab === 'friends') renderHomeContent();
     });
 }
 
@@ -1582,7 +1658,7 @@ function openDM(dmId, friendEmail) {
     const uData = globalUsersCache[friendEmail]; currentDMOtherUser = uData;
     myServerPerms = { viewChannels: true, sendMessages: true, placeEmojiStickers: true, manageMessages: false };
     myServerMemberData = {};
-    update(ref(db, `users/${currentUserSafeEmail}/friends/${friendEmail}`), { hidden: false });
+    update(ref(db, `dm_meta/${currentUserSafeEmail}/${friendEmail}`), { dmId, hidden: false });
     document.getElementById('home-area').style.display = 'none';
     document.getElementById('chat-area').style.display = 'flex';
     setTimeout(onChatSwitched, 60);
@@ -5126,7 +5202,7 @@ async function sendGif(gifUrl) {
     push(ref(db, path), msgPayload);
     if (chatType === 'dm') {
         const friendEmail = currentChatId.replace(currentUserSafeEmail, '').replace(/_/g, '').replace(currentUserSafeEmail, '');
-        update(ref(db, `users/${currentUserSafeEmail}/friends/${friendEmail}`), { lastActivity: Date.now(), hidden: false });
+        touchDmMeta(currentUserSafeEmail, friendEmail);
     }
     update(ref(db, `users/${currentUserSafeEmail}/lastRead`), { [currentChatId]: Date.now() });
 }
@@ -5323,8 +5399,7 @@ async function sendMessage() {
         const parts = currentChatId.split('_');
         const friendEmail = parts.find(p => p !== currentUserSafeEmail);
         if (friendEmail) {
-            update(ref(db, `users/${currentUserSafeEmail}/friends/${friendEmail}`), { lastActivity: Date.now(), hidden: false });
-            update(ref(db, `users/${friendEmail}/friends/${currentUserSafeEmail}`), { lastActivity: Date.now(), hidden: false });
+            touchDmMeta(currentUserSafeEmail, friendEmail);
         }
     }
     update(ref(db, `users/${currentUserSafeEmail}/lastRead`), { [currentChatId]: Date.now() });
@@ -5350,7 +5425,7 @@ function startNotificationListeners() {
     if (dmsNotifListener) dmsNotifListener();
     if (serversNotifListener) serversNotifListener();
     
-    dmsNotifListener = onChildAdded(ref(db, `users/${currentUserSafeEmail}/friends`), (childSnapshot) => {
+    dmsNotifListener = onChildAdded(ref(db, `dm_meta/${currentUserSafeEmail}`), (childSnapshot) => {
         const dmId = childSnapshot.val().dmId;
         onChildAdded(query(ref(db, `dms/${dmId}`), limitToLast(1)), (msg) => {
             const mData = msg.val();
