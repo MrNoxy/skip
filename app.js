@@ -30,7 +30,7 @@ const storage = getStorage(app);
 let currentServerId = null;
 let currentChatId = null;
 let chatType = 'home';
-let currentHomeTab = 'news';
+let currentHomeTab = 'home';
 let currentUserSafeEmail = null;
 let myProfile = {};
 let myServerPerms = { viewChannels: true, sendMessages: true, placeEmojiStickers: true, manageChannels: false, manageServerSettings: false, manageServerProfile: false, manageServerOverview: false, manageRoles: false, manageMessages: false, kickMembers: false, banMembers: false, timeoutMembers: false, manageDownloadChannel: false };
@@ -45,6 +45,8 @@ let activeFriendsData = []; // list of { email, since } from `friends/{me}`
 let activeDmsData = [];     // list of { email, dmId, hidden, lastActivity } from `dm_meta/{me}`
 let globalEmojisCache = {};
 let globalDecorationsCache = {};
+let globalVoiceRostersFlat = {}; // safeEmail -> { serverId, channelId } for whoever is currently in a voice channel
+let allServersCache = {}; // serverId -> server data, used for the Discovery grid
 
 let unsubscribeMessages = null;
 let unsubscribeMessagesRemoved = null;
@@ -755,27 +757,137 @@ document.addEventListener('click', (e) => {
 // ==========================================
 // --- AUTH & PROFILE ---
 // ==========================================
+
+// --- Friendly error messages instead of raw Firebase error strings ---
+function friendlyAuthError(error) {
+    const map = {
+        'auth/email-already-in-use': 'An account with this email already exists — try logging in instead.',
+        'auth/invalid-email': "That email address doesn't look right.",
+        'auth/weak-password': 'Your password is too weak — use at least 6 characters.',
+        'auth/user-not-found': 'No account found with that email.',
+        'auth/wrong-password': 'Incorrect password. Please try again.',
+        'auth/invalid-credential': 'Incorrect email or password.',
+        'auth/too-many-requests': 'Too many attempts. Please wait a moment and try again.',
+        'auth/network-request-failed': 'Network error — check your connection and try again.',
+        'auth/user-disabled': 'This account has been disabled.',
+    };
+    return map[error.code] || error.message;
+}
+
+function setFieldError(inputId, errorId, message) {
+    const input = document.getElementById(inputId);
+    const err = document.getElementById(errorId);
+    if (input) input.classList.toggle('input-error', !!message);
+    if (err) err.innerText = message || '';
+}
+
+function clearFieldErrors(ids) {
+    ids.forEach(id => setFieldError(id, `${id}-error`, ''));
+}
+
+function setBtnLoading(btnId, loading) {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    const label = btn.querySelector('.btn-label');
+    const spinner = btn.querySelector('.btn-spinner');
+    btn.disabled = loading;
+    if (label) label.style.display = loading ? 'none' : 'inline';
+    if (spinner) spinner.style.display = loading ? 'inline-block' : 'none';
+}
+
+// --- View switching between Login and Register ---
+document.getElementById('show-register-link')?.addEventListener('click', () => {
+    document.getElementById('auth-login-view').style.display = 'none';
+    document.getElementById('auth-register-view').style.display = 'block';
+});
+document.getElementById('show-login-link')?.addEventListener('click', () => {
+    document.getElementById('auth-register-view').style.display = 'none';
+    document.getElementById('auth-login-view').style.display = 'block';
+});
+
+// --- Submit on Enter ---
+['login-email', 'login-password'].forEach(id => document.getElementById(id)?.addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('login-btn').click(); }));
+['reg-username', 'reg-email', 'reg-password', 'reg-password-confirm'].forEach(id => document.getElementById(id)?.addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('register-btn').click(); }));
+
 document.getElementById('register-btn')?.addEventListener('click', async () => {
-    const email = document.getElementById('email').value;
-    const pass = document.getElementById('password').value;
+    const username = document.getElementById('reg-username').value.trim();
+    const email = document.getElementById('reg-email').value.trim();
+    const pass = document.getElementById('reg-password').value;
+    const passConfirm = document.getElementById('reg-password-confirm').value;
+
+    clearFieldErrors(['reg-username', 'reg-email', 'reg-password', 'reg-password-confirm']);
+    document.getElementById('register-form-error').style.display = 'none';
+
+    let hasError = false;
+    const usernameRegex = /^[a-zA-Z0-9_.]{2,20}$/;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!username) { setFieldError('reg-username', 'reg-username-error', 'Please choose a username.'); hasError = true; }
+    else if (!usernameRegex.test(username)) { setFieldError('reg-username', 'reg-username-error', '2-20 characters: letters, numbers, _ or . only.'); hasError = true; }
+
+    if (!email) { setFieldError('reg-email', 'reg-email-error', 'Please enter your email.'); hasError = true; }
+    else if (!emailRegex.test(email)) { setFieldError('reg-email', 'reg-email-error', "That email address doesn't look right."); hasError = true; }
+
+    if (!pass) { setFieldError('reg-password', 'reg-password-error', 'Please choose a password.'); hasError = true; }
+    else if (pass.length < 6) { setFieldError('reg-password', 'reg-password-error', 'Use at least 6 characters.'); hasError = true; }
+
+    if (!passConfirm) { setFieldError('reg-password-confirm', 'reg-password-confirm-error', 'Please confirm your password.'); hasError = true; }
+    else if (pass && passConfirm !== pass) { setFieldError('reg-password-confirm', 'reg-password-confirm-error', "Passwords don't match."); hasError = true; }
+
+    if (hasError) return;
+
+    setBtnLoading('register-btn', true);
     try {
         const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
         const safeEmail = sanitizeEmail(email);
-        const baseName = email.split('@')[0];
-        const randomTag = Math.floor(1000 + Math.random() * 9000).toString();
-        const defaultAvatar = `https://ui-avatars.com/api/?name=${baseName.charAt(0)}&background=4d78cc&color=fff&size=256`;
-        await set(ref(db, `users/${safeEmail}`), { email, uid: userCredential.user.uid, username: baseName, tag: randomTag, avatar: defaultAvatar, status: 'online', saved_status: 'online' });
-        await set(ref(db, `user_tags/${baseName}_${randomTag}`), safeEmail);
+        const defaultAvatar = `https://ui-avatars.com/api/?name=${username.charAt(0)}&background=4d78cc&color=fff&size=256`;
+
+        // Find a free Username#Tag combo — random 4-digit tag, retried on collision
+        let tag, tagKey, attempts = 0;
+        do {
+            tag = Math.floor(1000 + Math.random() * 9000).toString();
+            tagKey = `${username}_${tag}`;
+            attempts++;
+        } while ((await get(child(ref(db), `user_tags/${tagKey}`))).exists() && attempts < 10);
+
+        await set(ref(db, `users/${safeEmail}`), { email, uid: userCredential.user.uid, username, tag, avatar: defaultAvatar, status: 'online', saved_status: 'online' });
+        await set(ref(db, `user_tags/${tagKey}`), safeEmail);
         showToast('Account created! Welcome to Skip 🎉', 'success');
-    } catch (error) { customAlert(error.message, "Registration Error"); }
+    } catch (error) {
+        const formErr = document.getElementById('register-form-error');
+        formErr.style.display = 'block';
+        formErr.innerText = friendlyAuthError(error);
+    } finally {
+        setBtnLoading('register-btn', false);
+    }
 });
 
-document.getElementById('login-btn')?.addEventListener('click', () => {
-    signInWithEmailAndPassword(auth, document.getElementById('email').value, document.getElementById('password').value)
-        .catch(e => customAlert(e.message, "Login Error"));
+document.getElementById('login-btn')?.addEventListener('click', async () => {
+    const email = document.getElementById('login-email').value.trim();
+    const pass = document.getElementById('login-password').value;
+
+    clearFieldErrors(['login-email', 'login-password']);
+    document.getElementById('login-form-error').style.display = 'none';
+
+    let hasError = false;
+    if (!email) { setFieldError('login-email', 'login-email-error', 'Please enter your email.'); hasError = true; }
+    if (!pass) { setFieldError('login-password', 'login-password-error', 'Please enter your password.'); hasError = true; }
+    if (hasError) return;
+
+    setBtnLoading('login-btn', true);
+    try {
+        await signInWithEmailAndPassword(auth, email, pass);
+    } catch (error) {
+        const formErr = document.getElementById('login-form-error');
+        formErr.style.display = 'block';
+        formErr.innerText = friendlyAuthError(error);
+    } finally {
+        setBtnLoading('login-btn', false);
+    }
 });
 
 onAuthStateChanged(auth, async (user) => {
+    document.getElementById('auth-loading-screen').style.display = 'none';
     if (user) {
         authSection.style.display = 'none';
         appContainer.style.display = 'flex';
@@ -848,8 +960,27 @@ if (user.email === MY_ADMIN_EMAIL) {
             }
         });
 
+        // --- HOME DASHBOARD: live caches for Activity Feed + Discovery ---
+        onValue(ref(db, 'voice_rosters'), snap => {
+            globalVoiceRostersFlat = {};
+            const data = snap.val() || {};
+            Object.keys(data).forEach(serverId => {
+                Object.keys(data[serverId] || {}).forEach(channelId => {
+                    Object.keys(data[serverId][channelId] || {}).forEach(email => {
+                        globalVoiceRostersFlat[email] = { serverId, channelId };
+                    });
+                });
+            });
+            if (chatType === 'home' && currentHomeTab === 'home') renderHomeContent();
+        });
+        onValue(ref(db, 'servers'), snap => {
+            allServersCache = snap.val() || {};
+            if (chatType === 'home' && currentHomeTab === 'home') renderHomeContent();
+        });
+
         initVoiceChat(); loadMyServers(); loadFriendsData(); loadDmList(); startNotificationListeners(); listenForFriendRequests();
         document.getElementById('home-btn').click();
+        checkForNewUpdatePopup();
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('invite')) { await joinServerByCode(urlParams.get('invite')); window.history.replaceState({}, document.title, appBaseUrl); }
     } else {
@@ -1283,25 +1414,192 @@ function switchToHomeView() {
 document.getElementById('home-btn')?.addEventListener('click', switchToHomeView);
 document.getElementById('mobile-back-btn')?.addEventListener('click', () => { document.body.classList.remove('mobile-chat-active', 'mobile-home-active'); });
 document.getElementById('mobile-back-btn-home')?.addEventListener('click', () => { document.body.classList.remove('mobile-chat-active', 'mobile-home-active'); });
+document.getElementById('nav-home-btn')?.addEventListener('click', () => { currentHomeTab = 'home'; if (chatType !== 'home') switchToHomeView(); document.body.classList.add('mobile-home-active'); renderHomeContent(); });
 document.getElementById('nav-news-btn')?.addEventListener('click', () => { currentHomeTab = 'news'; if (chatType !== 'home') switchToHomeView(); document.body.classList.add('mobile-home-active'); renderHomeContent(); });
 document.getElementById('nav-friends-btn')?.addEventListener('click', () => { currentHomeTab = 'friends'; if (chatType !== 'home') switchToHomeView(); document.body.classList.add('mobile-home-active'); renderHomeContent(); });
 document.getElementById('nav-requests-btn')?.addEventListener('click', () => { currentHomeTab = 'requests'; if (chatType !== 'home') switchToHomeView(); document.body.classList.add('mobile-home-active'); renderHomeContent(); });
 
+// ==========================================
+// --- "WHAT'S NEW" POPUP ---
+// Checks the same Headway feed the News tab uses, but quietly in the
+// background, so people see what's new without having to open the News
+// tab first. Uses the same localStorage "seen" marker as the News tab's
+// badge logic, so viewing/dismissing one clears the other.
+// ==========================================
+async function checkForNewUpdatePopup() {
+    try {
+        const HEADWAY_PAGE = 'mrnoxy-github-changelog';
+        const RSS_URL = `https://headwayapp.co/${HEADWAY_PAGE}/rss?nocache=${Date.now()}`;
+        const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(RSS_URL)}`, { cache: 'no-store' });
+        if (!res.ok) return;
+        const xmlText = await res.text();
+        if (xmlText.includes('cloudflare') || xmlText.includes('Just a moment')) return;
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+        if (xmlDoc.querySelector("parsererror")) return;
+        const items = Array.from(xmlDoc.querySelectorAll("item"));
+        if (items.length === 0) return;
+
+        const latest = items[0];
+        const guid = latest.querySelector("guid")?.textContent || "";
+        const latestPostId = btoa(guid).replace(/=/g, '').substring(0, 30);
+        const savedPostId = localStorage.getItem('skip_last_news_id');
+        if (savedPostId === latestPostId) return; // already seen, nothing to announce
+
+        updateBadge('nav-news-btn', true, true, false);
+
+        const title = latest.querySelector("title")?.textContent || "New update";
+        let desc = latest.querySelector("description")?.textContent || "";
+        desc = desc.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+        if (desc.length > 160) desc = desc.substring(0, 157) + '...';
+
+        document.getElementById('whats-new-title').innerText = title;
+        document.getElementById('whats-new-desc').innerText = desc || 'Tap below to see everything that changed.';
+        document.getElementById('whats-new-modal').style.display = 'flex';
+
+        document.getElementById('whats-new-view-btn').onclick = () => {
+            localStorage.setItem('skip_last_news_id', latestPostId);
+            document.getElementById('whats-new-modal').style.display = 'none';
+            document.getElementById('nav-news-btn').click();
+        };
+        document.getElementById('whats-new-dismiss-btn').onclick = () => {
+            localStorage.setItem('skip_last_news_id', latestPostId);
+            document.getElementById('whats-new-modal').style.display = 'none';
+        };
+    } catch (err) {
+        console.log('Update check skipped:', err.message);
+    }
+}
+
+// ==========================================
+// --- HOME DASHBOARD (Activity Feed + Discovery) ---
+// ==========================================
+function renderHomeDashboard(content) {
+    content.innerHTML = '';
+
+    // --- ACTIVITY FEED: friends who are online right now, voice-active ones first ---
+    const feedTitle = document.createElement('div');
+    feedTitle.className = 'home-section-title';
+    feedTitle.innerText = 'Active Now';
+    content.appendChild(feedTitle);
+
+    const activityRow = document.createElement('div');
+    activityRow.className = 'activity-row';
+
+    const onlineFriends = activeFriendsData
+        .map(f => ({ email: f.email, user: globalUsersCache[f.email] }))
+        .filter(f => f.user && f.user.status && f.user.status !== 'offline');
+
+    if (onlineFriends.length === 0) {
+        activityRow.innerHTML = `<div class="activity-empty">None of your friends are online right now.</div>`;
+    } else {
+        onlineFriends
+            .sort((a, b) => (globalVoiceRostersFlat[b.email] ? 1 : 0) - (globalVoiceRostersFlat[a.email] ? 1 : 0))
+            .forEach(({ email, user }) => {
+                const inVoice = globalVoiceRostersFlat[email];
+                const statusLabel = inVoice ? 'In Voice' : (user.status === 'idle' ? 'Idle' : user.status === 'dnd' ? 'Busy' : 'Online');
+                const card = document.createElement('div');
+                card.className = 'activity-card' + (inVoice ? ' in-voice' : '');
+                card.title = `${user.username} — ${statusLabel}`;
+                card.innerHTML = `${getAvatarHTML(user, 'avatar-small')}<div class="activity-card-name">${user.username}</div><div class="activity-card-sub">${inVoice ? '🔊 ' + statusLabel : statusLabel}</div>`;
+                card.onclick = async () => {
+                    const dmId = getDmId(currentUserSafeEmail, email);
+                    await touchDmMeta(currentUserSafeEmail, email);
+                    openDM(dmId, email);
+                };
+                activityRow.appendChild(card);
+            });
+    }
+    content.appendChild(activityRow);
+
+    // --- DISCOVERY: public servers anyone can browse and join ---
+    const discTitle = document.createElement('div');
+    discTitle.className = 'home-section-title';
+    discTitle.innerText = 'Discover Communities';
+    content.appendChild(discTitle);
+
+    const discoveryDesc = document.createElement('p');
+    discoveryDesc.style.cssText = 'color:var(--text-muted); font-size:12px; margin: -6px 0 14px;';
+    discoveryDesc.innerText = 'Public servers anyone on Skip can join. Server owners can toggle this on in Server Settings → Server Profile.';
+    content.appendChild(discoveryDesc);
+
+    const grid = document.createElement('div');
+    grid.className = 'discovery-grid';
+
+    const publicServers = Object.entries(allServersCache).filter(([id, s]) => s && s.public);
+
+    if (publicServers.length === 0) {
+        grid.innerHTML = `<div class="activity-empty">No public servers yet. Toggle "Public Server" in your Server Settings to be the first one listed!</div>`;
+    } else {
+        publicServers.forEach(([serverId, sData]) => {
+            const card = document.createElement('div');
+            card.className = 'discovery-card';
+            const membersElId = `disc-members-${serverId}`;
+            card.innerHTML = `
+                <div class="discovery-card-banner" style="${sData.banner ? `background-image:url('${sData.banner}');` : ''}"></div>
+                <div class="discovery-card-body">
+                    <div class="discovery-card-icon" style="${sData.icon ? `background-image:url('${sData.icon}');` : ''}">${!sData.icon ? (sData.name || '?').charAt(0).toUpperCase() : ''}</div>
+                    <div class="discovery-card-name">${sData.name}</div>
+                    <div class="discovery-card-desc">${sData.description || 'No description yet.'}</div>
+                    <div class="discovery-card-footer">
+                        <div class="discovery-card-members" id="${membersElId}">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-2.67 0-8 1.34-8 4v3h16v-3c0-2.66-5.33-4-8-4z"/></svg>
+                            <span>...</span>
+                        </div>
+                        <button class="discovery-card-join">Join</button>
+                    </div>
+                </div>`;
+            get(ref(db, `server_members/${serverId}`)).then(snap => {
+                const count = snap.exists() ? Object.keys(snap.val()).length : 0;
+                const span = card.querySelector(`#${membersElId} span`);
+                if (span) span.innerText = `${count} member${count === 1 ? '' : 's'}`;
+            });
+            card.querySelector('.discovery-card-join').onclick = async (e) => {
+                e.stopPropagation();
+                const joinBtn = e.currentTarget; joinBtn.disabled = true; joinBtn.innerText = '...';
+                const alreadyMember = await get(ref(db, `server_members/${serverId}/${currentUserSafeEmail}`));
+                if (!alreadyMember.exists()) await joinServerByCode(serverId);
+                // The sidebar server list rebuilds asynchronously on join; once its icon
+                // exists, click it to jump straight into the server.
+                let attempts = 0;
+                const tryOpen = () => {
+                    const el = document.getElementById(`server-${serverId}`);
+                    if (el) { el.click(); }
+                    else if (attempts++ < 15) { setTimeout(tryOpen, 200); }
+                };
+                tryOpen();
+            };
+            grid.appendChild(card);
+        });
+    }
+    content.appendChild(grid);
+}
+
 function renderHomeContent() {
     if (chatType !== 'home') return;
     const content = document.getElementById('home-content');
+    const hHome = document.getElementById('home-header-home');
     const hFriends = document.getElementById('home-header-friends');
     const hRequests = document.getElementById('home-header-requests');
     const hNews = document.getElementById('home-header-news'); // NEW
+    [hHome, hFriends, hRequests, hNews].forEach(h => { if (h) h.style.display = 'none'; });
     
     // Manage active states
+    document.getElementById('nav-home-btn').classList.toggle('active', currentHomeTab === 'home');
     document.getElementById('nav-news-btn').classList.toggle('active', currentHomeTab === 'news');
     document.getElementById('nav-friends-btn').classList.toggle('active', currentHomeTab === 'friends');
     document.getElementById('nav-requests-btn').classList.toggle('active', currentHomeTab === 'requests');
 
+    // === 0. HOME TAB (Activity Feed + Discovery) ===
+    if (currentHomeTab === 'home') {
+        hHome.style.display = 'flex';
+        renderHomeDashboard(content);
+        return;
+    }
+
     // === 1. NEWS TAB (Headway Integration) ===
     if (currentHomeTab === 'news') {
-        hNews.style.display = 'flex'; hFriends.style.display = 'none'; hRequests.style.display = 'none';
+        hNews.style.display = 'flex';
         content.innerHTML = '<div style="text-align:center; padding: 40px; color:var(--text-muted);"><div class="loading-spinner" style="width:24px;height:24px;border:2px solid var(--border-color);border-top-color:var(--accent-primary);border-radius:50%;margin:0 auto 10px;"></div>Loading latest updates...</div>';
         
         // IMPORTANT: Make sure this is your EXACT Headway page name!
@@ -1599,11 +1897,11 @@ function loadFriendsData() {
             onValue(ref(db, `users/${fEmail}`), (userSnap) => {
                 if (userSnap.exists()) {
                     globalUsersCache[fEmail] = userSnap.val();
-                    if (chatType === 'home' && currentHomeTab === 'friends') renderHomeContent();
+                    if (chatType === 'home' && (currentHomeTab === 'friends' || currentHomeTab === 'home')) renderHomeContent();
                 }
             });
         });
-        if (chatType === 'home' && currentHomeTab === 'friends') renderHomeContent();
+        if (chatType === 'home' && (currentHomeTab === 'friends' || currentHomeTab === 'home')) renderHomeContent();
     });
 }
 
@@ -1953,6 +2251,8 @@ document.getElementById('menu-server-settings')?.addEventListener('click', async
     document.getElementById('tab-ss-delete').style.display = (myServerPerms.manageServerSettings || sData.owner === auth.currentUser.email) ? 'block' : 'none';
     document.getElementById('ss-header-name').innerText = sData.name;
     document.getElementById('ss-server-name').value = sData.name;
+    document.getElementById('ss-server-description').value = sData.description || '';
+    document.getElementById('ss-server-public').checked = !!sData.public;
     const preview = document.getElementById('ss-icon-preview');
     if (sData.icon) { preview.style.backgroundImage = `url(${sData.icon})`; preview.innerText = ""; tempServerIcon = sData.icon; } else { preview.style.backgroundImage = 'none'; preview.innerText = sData.name.charAt(0); }
     const bannerPreview = document.getElementById('ss-banner-preview');
@@ -1991,7 +2291,9 @@ document.getElementById('ss-banner-upload')?.addEventListener('change', async (e
 });
 document.getElementById('ss-save-profile-btn')?.addEventListener('click', () => {
     const newName = document.getElementById('ss-server-name').value.trim();
-    if (newName && currentServerId) { update(ref(db, `servers/${currentServerId}`), { name: newName, icon: tempServerIcon, banner: tempServerBanner }); showToast("Server profile updated!", 'success'); }
+    const newDesc = document.getElementById('ss-server-description').value.trim();
+    const isPublic = document.getElementById('ss-server-public').checked;
+    if (newName && currentServerId) { update(ref(db, `servers/${currentServerId}`), { name: newName, icon: tempServerIcon, banner: tempServerBanner, description: newDesc || null, public: isPublic }); showToast("Server profile updated!", 'success'); }
 });
 document.getElementById('ss-save-engagement-btn')?.addEventListener('click', () => {
     if (currentServerId) { update(ref(db, `servers/${currentServerId}/engagement`), { joinChannel: document.getElementById('ss-join-channel').value || null, leaveChannel: document.getElementById('ss-leave-channel').value || null }); showToast("Engagement settings saved!", 'success'); }
