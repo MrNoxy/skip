@@ -3,9 +3,9 @@ import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, on
 import { getDatabase, ref, push, onChildAdded, onChildRemoved, onChildChanged, onValue, set, get, child, remove, onDisconnect, query, limitToLast, update, orderByChild, startAt, endAt } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-storage.js";
 
-// =========================================
+// ==========================================
 // --- FIREBASE CONFIG ---
-// =========================================
+// ==========================================
 const firebaseConfig = {
   apiKey: "AIzaSyDkorKjbFJica8XAWMApXplIM_NFvCdPa4",
   authDomain: "skip-4bf6f.firebaseapp.com",
@@ -812,6 +812,27 @@ function setBtnLoading(btnId, loading) {
     if (spinner) spinner.style.display = loading ? 'inline-block' : 'none';
 }
 
+// Small "no" shake on the whole card — used for validation failures and
+// rejected submissions so a mistake reads as physical feedback, not just red text.
+function shakeAuthCard() {
+    const card = document.getElementById('auth-section');
+    if (!card) return;
+    card.classList.remove('auth-shake');
+    void card.offsetWidth; // force reflow so this restarts even on back-to-back errors
+    card.classList.add('auth-shake');
+}
+
+// Live avatar preview above the username field on the register form — just a
+// themed initial-letter circle (no network round-trip per keystroke), swapped
+// for the real ui-avatars.com image once the account actually exists.
+document.getElementById('reg-username')?.addEventListener('input', (e) => {
+    const preview = document.getElementById('reg-avatar-preview');
+    if (!preview) return;
+    const v = e.target.value.trim();
+    preview.textContent = v ? v.charAt(0).toUpperCase() : '?';
+    preview.classList.toggle('auth-identity-avatar-filled', !!v);
+});
+
 // --- View switching between Login and Register ---
 document.getElementById('show-register-link')?.addEventListener('click', () => {
     document.getElementById('auth-login-view').style.display = 'none';
@@ -851,7 +872,7 @@ document.getElementById('register-btn')?.addEventListener('click', async () => {
     if (!passConfirm) { setFieldError('reg-password-confirm', 'reg-password-confirm-error', 'Please confirm your password.'); hasError = true; }
     else if (pass && passConfirm !== pass) { setFieldError('reg-password-confirm', 'reg-password-confirm-error', "Passwords don't match."); hasError = true; }
 
-    if (hasError) return;
+    if (hasError) { shakeAuthCard(); return; }
 
     setBtnLoading('register-btn', true);
     try {
@@ -874,6 +895,7 @@ document.getElementById('register-btn')?.addEventListener('click', async () => {
         const formErr = document.getElementById('register-form-error');
         formErr.style.display = 'block';
         formErr.innerText = friendlyAuthError(error);
+        shakeAuthCard();
     } finally {
         setBtnLoading('register-btn', false);
     }
@@ -889,7 +911,7 @@ document.getElementById('login-btn')?.addEventListener('click', async () => {
     let hasError = false;
     if (!email) { setFieldError('login-email', 'login-email-error', 'Please enter your email.'); hasError = true; }
     if (!pass) { setFieldError('login-password', 'login-password-error', 'Please enter your password.'); hasError = true; }
-    if (hasError) return;
+    if (hasError) { shakeAuthCard(); return; }
 
     setBtnLoading('login-btn', true);
     try {
@@ -898,6 +920,7 @@ document.getElementById('login-btn')?.addEventListener('click', async () => {
         const formErr = document.getElementById('login-form-error');
         formErr.style.display = 'block';
         formErr.innerText = friendlyAuthError(error);
+        shakeAuthCard();
     } finally {
         setBtnLoading('login-btn', false);
     }

@@ -21,14 +21,32 @@
             <!-- Lightning logo: a dim "base" glyph always visible, with a stroke that
                  traces its outline and a fill that "strikes" in with a glow. -->
             <svg class="skip-lightning" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <!-- Static blur only — the glow is created by animating this
+                         duplicate shape's opacity/scale, never by animating the
+                         filter itself. iOS Safari is unreliable at animating
+                         `filter: drop-shadow()` (it can just silently not render),
+                         but animating opacity/transform on a pre-blurred copy works
+                         everywhere. -->
+                    <filter id="skipLogoGlowBlur" x="-60%" y="-60%" width="220%" height="220%">
+                        <feGaussianBlur stdDeviation="2.2" />
+                    </filter>
+                </defs>
                 <path class="lightning-base" d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                <path class="lightning-glow" d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" filter="url(#skipLogoGlowBlur)" />
                 <path class="lightning-fill" d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
                 <path class="lightning-stroke" d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
             </svg>
             <!-- "Skip" wordmark, traced the same way as the logo for a unified feel.
                  dominant-baseline + y="50%" keeps it vertically centered on the logo. -->
             <svg class="skip-text-svg" viewBox="0 0 80 48" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <filter id="skipTextGlowBlur" x="-60%" y="-60%" width="220%" height="220%">
+                        <feGaussianBlur stdDeviation="2.6" />
+                    </filter>
+                </defs>
                 <text class="text-base" x="0" y="50%" dominant-baseline="central">Skip</text>
+                <text class="text-glow" x="0" y="50%" dominant-baseline="central" filter="url(#skipTextGlowBlur)">Skip</text>
                 <text class="text-fill" x="0" y="50%" dominant-baseline="central">Skip</text>
                 <text class="text-stroke" x="0" y="50%" dominant-baseline="central">Skip</text>
             </svg>
@@ -37,7 +55,16 @@
 
     <div id="auth-section" style="display: none;">
         <div class="auth-logo">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            <svg width="40" height="40" viewBox="0 0 24 24" class="auth-logo-icon">
+                <defs>
+                    <filter id="authLogoGlowBlur" x="-60%" y="-60%" width="220%" height="220%">
+                        <feGaussianBlur stdDeviation="2" />
+                    </filter>
+                </defs>
+                <path class="auth-logo-icon-base" d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                <path class="auth-logo-icon-glow" d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" filter="url(#authLogoGlowBlur)"/>
+                <path class="auth-logo-icon-fill" d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+            </svg>
             <span>Skip</span>
         </div>
 
@@ -69,11 +96,23 @@
             <h2>Create an account</h2>
             <p class="auth-sub">Join Skip in a few seconds</p>
 
-            <div class="auth-field">
-                <label for="reg-username">Username</label>
-                <input type="text" id="reg-username" placeholder="e.g. noxy" autocomplete="off" maxlength="20">
-                <span class="auth-field-error" id="reg-username-error"></span>
+            <!-- Identity comes first and gets its own visual weight — a live avatar
+                 preview next to the username input, instead of a username field that
+                 looked identical to (and got lost among) the credential fields below. -->
+            <div class="auth-identity">
+                <div class="auth-identity-avatar" id="reg-avatar-preview">?</div>
+                <div class="auth-field auth-field-username">
+                    <label for="reg-username">Username</label>
+                    <div class="auth-username-wrap">
+                        <span class="auth-username-at">@</span>
+                        <input type="text" id="reg-username" placeholder="noxy" autocomplete="off" maxlength="20">
+                    </div>
+                    <span class="auth-field-error" id="reg-username-error"></span>
+                </div>
             </div>
+
+            <div class="auth-divider"><span>Account details</span></div>
+
             <div class="auth-field">
                 <label for="reg-email">Email</label>
                 <input type="email" id="reg-email" placeholder="you@example.com" autocomplete="email">

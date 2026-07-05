@@ -129,6 +129,10 @@ input, textarea {
 }
 
 .lightning-base { fill: var(--accent-primary); opacity: 0.2; }
+.lightning-glow {
+    fill: var(--accent-primary); opacity: 0; transform-origin: center;
+    animation: authGlowPulse var(--auth-loader-speed, 2.5s) cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
 .lightning-stroke {
     fill: none; stroke: var(--accent-primary); stroke-width: 1.5; stroke-linejoin: round;
     stroke-dasharray: 70; stroke-dashoffset: 70;
@@ -140,6 +144,10 @@ input, textarea {
 }
 
 .text-base { fill: var(--text-bright); opacity: 0.2; }
+.text-glow {
+    fill: var(--text-bright); opacity: 0; transform-origin: center;
+    animation: authGlowPulseText var(--auth-loader-speed, 2.5s) cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
 .text-stroke {
     fill: none; stroke: var(--text-bright); stroke-width: 1; stroke-linejoin: round;
     stroke-dasharray: 150; stroke-dashoffset: 150;
@@ -162,20 +170,45 @@ input, textarea {
     75% { stroke-dashoffset: 0; opacity: 0; }
     100% { stroke-dashoffset: 150; opacity: 0; }
 }
+/* NOTE: these two used to also animate `filter: drop-shadow(...)` for the glow.
+   iOS Safari is known to be unreliable animating `filter` via CSS keyframes —
+   it can just never update, which is exactly the "glow is nonexistent on iOS"
+   symptom. The glow is now handled entirely by the separate .lightning-glow /
+   .text-glow layers below (a pre-blurred duplicate shape, opacity/scale only —
+   properties every browser animates the same way), so these only need to
+   handle the crisp fill anymore. */
 @keyframes authStrikeFill {
     0%, 30% { opacity: 0; transform: scale(0.9); }
-    35% { opacity: 1; transform: scale(1.1); filter: drop-shadow(0 0 15px var(--accent-primary)); }
-    40% { opacity: 0.8; transform: scale(1); filter: drop-shadow(0 0 8px var(--accent-primary)); }
-    45% { opacity: 1; filter: drop-shadow(0 0 20px var(--accent-primary)); }
-    75% { opacity: 1; transform: scale(1); filter: drop-shadow(0 0 5px var(--accent-primary)); }
+    35% { opacity: 1; transform: scale(1.1); }
+    40% { opacity: 0.8; transform: scale(1); }
+    45% { opacity: 1; }
+    75% { opacity: 1; transform: scale(1); }
     100% { opacity: 0; transform: scale(0.9); }
 }
 @keyframes authStrikeFillText {
     0%, 30% { opacity: 0; transform: scale(0.95); }
-    35% { opacity: 1; transform: scale(1.05); filter: drop-shadow(0 0 15px rgba(255,255,255,0.8)); }
-    40% { opacity: 0.8; transform: scale(1); filter: drop-shadow(0 0 8px rgba(255,255,255,0.8)); }
-    45% { opacity: 1; filter: drop-shadow(0 0 20px rgba(255,255,255,0.8)); }
-    75% { opacity: 1; transform: scale(1); filter: drop-shadow(0 0 5px rgba(255,255,255,0.8)); }
+    35% { opacity: 1; transform: scale(1.05); }
+    40% { opacity: 0.8; transform: scale(1); }
+    45% { opacity: 1; }
+    75% { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: scale(0.95); }
+}
+/* The actual glow "bloom" — bigger opacity/scale swing than the crisp fill
+   above so it reads as a soft halo growing and fading behind it. */
+@keyframes authGlowPulse {
+    0%, 30% { opacity: 0; transform: scale(0.9); }
+    35% { opacity: 0.9; transform: scale(1.35); }
+    40% { opacity: 0.5; transform: scale(1.15); }
+    45% { opacity: 0.85; transform: scale(1.25); }
+    75% { opacity: 0.55; transform: scale(1.1); }
+    100% { opacity: 0; transform: scale(0.9); }
+}
+@keyframes authGlowPulseText {
+    0%, 30% { opacity: 0; transform: scale(0.95); }
+    35% { opacity: 0.85; transform: scale(1.2); }
+    40% { opacity: 0.5; transform: scale(1.1); }
+    45% { opacity: 0.8; transform: scale(1.15); }
+    75% { opacity: 0.5; transform: scale(1.05); }
     100% { opacity: 0; transform: scale(0.95); }
 }
 
@@ -185,13 +218,64 @@ input, textarea {
     width: 380px; max-width: 95vw;
     text-align: center; border: 1px solid var(--border-color);
     box-shadow: 0 20px 60px rgba(0,0,0,0.7);
-    animation: slideUp 0.3s ease;
+    animation: authCardIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
+@keyframes authCardIn { from { opacity: 0; transform: translateY(14px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+#auth-section.auth-shake { animation: authShake 0.4s ease; }
+@keyframes authShake {
+    10%, 90% { transform: translateX(-1px); }
+    20%, 80% { transform: translateX(2px); }
+    30%, 50%, 70% { transform: translateX(-4px); }
+    40%, 60% { transform: translateX(4px); }
+}
+
 .auth-logo { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 20px; color: var(--accent-primary); }
-.auth-logo svg { color: var(--accent-primary); }
+.auth-logo-icon { overflow: visible; }
 .auth-logo span { font-size: 24px; font-weight: 700; color: var(--text-bright); letter-spacing: -0.5px; }
+/* A gentle idle "breathing" glow on the card logo — a quieter nod to the big
+   trace-in animation on the loading screen, not a repeat of it (that one's
+   meant to be watched once; this one just needs to sit there and feel alive). */
+/* A gentle idle "breathing" glow on the card logo — a quieter nod to the big
+   trace-in animation on the loading screen, not a repeat of it (that one's
+   meant to be watched once; this one just needs to sit there and feel alive).
+   Uses the same pre-blurred-duplicate technique as the loading screen (see
+   .lightning-glow above) instead of animating `filter` directly, since that's
+   the part iOS Safari renders unreliably. */
+.auth-logo-icon-base { fill: var(--accent-primary); opacity: 0.35; }
+.auth-logo-icon-glow {
+    fill: var(--accent-primary);
+    animation: authLogoGlowBreathe 3.2s ease-in-out infinite;
+    transform-origin: center;
+}
+.auth-logo-icon-fill {
+    fill: var(--accent-primary);
+    animation: authLogoBreathe 3.2s ease-in-out infinite;
+    transform-origin: center;
+}
+@keyframes authLogoBreathe { 0%, 100% { opacity: 0.7; } 50% { opacity: 1; } }
+@keyframes authLogoGlowBreathe {
+    0%, 100% { opacity: 0; transform: scale(1); }
+    50% { opacity: 0.55; transform: scale(1.3); }
+}
 #auth-section h2 { margin: 0 0 5px; font-size: 22px; color: var(--text-bright); font-weight: 700; }
 .auth-sub { color: var(--text-muted); margin: 0 0 22px; font-size: 14px; }
+
+/* Every direct child of a view cascades in with a slight stagger whenever that
+   view is (re)shown — swapping login<->register, or the very first paint. */
+#auth-login-view > *, #auth-register-view > * {
+    animation: authFieldIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+#auth-login-view > *:nth-child(1), #auth-register-view > *:nth-child(1) { animation-delay: 0s; }
+#auth-login-view > *:nth-child(2), #auth-register-view > *:nth-child(2) { animation-delay: 0.03s; }
+#auth-login-view > *:nth-child(3), #auth-register-view > *:nth-child(3) { animation-delay: 0.06s; }
+#auth-login-view > *:nth-child(4), #auth-register-view > *:nth-child(4) { animation-delay: 0.09s; }
+#auth-login-view > *:nth-child(5), #auth-register-view > *:nth-child(5) { animation-delay: 0.12s; }
+#auth-login-view > *:nth-child(6), #auth-register-view > *:nth-child(6) { animation-delay: 0.15s; }
+#auth-login-view > *:nth-child(7), #auth-register-view > *:nth-child(7) { animation-delay: 0.18s; }
+#auth-login-view > *:nth-child(8), #auth-register-view > *:nth-child(8) { animation-delay: 0.21s; }
+#auth-login-view > *:nth-child(9), #auth-register-view > *:nth-child(9) { animation-delay: 0.24s; }
+#auth-register-view > *:nth-child(10) { animation-delay: 0.27s; }
+@keyframes authFieldIn { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
 
 .auth-field { text-align: left; margin-bottom: 14px; }
 .auth-field label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); margin-bottom: 6px; }
@@ -199,7 +283,7 @@ input, textarea {
     width: 100%; padding: 12px 14px;
     border-radius: var(--radius-sm); border: 1px solid var(--border-color);
     background: var(--bg-main); color: var(--text-bright); outline: none;
-    transition: border-color var(--transition);
+    transition: border-color var(--transition), box-shadow var(--transition), transform 0.15s ease;
 }
 #auth-section input:focus { border-color: var(--accent-primary); box-shadow: 0 0 0 3px rgba(79,129,214,0.15); }
 #auth-section input.input-error { border-color: var(--accent-danger); }
@@ -213,10 +297,48 @@ input, textarea {
     padding: 10px 12px; margin-bottom: 14px; text-align: left;
 }
 
+/* --- Register: identity section --- */
+/* The username used to be a plain text field indistinguishable from email/
+   password below it. Pairing it with a live avatar preview gives it the visual
+   weight of "this is who you'll be" rather than just another form line. */
+.auth-identity { display: flex; align-items: flex-end; gap: 12px; margin-bottom: 16px; }
+.auth-identity-avatar {
+    width: 50px; height: 50px; border-radius: 50%; flex-shrink: 0;
+    background: var(--bg-main); border: 1px solid var(--border-color);
+    color: var(--text-muted); font-weight: 700; font-size: 19px;
+    display: flex; align-items: center; justify-content: center;
+    text-transform: uppercase;
+    transition: background var(--transition), color var(--transition), border-color var(--transition), transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.auth-identity-avatar.auth-identity-avatar-filled {
+    background: var(--accent-primary); color: #fff; border-color: transparent;
+    box-shadow: 0 4px 14px rgba(79,129,214,0.35);
+    transform: scale(1.06);
+}
+.auth-field-username { flex: 1; margin-bottom: 0; }
+.auth-username-wrap {
+    display: flex; align-items: center;
+    background: var(--bg-main); border: 1px solid var(--border-color); border-radius: var(--radius-sm);
+    transition: border-color var(--transition), box-shadow var(--transition);
+}
+.auth-username-wrap:focus-within { border-color: var(--accent-primary); box-shadow: 0 0 0 3px rgba(79,129,214,0.15); }
+.auth-username-at { padding-left: 14px; color: var(--text-muted); font-weight: 600; }
+.auth-username-wrap input { border: none !important; background: transparent !important; box-shadow: none !important; padding-left: 4px !important; }
+.auth-username-wrap input:focus { box-shadow: none !important; }
+
+.auth-divider {
+    display: flex; align-items: center; gap: 10px; margin: 6px 0 16px;
+    color: var(--text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--border-color); }
+
 #auth-section button#login-btn, #auth-section button#register-btn {
     width: 100%; margin: 6px 0 0; padding: 12px; font-size: 15px; font-weight: 600;
     border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; gap: 8px;
+    transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
 }
+#auth-section button#login-btn:hover:not(:disabled), #auth-section button#register-btn:hover:not(:disabled) { filter: brightness(1.08); }
+#auth-section button#login-btn:active:not(:disabled), #auth-section button#register-btn:active:not(:disabled) { transform: scale(0.97); }
 .btn-spinner {
     width: 16px; height: 16px; border-radius: 50%;
     border: 2px solid rgba(255,255,255,0.35); border-top-color: #fff;
