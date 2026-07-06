@@ -38,18 +38,22 @@
                 <path class="lightning-stroke" d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
             </svg>
             <!-- "Skip" wordmark, traced the same way as the logo for a unified feel.
-                 dominant-baseline + y="50%" keeps it vertically centered on the logo. -->
-            <svg class="skip-text-svg" viewBox="0 0 80 48" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                    <filter id="skipTextGlowBlur" x="-60%" y="-60%" width="220%" height="220%">
-                        <feGaussianBlur stdDeviation="2.6" />
-                    </filter>
-                </defs>
-                <text class="text-base" x="0" y="50%" dominant-baseline="central">Skip</text>
-                <text class="text-glow" x="0" y="50%" dominant-baseline="central" filter="url(#skipTextGlowBlur)">Skip</text>
-                <text class="text-fill" x="0" y="50%" dominant-baseline="central">Skip</text>
-                <text class="text-stroke" x="0" y="50%" dominant-baseline="central">Skip</text>
-            </svg>
+                 dominant-baseline + y="50%" keeps it vertically centered on the logo.
+                 Stays collapsed (width:0) during the loop — it only expands into view
+                 once during the one-time "loaded" reveal (see .is-loaded in CSS/app.js). -->
+            <div class="text-wrapper">
+                <svg class="skip-text-svg" viewBox="0 0 80 48" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <filter id="skipTextGlowBlur" x="-60%" y="-60%" width="220%" height="220%">
+                            <feGaussianBlur stdDeviation="2.6" />
+                        </filter>
+                    </defs>
+                    <text class="text-base" x="0" y="50%" dominant-baseline="central">Skip</text>
+                    <text class="text-glow" x="0" y="50%" dominant-baseline="central" filter="url(#skipTextGlowBlur)">Skip</text>
+                    <text class="text-fill" x="0" y="50%" dominant-baseline="central">Skip</text>
+                    <text class="text-stroke" x="0" y="50%" dominant-baseline="central">Skip</text>
+                </svg>
+            </div>
         </div>
     </div>
 
@@ -96,19 +100,29 @@
             <h2>Create an account</h2>
             <p class="auth-sub">Join Skip in a few seconds</p>
 
-            <!-- Identity comes first and gets its own visual weight — a live avatar
-                 preview next to the username input, instead of a username field that
-                 looked identical to (and got lost among) the credential fields below. -->
-            <div class="auth-identity">
-                <div class="auth-identity-avatar" id="reg-avatar-preview">?</div>
-                <div class="auth-field auth-field-username">
-                    <label for="reg-username">Username</label>
+            <!-- Identity comes first and gets its own visual weight instead of a
+                 username field that looked identical to (and got lost among) the
+                 credential fields below. The avatar circle is a real optional photo
+                 upload (click it) — it just falls back to a live initial-letter
+                 preview when no photo is chosen. Kept as a single .auth-field (like
+                 every other field) so the label sits above the *whole* row and the
+                 avatar/input naturally line up with each other, not with the error
+                 text underneath. -->
+            <div class="auth-field auth-field-username">
+                <label for="reg-username">Username <span class="auth-optional-tag">+ optional photo</span></label>
+                <div class="auth-identity-row">
+                    <button type="button" class="auth-identity-avatar" id="reg-avatar-btn" title="Add a profile picture (optional)">
+                        <span id="reg-avatar-letter">?</span>
+                        <img id="reg-avatar-img" alt="" style="display:none;">
+                        <span class="auth-identity-avatar-edit">✎</span>
+                    </button>
+                    <input type="file" id="reg-avatar-upload" accept="image/*" style="display:none;">
                     <div class="auth-username-wrap">
                         <span class="auth-username-at">@</span>
-                        <input type="text" id="reg-username" placeholder="username" autocomplete="off" maxlength="20">
+                        <input type="text" id="reg-username" placeholder="noxy" autocomplete="off" maxlength="20">
                     </div>
-                    <span class="auth-field-error" id="reg-username-error"></span>
                 </div>
+                <span class="auth-field-error" id="reg-username-error"></span>
             </div>
 
             <div class="auth-divider"><span>Account details</span></div>

@@ -86,21 +86,47 @@ const appContainer = document.getElementById('app-container');
 const authSection = document.getElementById('auth-section');
 const appBaseUrl = window.location.href.split('?')[0];
 
-// The new traced-logo loading animation runs on a ~2.5s loop and is worth actually
-// seeing — so instead of hiding it the instant Firebase reports auth state (which,
-// with a cached session, can happen almost immediately), we hold it on screen for
-// a minimum stretch covering two full loops before revealing the app/login form.
-const AUTH_LOADER_MIN_MS = 5000;
-const authLoaderShownAt = performance.now();
-function hideAuthLoadingScreen() {
-    const el = document.getElementById('auth-loading-screen');
-    if (!el || el.style.display === 'none') return;
-    const elapsed = performance.now() - authLoaderShownAt;
-    const remaining = Math.max(0, AUTH_LOADER_MIN_MS - elapsed);
+// --- Loading screen sequencing ---
+// The bolt just loops (traces + strikes + fades, over and over) with the "Skip"
+// wordmark fully collapsed and invisible, for as long as we're waiting on auth to
+// resolve. Once auth is ready AND the bolt has looped at least AUTH_LOADER_MIN_LOOPS
+// times (so it's never just a flash even when a cached session resolves instantly),
+// the *next* loop boundary triggers a one-time reveal: the wordmark opens up and
+// both the bolt and text trace/strike in together and hold fully lit (see the
+// .is-loaded rules in style.css) — no further looping, no fading back out — and a
+// beat later the whole overlay fades away.
+const AUTH_LOADER_MIN_LOOPS = 2;
+let authLoaderLoopsSoFar = 0;
+let authIsReadyToReveal = false;
+let authLoaderRevealed = false;
+
+function tryRevealAuthLoader() {
+    if (authLoaderRevealed) return;
+    if (authLoaderLoopsSoFar < AUTH_LOADER_MIN_LOOPS) return; // still owed loops, even if auth already resolved
+    if (!authIsReadyToReveal) return; // auth isn't ready yet — keep looping no matter how many loops have played
+    authLoaderRevealed = true;
+    const brand = document.querySelector('#auth-loading-screen .brand-container');
+    brand?.classList.add('is-loaded');
+    // Let the "ta-da" actually be seen before the whole screen fades away.
     setTimeout(() => {
+        const el = document.getElementById('auth-loading-screen');
+        if (!el) return;
         el.classList.add('fading-out');
         setTimeout(() => { el.style.display = 'none'; }, 350); // matches the fading-out CSS animation duration
-    }, remaining);
+    }, 900);
+}
+
+document.querySelector('#auth-loading-screen .lightning-stroke')?.addEventListener('animationiteration', () => {
+    authLoaderLoopsSoFar++;
+    tryRevealAuthLoader();
+});
+
+// Called once Firebase reports whatever the real auth state is — no longer hides
+// anything directly, just flags that we're clear to reveal as soon as the loop
+// count catches up (see tryRevealAuthLoader above).
+function hideAuthLoadingScreen() {
+    authIsReadyToReveal = true;
+    tryRevealAuthLoader();
 }
 
 function sanitizeEmail(e) { return e.replace(/\./g, ','); }
@@ -822,15 +848,39 @@ function shakeAuthCard() {
     card.classList.add('auth-shake');
 }
 
-// Live avatar preview above the username field on the register form — just a
-// themed initial-letter circle (no network round-trip per keystroke), swapped
-// for the real ui-avatars.com image once the account actually exists.
+// Register avatar: a real optional photo upload (click the circle), falling
+// back to a live initial-letter preview when no photo has been picked — no
+// network round-trip per keystroke, that's purely local canvas/text.
+let regAvatarDataUrl = null; // set only if the user actually picks a photo; stays optional otherwise
+const regAvatarBtn = document.getElementById('reg-avatar-btn');
+const regAvatarUpload = document.getElementById('reg-avatar-upload');
+const regAvatarImg = document.getElementById('reg-avatar-img');
+const regAvatarLetter = document.getElementById('reg-avatar-letter');
+
+regAvatarBtn?.addEventListener('click', () => regAvatarUpload?.click());
+
+regAvatarUpload?.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+        const result = await compressImage(file, 256, 256, 0.9);
+        regAvatarDataUrl = result.compressed;
+        if (regAvatarImg) { regAvatarImg.src = regAvatarDataUrl; regAvatarImg.style.display = 'block'; }
+        if (regAvatarLetter) regAvatarLetter.style.display = 'none';
+        regAvatarBtn?.classList.add('auth-identity-avatar-filled');
+    } catch (err) {
+        console.error('Avatar preview failed:', err);
+        showToast("Couldn't load that image — try a different one.", 'error');
+    } finally {
+        regAvatarUpload.value = ''; // lets picking the same file again re-fire 'change'
+    }
+});
+
 document.getElementById('reg-username')?.addEventListener('input', (e) => {
-    const preview = document.getElementById('reg-avatar-preview');
-    if (!preview) return;
+    if (regAvatarDataUrl || !regAvatarLetter) return; // an actual photo takes priority over the letter fallback
     const v = e.target.value.trim();
-    preview.textContent = v ? v.charAt(0).toUpperCase() : '?';
-    preview.classList.toggle('auth-identity-avatar-filled', !!v);
+    regAvatarLetter.textContent = v ? v.charAt(0).toUpperCase() : '?';
+    regAvatarBtn?.classList.toggle('auth-identity-avatar-filled', !!v);
 });
 
 // --- View switching between Login and Register ---
@@ -878,7 +928,10 @@ document.getElementById('register-btn')?.addEventListener('click', async () => {
     try {
         const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
         const safeEmail = sanitizeEmail(email);
-        const defaultAvatar = `https://ui-avatars.com/api/?name=${username.charAt(0)}&background=4d78cc&color=fff&size=256`;
+        // regAvatarDataUrl is only set if the user actually clicked the avatar
+        // circle and picked a photo — entirely optional, falls back to the
+        // generated initial-letter avatar otherwise.
+        const defaultAvatar = regAvatarDataUrl || `https://ui-avatars.com/api/?name=${username.charAt(0)}&background=4d78cc&color=fff&size=256`;
 
         // Find a free Username#Tag combo — random 4-digit tag, retried on collision
         let tag, tagKey, attempts = 0;

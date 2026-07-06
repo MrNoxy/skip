@@ -111,15 +111,28 @@ input, textarea {
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 /* --- Traced logo + wordmark loading animation ---
-   A dim "base" glyph sits underneath at all times so there's never an empty gap
-   between loops; a stroke traces the outline on top of it, then a filled version
-   "strikes" in with a glow before everything fades back to the dim base and the
-   loop restarts. Colors pull from the app's real theme vars rather than being
-   hardcoded, so it always matches whatever theme is active. */
-.brand-container { display: flex; align-items: center; gap: 12px; }
+   Two phases, driven from app.js:
+   1. LOOP (default): just the lightning bolt traces + strikes + fades, over and
+      over, while we wait on auth to resolve (and for at least
+      AUTH_LOADER_MIN_LOOPS full loops to play, so it's never just a flash).
+      The "Skip" wordmark stays fully collapsed and invisible the whole time.
+   2. REVEAL (.is-loaded, added once): plays ONE time — the text wrapper expands
+      open, and both the bolt and the wordmark trace/strike in together and then
+      HOLD fully lit (not fade back out, not loop again) until the whole overlay
+      fades away a moment later. */
+.brand-container { display: flex; align-items: center; justify-content: center; gap: 0; transition: gap 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+.brand-container.is-loaded { gap: 12px; }
 
 .skip-lightning { width: 48px; height: 48px; overflow: visible; position: relative; }
-.skip-text-svg { width: 70px; height: 48px; overflow: visible; }
+
+/* Collapsed by default — this is what makes the wordmark "not exist" during the
+   loop phase and then open up like a reveal once .is-loaded lands. */
+.text-wrapper {
+    width: 0; opacity: 0; display: flex; align-items: center; overflow: hidden;
+    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.brand-container.is-loaded .text-wrapper { width: 70px; opacity: 1; overflow: visible; }
+.skip-text-svg { width: 70px; height: 48px; overflow: visible; flex-shrink: 0; }
 
 .skip-text-svg text {
     font-family: var(--font-family, 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif);
@@ -129,54 +142,51 @@ input, textarea {
 }
 
 .lightning-base { fill: var(--accent-primary); opacity: 0.2; }
-.lightning-glow {
-    fill: var(--accent-primary); opacity: 0; transform-origin: center;
-    animation: authGlowPulse var(--auth-loader-speed, 2.5s) cubic-bezier(0.4, 0, 0.2, 1) infinite;
-}
+.lightning-glow { fill: var(--accent-primary); opacity: 0; transform-origin: center; }
 .lightning-stroke {
     fill: none; stroke: var(--accent-primary); stroke-width: 1.5; stroke-linejoin: round;
     stroke-dasharray: 70; stroke-dashoffset: 70;
-    animation: authDrawTrace var(--auth-loader-speed, 2.5s) cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    animation: authDrawTrace 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
-.lightning-fill {
-    fill: var(--accent-primary); opacity: 0; transform-origin: center;
-    animation: authStrikeFill var(--auth-loader-speed, 2.5s) cubic-bezier(0.4, 0, 0.2, 1) infinite;
-}
+.lightning-fill { fill: var(--accent-primary); opacity: 0; transform-origin: center; }
+
+/* Loop phase: bolt only */
+.brand-container:not(.is-loaded) .lightning-glow { animation: authGlowPulse 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+.brand-container:not(.is-loaded) .lightning-fill { animation: authStrikeFill 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+
+/* Reveal phase: one pass, ends held fully lit — this is why .lightning-stroke
+   above keeps its infinite loop animation running (so app.js's `animationiteration`
+   counter it listens on keeps firing) right up until .is-loaded lands, at which
+   point these higher-specificity rules take over for the final pass. */
+.brand-container.is-loaded .lightning-stroke { animation: authDrawTraceFinal 0.7s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+.brand-container.is-loaded .lightning-glow { animation: authGlowPulseFinal 0.7s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+.brand-container.is-loaded .lightning-fill { animation: authStrikeFillFinal 0.7s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
 
 .text-base { fill: var(--text-bright); opacity: 0.2; }
-.text-glow {
-    fill: var(--text-bright); opacity: 0; transform-origin: center;
-    animation: authGlowPulseText var(--auth-loader-speed, 2.5s) cubic-bezier(0.4, 0, 0.2, 1) infinite;
-}
+.text-glow { fill: var(--text-bright); opacity: 0; transform-origin: center; }
 .text-stroke {
     fill: none; stroke: var(--text-bright); stroke-width: 1; stroke-linejoin: round;
-    stroke-dasharray: 150; stroke-dashoffset: 150;
-    animation: authDrawTextTrace var(--auth-loader-speed, 2.5s) cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    stroke-dasharray: 150; stroke-dashoffset: 150; opacity: 0; /* invisible until the reveal */
 }
-.text-fill {
-    fill: var(--text-bright); opacity: 0; transform-origin: center;
-    animation: authStrikeFillText var(--auth-loader-speed, 2.5s) cubic-bezier(0.4, 0, 0.2, 1) infinite;
-}
+.text-fill { fill: var(--text-bright); opacity: 0; transform-origin: center; }
 
+.brand-container.is-loaded .text-stroke { animation: authDrawTextTraceFinal 0.7s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+.brand-container.is-loaded .text-glow { animation: authGlowPulseTextFinal 0.7s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+.brand-container.is-loaded .text-fill { animation: authStrikeFillTextFinal 0.7s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+
+/* --- Loop-phase keyframes (bolt only, repeats) --- */
 @keyframes authDrawTrace {
     0% { stroke-dashoffset: 70; opacity: 1; }
     35% { stroke-dashoffset: 0; opacity: 1; }
     75% { stroke-dashoffset: 0; opacity: 0; }
     100% { stroke-dashoffset: 70; opacity: 0; }
 }
-@keyframes authDrawTextTrace {
-    0% { stroke-dashoffset: 150; opacity: 1; }
-    35% { stroke-dashoffset: 0; opacity: 1; }
-    75% { stroke-dashoffset: 0; opacity: 0; }
-    100% { stroke-dashoffset: 150; opacity: 0; }
-}
-/* NOTE: these two used to also animate `filter: drop-shadow(...)` for the glow.
-   iOS Safari is known to be unreliable animating `filter` via CSS keyframes —
-   it can just never update, which is exactly the "glow is nonexistent on iOS"
-   symptom. The glow is now handled entirely by the separate .lightning-glow /
-   .text-glow layers below (a pre-blurred duplicate shape, opacity/scale only —
-   properties every browser animates the same way), so these only need to
-   handle the crisp fill anymore. */
+/* NOTE: these avoid animating `filter: drop-shadow(...)` — iOS Safari is known to
+   be unreliable animating `filter` via CSS keyframes (it can just never update,
+   which is exactly the "glow is nonexistent on iOS" symptom). The glow instead
+   comes from the separate .lightning-glow / .text-glow layers (a pre-blurred
+   duplicate shape, opacity/scale only — properties every browser animates the
+   same way), so these only ever need to handle the crisp fill. */
 @keyframes authStrikeFill {
     0%, 30% { opacity: 0; transform: scale(0.9); }
     35% { opacity: 1; transform: scale(1.1); }
@@ -185,16 +195,6 @@ input, textarea {
     75% { opacity: 1; transform: scale(1); }
     100% { opacity: 0; transform: scale(0.9); }
 }
-@keyframes authStrikeFillText {
-    0%, 30% { opacity: 0; transform: scale(0.95); }
-    35% { opacity: 1; transform: scale(1.05); }
-    40% { opacity: 0.8; transform: scale(1); }
-    45% { opacity: 1; }
-    75% { opacity: 1; transform: scale(1); }
-    100% { opacity: 0; transform: scale(0.95); }
-}
-/* The actual glow "bloom" — bigger opacity/scale swing than the crisp fill
-   above so it reads as a soft halo growing and fading behind it. */
 @keyframes authGlowPulse {
     0%, 30% { opacity: 0; transform: scale(0.9); }
     35% { opacity: 0.9; transform: scale(1.35); }
@@ -203,19 +203,42 @@ input, textarea {
     75% { opacity: 0.55; transform: scale(1.1); }
     100% { opacity: 0; transform: scale(0.9); }
 }
-@keyframes authGlowPulseText {
-    0%, 30% { opacity: 0; transform: scale(0.95); }
-    35% { opacity: 0.85; transform: scale(1.2); }
-    40% { opacity: 0.5; transform: scale(1.1); }
-    45% { opacity: 0.8; transform: scale(1.15); }
-    75% { opacity: 0.5; transform: scale(1.05); }
-    100% { opacity: 0; transform: scale(0.95); }
+
+/* --- Reveal-phase keyframes (play once, hold the final frame) --- */
+@keyframes authDrawTraceFinal {
+    0% { stroke-dashoffset: 70; opacity: 1; }
+    100% { stroke-dashoffset: 0; opacity: 1; }
+}
+@keyframes authDrawTextTraceFinal {
+    0% { stroke-dashoffset: 150; opacity: 1; }
+    100% { stroke-dashoffset: 0; opacity: 1; }
+}
+@keyframes authStrikeFillFinal {
+    0% { opacity: 0; transform: scale(0.9); }
+    60% { opacity: 1; transform: scale(1.12); }
+    100% { opacity: 1; transform: scale(1); }
+}
+@keyframes authStrikeFillTextFinal {
+    0% { opacity: 0; transform: scale(0.95); }
+    60% { opacity: 1; transform: scale(1.08); }
+    100% { opacity: 1; transform: scale(1); }
+}
+@keyframes authGlowPulseFinal {
+    0% { opacity: 0; transform: scale(0.9); }
+    60% { opacity: 0.75; transform: scale(1.3); }
+    100% { opacity: 0.35; transform: scale(1.05); } /* settles to a calm steady glow, doesn't pulse anymore */
+}
+@keyframes authGlowPulseTextFinal {
+    0% { opacity: 0; transform: scale(0.95); }
+    60% { opacity: 0.65; transform: scale(1.2); }
+    100% { opacity: 0.3; transform: scale(1.05); }
 }
 
 #auth-section {
     background: linear-gradient(160deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
-    padding: 40px 35px; border-radius: var(--radius-lg);
+    padding: 32px 32px; border-radius: var(--radius-lg);
     width: 380px; max-width: 95vw;
+    max-height: 92vh; overflow-y: auto; overscroll-behavior: contain;
     text-align: center; border: 1px solid var(--border-color);
     box-shadow: 0 20px 60px rgba(0,0,0,0.7);
     animation: authCardIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
@@ -229,7 +252,7 @@ input, textarea {
     40%, 60% { transform: translateX(4px); }
 }
 
-.auth-logo { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 20px; color: var(--accent-primary); }
+.auth-logo { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 14px; color: var(--accent-primary); }
 .auth-logo-icon { overflow: visible; }
 .auth-logo span { font-size: 24px; font-weight: 700; color: var(--text-bright); letter-spacing: -0.5px; }
 /* A gentle idle "breathing" glow on the card logo — a quieter nod to the big
@@ -258,7 +281,7 @@ input, textarea {
     50% { opacity: 0.55; transform: scale(1.3); }
 }
 #auth-section h2 { margin: 0 0 5px; font-size: 22px; color: var(--text-bright); font-weight: 700; }
-.auth-sub { color: var(--text-muted); margin: 0 0 22px; font-size: 14px; }
+.auth-sub { color: var(--text-muted); margin: 0 0 16px; font-size: 14px; }
 
 /* Every direct child of a view cascades in with a slight stagger whenever that
    view is (re)shown — swapping login<->register, or the very first paint. */
@@ -299,25 +322,40 @@ input, textarea {
 
 /* --- Register: identity section --- */
 /* The username used to be a plain text field indistinguishable from email/
-   password below it. Pairing it with a live avatar preview gives it the visual
-   weight of "this is who you'll be" rather than just another form line. */
-.auth-identity { display: flex; align-items: flex-end; gap: 12px; margin-bottom: 16px; }
+   password below it. Giving it its own avatar-upload row (with a live
+   initial-letter fallback) gives it the visual weight of "this is who you'll
+   be" rather than just another form line. Kept as one .auth-field (label above
+   the whole row, error below it) so the avatar lines up with just the input —
+   not with the label above or error text below it. */
+.auth-field-username { margin-bottom: 14px; }
+.auth-optional-tag { text-transform: none; font-weight: 500; color: var(--text-muted); opacity: 0.75; letter-spacing: 0; font-size: 11px; }
+.auth-identity-row { display: flex; align-items: center; gap: 12px; }
+
 .auth-identity-avatar {
-    width: 50px; height: 50px; border-radius: 50%; flex-shrink: 0;
-    background: var(--bg-main); border: 1px solid var(--border-color);
-    color: var(--text-muted); font-weight: 700; font-size: 19px;
+    position: relative;
+    width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0; padding: 0; overflow: hidden;
+    background: var(--bg-main); border: 1px dashed var(--border-color);
+    color: var(--text-muted); font-weight: 700; font-size: 18px; font-family: inherit;
     display: flex; align-items: center; justify-content: center;
-    text-transform: uppercase;
+    text-transform: uppercase; cursor: pointer;
     transition: background var(--transition), color var(--transition), border-color var(--transition), transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
+.auth-identity-avatar:hover { border-color: var(--accent-primary); transform: scale(1.06); }
+.auth-identity-avatar img { width: 100%; height: 100%; object-fit: cover; }
 .auth-identity-avatar.auth-identity-avatar-filled {
-    background: var(--accent-primary); color: #fff; border-color: transparent;
+    background: var(--accent-primary); color: #fff; border-style: solid; border-color: transparent;
     box-shadow: 0 4px 14px rgba(79,129,214,0.35);
-    transform: scale(1.06);
 }
-.auth-field-username { flex: 1; margin-bottom: 0; }
+/* Small pencil overlay on hover — the affordance that this is clickable, since
+   a plain circle otherwise doesn't read as an upload control. */
+.auth-identity-avatar-edit {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.45); color: #fff; font-size: 15px; opacity: 0; transition: opacity 0.15s ease;
+}
+.auth-identity-avatar:hover .auth-identity-avatar-edit { opacity: 1; }
+
 .auth-username-wrap {
-    display: flex; align-items: center;
+    flex: 1; display: flex; align-items: center;
     background: var(--bg-main); border: 1px solid var(--border-color); border-radius: var(--radius-sm);
     transition: border-color var(--transition), box-shadow var(--transition);
 }
@@ -327,7 +365,7 @@ input, textarea {
 .auth-username-wrap input:focus { box-shadow: none !important; }
 
 .auth-divider {
-    display: flex; align-items: center; gap: 10px; margin: 6px 0 16px;
+    display: flex; align-items: center; gap: 10px; margin: 4px 0 14px;
     color: var(--text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
 }
 .auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--border-color); }
@@ -344,7 +382,7 @@ input, textarea {
     border: 2px solid rgba(255,255,255,0.35); border-top-color: #fff;
     animation: spin 0.7s linear infinite; display: inline-block;
 }
-.auth-switch { margin: 18px 0 0; font-size: 13px; color: var(--text-muted); }
+.auth-switch { margin: 12px 0 0; font-size: 13px; color: var(--text-muted); }
 .auth-switch a { color: var(--accent-primary); cursor: pointer; font-weight: 600; }
 .auth-switch a:hover { text-decoration: underline; }
 
