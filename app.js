@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-import { getDatabase, ref, push, onChildAdded, onChildRemoved, onChildChanged, onValue, set, get, child, remove, onDisconnect, query, limitToLast, update, orderByChild, startAt, endAt } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { getDatabase, ref, push, onChildAdded, onChildRemoved, onChildChanged, onValue, set, get, child, remove, onDisconnect, query, limitToLast, update, orderByChild, startAt, endAt, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-functions.js";
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-storage.js";
 
 // ==========================================
@@ -23,6 +24,26 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getDatabase(app);
 const storage = getStorage(app);
+const schoolUpFunctions = getFunctions(app, 'europe-west1');
+const ensureSchoolUpDm = httpsCallable(schoolUpFunctions, 'schoolupEnsureDM');
+const verifiedDmPairs = new Map();
+let dmOpenSequence = 0;
+let currentDMOtherSafeEmail = null;
+async function ensureDmPair(otherSafe) {
+    const owner = auth.currentUser?.uid;
+    const cacheKey = owner + ':' + otherSafe;
+    if (verifiedDmPairs.has(cacheKey)) return verifiedDmPairs.get(cacheKey);
+    const result = await ensureSchoolUpDm({ other: otherSafe });
+    if (auth.currentUser?.uid !== owner) throw new Error('Your account changed. Open the conversation again.');
+    verifiedDmPairs.set(cacheKey, result.data.dmId);
+    return result.data.dmId;
+}
+const skipTagKey = (name, tag) => `${name}_${tag}`.replace(/\./g, ',');
+async function claimSkipTag(username, tag, owner) {
+    return runTransaction(ref(db, `user_tags/${skipTagKey(username, tag)}`), current =>
+        current === null || current === owner ? owner : undefined,
+        { applyLocally: false });
+}
 
 // ==========================================
 // --- STATE ---
@@ -161,7 +182,7 @@ async function setFriendship(meSafe, otherSafe, isFriend) {
 // Creates/updates a DM thread as visible for BOTH people (used when a DM
 // is opened/started, or when a new message is sent into it).
 async function touchDmMeta(meSafe, otherSafe) {
-    const dmId = getDmId(meSafe, otherSafe);
+    const dmId = await ensureDmPair(otherSafe);
     const payload = { dmId, lastActivity: Date.now(), hidden: false };
     await update(ref(db, `dm_meta/${meSafe}/${otherSafe}`), payload);
     await update(ref(db, `dm_meta/${otherSafe}/${meSafe}`), payload);
@@ -170,7 +191,7 @@ async function touchDmMeta(meSafe, otherSafe) {
 // Hides a DM from MY OWN sidebar only ("Close DM"). Never touches the
 // other person's copy, so it never disappears for them.
 async function hideDmForMe(meSafe, otherSafe) {
-    const dmId = getDmId(meSafe, otherSafe);
+    const dmId = await ensureDmPair(otherSafe);
     await update(ref(db, `dm_meta/${meSafe}/${otherSafe}`), { dmId, hidden: true });
 }
 function formatBytes(bytes) {
@@ -397,7 +418,7 @@ window.showGlobalUserProfile = async function (email, event) {
 
     const nameEl = document.getElementById('gup-username');
     const tagEl = document.getElementById('gup-tag');
-    
+
     const bannerEl = document.getElementById('gup-banner');
     const rolesContainer = document.getElementById('gup-roles-container');
     const sendMsgBtn = document.getElementById('gup-send-message');
@@ -447,11 +468,11 @@ window.showGlobalUserProfile = async function (email, event) {
         if(studioLayer) {
             studioLayer.innerHTML = ''; // Clear old elements
             const studio = uData.studio || { colors: ['var(--bg-secondary)', 'var(--bg-main)'], angle: 135, elements: [] };
-            
+
             // 1. Draw the gradient background safely
             const safeColors = studio.colors || ['var(--bg-secondary)', 'var(--bg-main)'];
             studioLayer.style.background = `linear-gradient(${studio.angle || 135}deg, ${safeColors.join(', ')})`;
-            
+
             // 2. Plot the stickers and text safely
             if (studio.elements && studio.elements.length > 0) {
                 studio.elements.forEach(el => {
@@ -499,7 +520,7 @@ window.showGlobalUserProfile = async function (email, event) {
         const badgesContainer = document.getElementById('gup-badges');
         if (badgesContainer) {
             badgesContainer.innerHTML = ''; // Clear previous profile's badges
-            
+
             if (uData.badges) {
                 Object.keys(uData.badges).forEach(badgeKey => {
                     if (uData.badges[badgeKey] && badgeIcons[badgeKey]) {
@@ -549,7 +570,7 @@ window.showGlobalUserProfile = async function (email, event) {
                         const badge = document.createElement('span');
                         badge.className = 'role-badge';
                         badge.innerHTML = `<span style="color:${serverRolesCache[rId].color};">●</span> ${serverRolesCache[rId].name}`;
-                        
+
                         if (myServerPerms.manageRoles || myServerRoles.includes('owner')) {
                             badge.style.cursor = 'pointer';
                             badge.title = 'Click to remove role';
@@ -927,22 +948,22 @@ document.getElementById('register-btn')?.addEventListener('click', async () => {
     setBtnLoading('register-btn', true);
     try {
         const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
-        const safeEmail = sanitizeEmail(email);
+        const safeEmail = sanitizeEmail(userCredential.user.email);
         // regAvatarDataUrl is only set if the user actually clicked the avatar
         // circle and picked a photo — entirely optional, falls back to the
         // generated initial-letter avatar otherwise.
         const defaultAvatar = regAvatarDataUrl || `https://ui-avatars.com/api/?name=${username.charAt(0)}&background=4d78cc&color=fff&size=256`;
 
-        // Find a free Username#Tag combo — random 4-digit tag, retried on collision
-        let tag, tagKey, attempts = 0;
-        do {
+        // Atomically reserve the same Skip tag used by both apps.
+        let tag, claimed = false;
+        for (let attempt = 0; attempt < 30; attempt++) {
             tag = Math.floor(1000 + Math.random() * 9000).toString();
-            tagKey = `${username}_${tag}`;
-            attempts++;
-        } while ((await get(child(ref(db), `user_tags/${tagKey}`))).exists() && attempts < 10);
-
-        await set(ref(db, `users/${safeEmail}`), { email, uid: userCredential.user.uid, username, tag, avatar: defaultAvatar, status: 'online', saved_status: 'online' });
-        await set(ref(db, `user_tags/${tagKey}`), safeEmail);
+            const reservation = await claimSkipTag(username, tag, safeEmail);
+            if (reservation.committed) { claimed = true; break; }
+        }
+        if (!claimed) throw new Error('Could not reserve a Skip tag. Please sign in and retry your profile.');
+        const userData = { email: userCredential.user.email, uid: userCredential.user.uid, username, tag, avatar: defaultAvatar, status: 'online', saved_status: 'online' };
+        await update(ref(db), Object.fromEntries(Object.entries(userData).map(([key, value]) => [`users/${safeEmail}/${key}`, value])));
         showToast('Account created! Welcome to Skip 🎉', 'success');
     } catch (error) {
         const formErr = document.getElementById('register-form-error');
@@ -987,7 +1008,7 @@ onAuthStateChanged(auth, async (user) => {
         currentUserSafeEmail = sanitizeEmail(user.email);
 
         // Set your admin email here!
-const MY_ADMIN_EMAIL = "noxy@gmail.com"; 
+const MY_ADMIN_EMAIL = "noxy@gmail.com";
 
 if (user.email === MY_ADMIN_EMAIL) {
     document.getElementById('tab-us-admin').style.display = 'block';
@@ -996,14 +1017,14 @@ if (user.email === MY_ADMIN_EMAIL) {
         onValue(ref(db, `users/${currentUserSafeEmail}`), (snapshot) => {
             if (snapshot.exists()) {
                 myProfile = snapshot.val();
-                
+
                 // 1. ADD YOURSELF TO THE CACHE (Fixes the "when I send a message" bug!)
                 globalUsersCache[currentUserSafeEmail] = myProfile;
 
                 // 2. Update the text
                 document.getElementById('user-display').innerText = myProfile.username;
                 document.getElementById('user-tag-display').innerText = `#${myProfile.tag}`;
-                
+
                 // 3. Update the bottom-left avatar panel to use the decoration helper
              const userControls = document.getElementById('user-controls-dock'); // <-- UPDATED ID
              const oldAvatar = userControls.querySelector('.avatar-container');
@@ -1022,9 +1043,9 @@ if (user.email === MY_ADMIN_EMAIL) {
         onValue(ref(db, 'emojis'), snap => { globalEmojisCache = snap.val() || {}; });
 
         // --- NEW: DYNAMIC CSS INJECTOR ---
-        onValue(ref(db, 'decorations'), snap => { 
-            globalDecorationsCache = snap.val() || {}; 
-            
+        onValue(ref(db, 'decorations'), snap => {
+            globalDecorationsCache = snap.val() || {};
+
             // 1. Create a <style> tag if it doesn't exist
             let styleTag = document.getElementById('dynamic-decorations-css');
             if (!styleTag) {
@@ -1032,7 +1053,7 @@ if (user.email === MY_ADMIN_EMAIL) {
                 styleTag.id = 'dynamic-decorations-css';
                 document.head.appendChild(styleTag);
             }
-            
+
             // 2. Combine all the CSS from Firebase and inject it!
             let fullCSS = '';
             Object.values(globalDecorationsCache).forEach(dec => {
@@ -1041,7 +1062,7 @@ if (user.email === MY_ADMIN_EMAIL) {
             styleTag.innerHTML = fullCSS;
 
             // 3. Update the UI
-            loadDecorationsUI(); 
+            loadDecorationsUI();
         });
 
         const connectedRef = ref(db, '.info/connected');
@@ -1166,21 +1187,24 @@ document.getElementById('save-profile-btn')?.addEventListener('click', async () 
     const newTag = document.getElementById('edit-tag').value.trim();
     const newBio = document.getElementById('edit-bio').value.trim();
 
-    if (!newUsername || !newTag) return customAlert("Fields cannot be empty", "Error");
-    
-    await remove(ref(db, `user_tags/${myProfile.username}_${myProfile.tag}`));
-    await set(ref(db, `user_tags/${newUsername}_${newTag}`), currentUserSafeEmail);
-    
+    if (!/^[a-zA-Z0-9_.]{2,20}$/.test(newUsername) || !/^[0-9]{4}$/.test(newTag)) return customAlert("Use 2–20 letters, numbers, dots, or underscores and a 4-digit Skip tag.", "Invalid tag");
+    const oldTagKey = skipTagKey(myProfile.username, myProfile.tag);
+    const nextTagKey = skipTagKey(newUsername, newTag);
+    try {
+    const reservation = await claimSkipTag(newUsername, newTag, currentUserSafeEmail);
+    if (!reservation.committed) return customAlert("That Skip tag is already taken.", "Choose another tag");
     // Save EVERYTHING to Firebase
-    await update(ref(db, `users/${currentUserSafeEmail}`), { 
-        username: newUsername, 
-        tag: newTag, 
+    await update(ref(db, `users/${currentUserSafeEmail}`), {
+        username: newUsername,
+        tag: newTag,
         avatar: tempBase64Avatar,
         banner: tempBase64Banner,
         bio: newBio,
         studio: studioState // Save the entire studio configuration!
     });
+    if (oldTagKey !== nextTagKey) await remove(ref(db, `user_tags/${oldTagKey}`));
     showToast('Profile saved!', 'success');
+    } catch (err) { customAlert(err.message || 'Profile could not be saved.', 'Try again'); }
 });
 
 // --- SECURITY: Change Password ---
@@ -1272,8 +1296,8 @@ document.getElementById('uc-profile-trigger')?.addEventListener('click', (e) => 
 document.querySelectorAll('.status-option[data-status]').forEach(opt => {
     opt.addEventListener('click', (e) => {
         // FIX: Changed e.target to e.currentTarget
-        const s = e.currentTarget.getAttribute('data-status'); 
-        
+        const s = e.currentTarget.getAttribute('data-status');
+
         update(ref(db, `users/${currentUserSafeEmail}`), { status: s, saved_status: s });
         document.getElementById('status-selector').style.display = 'none';
     });
@@ -1364,7 +1388,7 @@ function renderStudio() {
             if (el.id === studioJustAddedElId) domEl.classList.add('studio-element-pop-in');
             domEl.style.left = el.x + 'px';
             domEl.style.top = el.y + 'px';
-            
+
             if(el.type === 'image') {
                 domEl.src = el.content;
                 domEl.style.maxWidth = '100px';
@@ -1459,10 +1483,10 @@ document.getElementById('studio-angle')?.addEventListener('input', (e) => {
 });
 document.getElementById('studio-sticker-upload')?.addEventListener('change', async (e) => {
     const file = e.target.files[0]; if(!file) return;
-    const result = file.type === 'image/gif' 
+    const result = file.type === 'image/gif'
         ? await new Promise(r => { const reader=new FileReader(); reader.onload=ev=>r({compressed: ev.target.result}); reader.readAsDataURL(file); })
         : await compressImage(file, 200, 200, 0.9);
-    
+
     const newId = generateCode();
     studioState.elements.push({ id: newId, type: 'image', content: result.compressed, x: 50, y: 50 });
     studioJustAddedElId = newId;
@@ -1482,27 +1506,27 @@ document.getElementById('studio-add-text-btn')?.addEventListener('click', () => 
 // Settings Button Logic
 document.getElementById('open-settings-btn')?.addEventListener('click', (e) => {
     e.stopPropagation();
-    
+
     const statusSelector = document.getElementById('status-selector');
     if (statusSelector) statusSelector.style.display = 'none';
-    
+
     // Load Username & Tag safely
     const usernameInput = document.getElementById('edit-username');
     if (usernameInput) usernameInput.value = myProfile.username || '';
-    
+
     const tagInput = document.getElementById('edit-tag');
     if (tagInput) tagInput.value = myProfile.tag || '';
-    
+
     // Load Avatar safely
     const avatarPreview = document.getElementById('profile-preview');
     if (avatarPreview) avatarPreview.src = myProfile.avatar || 'https://cdn.pixabay.com/photo/2023/02/18/11/00/icon-7797704_640.png';
     tempBase64Avatar = myProfile.avatar;
-    
+
     // Load Banner & Bio safely
     tempBase64Banner = myProfile.banner || null;
     const bannerPreview = document.getElementById('settings-banner-preview');
     if (bannerPreview) bannerPreview.style.backgroundImage = tempBase64Banner ? `url("${tempBase64Banner}")` : 'none';
-    
+
     const bioInput = document.getElementById('edit-bio');
     if (bioInput) bioInput.value = myProfile.bio || '';
 
@@ -1510,7 +1534,7 @@ document.getElementById('open-settings-btn')?.addEventListener('click', (e) => {
     studioState = myProfile.studio || { colors: ['#161b22', '#0f1115'], angle: 135, elements: [] };
     if (!studioState.elements) studioState.elements = []; // Prevent the crash
     if (!studioState.colors) studioState.colors = ['#161b22', '#0f1115']; // Ensure colors exist
-    
+
     if (typeof renderStudio === 'function') renderStudio(); // Draw the studio!
 
     // Open Modal safely
@@ -1520,7 +1544,7 @@ document.getElementById('open-settings-btn')?.addEventListener('click', (e) => {
         document.querySelector('#user-settings-modal .fs-modal-layout')?.classList.remove('mobile-viewing-content');
         document.querySelector('#user-settings-modal .fs-tab[data-tab="account"]')?.click();
     }
-    
+
     if (typeof loadPersonalEmojis === 'function') loadPersonalEmojis();
 });
 
@@ -1765,7 +1789,7 @@ function renderHomeContent() {
     const hRequests = document.getElementById('home-header-requests');
     const hNews = document.getElementById('home-header-news'); // NEW
     [hHome, hFriends, hRequests, hNews].forEach(h => { if (h) h.style.display = 'none'; });
-    
+
     // Manage active states
     document.getElementById('nav-home-btn').classList.toggle('active', currentHomeTab === 'home');
     document.getElementById('nav-news-btn').classList.toggle('active', currentHomeTab === 'news');
@@ -1783,12 +1807,12 @@ function renderHomeContent() {
     if (currentHomeTab === 'news') {
         hNews.style.display = 'flex';
         content.innerHTML = '<div style="text-align:center; padding: 40px; color:var(--text-muted);"><div class="loading-spinner" style="width:24px;height:24px;border:2px solid var(--border-color);border-top-color:var(--accent-primary);border-radius:50%;margin:0 auto 10px;"></div>Loading latest updates...</div>';
-        
+
         // IMPORTANT: Make sure this is your EXACT Headway page name !
-        const HEADWAY_PAGE = '341374-mrnoxy-github-changelog'; 
+        const HEADWAY_PAGE = '341374-mrnoxy-github-changelog';
         const RSS_URL = `https://headwayapp.co/${HEADWAY_PAGE}/rss?nocache=${Date.now()}`;
-        
-        
+
+
         fetch(`https://corsproxy.io/?${encodeURIComponent(RSS_URL)}`, {
             cache: 'no-store',
             headers: {
@@ -1812,7 +1836,7 @@ function renderHomeContent() {
                 // Natively parse the XML feed
                 const parser = new DOMParser();
                 const xmlDoc = parser.parseFromString(xmlText, "text/xml");
-                
+
                 // If the parser fails, throw an error
                 if (xmlDoc.querySelector("parsererror")) {
                     console.error("XML Parse Error:", xmlDoc.querySelector("parsererror").textContent);
@@ -1825,40 +1849,40 @@ function renderHomeContent() {
                 if (items.length > 0) {
                  const latestPostId = btoa(items[0].querySelector("guid")?.textContent || "").replace(/=/g, '').substring(0, 30);
                     const savedPostId = localStorage.getItem('skip_last_news_id');
-                    
+
                     // If they are on a different tab and haven't seen this post, show a dot!
                     if (savedPostId !== latestPostId && currentHomeTab !== 'news') {
                         updateBadge('nav-news-btn', true, true, false); // Shows the red dot
-                    } 
+                    }
                     // If they are currently looking at the news tab, clear the dot and save the ID
                     else if (currentHomeTab === 'news') {
                         localStorage.setItem('skip_last_news_id', latestPostId);
                         updateBadge('nav-news-btn', false);
                     }
-                }   
+                }
 
                 content.innerHTML = '';
                 if (items.length === 0) {
                     content.innerHTML = '<div class="news-container"><p style="color:var(--text-muted); text-align:center;">No news available at the moment.</p></div>';
                     return;
                 }
-                
+
                 const container = document.createElement('div');
                 container.className = 'news-container';
-                
+
                 // Clear old reaction listeners
                 newsListeners.forEach(unsub => unsub());
                 newsListeners = [];
-                
+
                 items.forEach(item => {
                     const title = item.querySelector("title")?.textContent || "Update";
                     const pubDateRaw = item.querySelector("pubDate")?.textContent || "";
                     const description = item.querySelector("description")?.textContent || "";
                     const guid = item.querySelector("guid")?.textContent || title;
-                    
+
                     const date = new Date(pubDateRaw).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
                     const postId = btoa(guid).replace(/=/g, '').substring(0, 30);
-                    
+
                     const card = document.createElement('div');
                     card.className = 'news-card';
                     card.innerHTML = `
@@ -1868,20 +1892,20 @@ function renderHomeContent() {
                         <div class="news-reaction-bar" id="news-react-${postId}"></div>
                     `;
                     container.appendChild(card);
-                    
+
                     // Reaction logic
                     const unsub = onValue(ref(db, `news_reactions/${postId}`), (rSnap) => {
                         const reactions = rSnap.val() || {};
                         const bar = document.getElementById(`news-react-${postId}`);
-                        if (!bar) return; 
+                        if (!bar) return;
                         bar.innerHTML = '';
-                        
+
                         const emojis = ['👍','👎','❤️', '🔥', '🎉','💀'];
                         emojis.forEach(emoji => {
                             const users = reactions[emoji] || {};
                             const count = Object.keys(users).length;
                             const hasVoted = !!users[currentUserSafeEmail];
-                            
+
                             const btn = document.createElement('button');
                             btn.className = `news-reaction-btn ${hasVoted ? 'active' : ''}`;
                             btn.innerHTML = `${emoji} ${count > 0 ? count : ''}`;
@@ -1914,10 +1938,10 @@ function renderHomeContent() {
             const fEmail = fData.email;
             const u = globalUsersCache[fEmail] || {};
             const div = document.createElement('div'); div.className = 'friend-card';
-            
+
             div.innerHTML = `<div class="friend-card-left">${getAvatarHTML(u, 'avatar-small')}<div><div style="font-weight:600;color:var(--text-bright);">${u.username || '...'}</div><div style="font-size:12px;color:var(--text-muted);">${u.status || 'offline'}</div></div></div>
             <div class="friend-card-right"><div class="action-circle" title="Message"><svg width='18' height='18' viewBox='0 0 24 24' fill='currentColor'><path d='M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z'/></svg></div><div class="action-circle red" title="Remove Friend"><svg width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2'/><circle cx='8.5' cy='7' r='4'/><line x1='18' y1='8' x2='23' y2='13'/><line x1='23' y1='8' x2='18' y2='13'/></svg></div></div>`;
-            
+
             div.querySelector('.action-circle:not(.red)').onclick = async () => {
                 const dmId = getDmId(currentUserSafeEmail, fEmail);
                 await touchDmMeta(currentUserSafeEmail, fEmail);
@@ -1929,7 +1953,7 @@ function renderHomeContent() {
             div.addEventListener('contextmenu', (e) => showContextMenu(e, 'friend', fEmail));
             content.appendChild(div);
         });
-    } 
+    }
     // === 3. REQUESTS TAB ===
     else {
         hFriends.style.display = 'none'; hRequests.style.display = 'flex'; if(hNews) hNews.style.display = 'none';
@@ -1976,7 +2000,7 @@ document.getElementById('add-friend-btn-green')?.addEventListener('click', () =>
     openInputModal("Add Friend", "e.g. noxy#6996", "Send a friend request (Username#Tag):", async (inputTag) => {
         if (!inputTag) return;
         if (inputTag.startsWith('@')) inputTag = inputTag.substring(1);
-        const tagSnap = await get(child(ref(db), `user_tags/${inputTag.replace('#', '_')}`));
+        const tagSnap = await get(child(ref(db), `user_tags/${inputTag.replace('#', '_').replace(/\./g, ',')}`));
         if (tagSnap.exists()) {
             const friendSafeEmail = tagSnap.val();
             if (friendSafeEmail === currentUserSafeEmail) return customAlert("You can't add yourself!", "Wait...");
@@ -1995,7 +2019,7 @@ document.getElementById('add-friend-btn-green')?.addEventListener('click', () =>
 function getAvatarHTML(user, sizeClass = 'avatar-small') {
     if (!user) return '';
     let decHtml = '';
-    
+
     // Check if user has a decoration and it exists in our cache
     if (user.decorationId && globalDecorationsCache[user.decorationId]) {
         const dec = globalDecorationsCache[user.decorationId];
@@ -2010,10 +2034,10 @@ function getAvatarHTML(user, sizeClass = 'avatar-small') {
             });
         }
     }
-    
+
     const status = user.status || 'offline';
     const avatarUrl = user.avatar || 'https://ui-avatars.com/api/?name=U';
-    
+
     return `
     <div class="avatar-container" style="position:relative; width: ${sizeClass === 'avatar-large' ? '64px' : '32px'}; height: ${sizeClass === 'avatar-large' ? '64px' : '32px'};">
         <img src="${avatarUrl}" class="${sizeClass}" style="object-fit:cover; width:100%; height:100%;">
@@ -2026,7 +2050,7 @@ function loadDecorationsUI() {
     const grid = document.getElementById('us-decorations-grid');
     if (!grid) return;
     grid.innerHTML = '';
-    
+
     // Add a "None" option
     const noneDiv = document.createElement('div');
     noneDiv.style.cssText = `padding: 10px; border-radius: 8px; border: 2px solid ${!myProfile.decorationId ? 'var(--accent-primary)' : 'var(--border-color)'}; background: var(--bg-main); cursor: pointer; text-align: center; width: 100px;`;
@@ -2044,7 +2068,7 @@ function loadDecorationsUI() {
         const isActive = myProfile.decorationId === decId;
         const div = document.createElement('div');
         div.style.cssText = `padding: 10px; border-radius: 8px; border: 2px solid ${isActive ? 'var(--accent-primary)' : 'var(--border-color)'}; background: var(--bg-main); cursor: pointer; text-align: center; width: 100px; transition: 0.2s;`;
-        
+
         // Use our helper to render a preview using the user's current avatar
         div.innerHTML = `
             <div style="display:flex; justify-content:center; margin-bottom: 10px;">
@@ -2052,7 +2076,7 @@ function loadDecorationsUI() {
             </div>
             <div style="font-size: 12px; color: var(--text-bright);">${decData.name || 'Decoration'}</div>
         `;
-        
+
         div.onclick = () => {
             update(ref(db, `users/${currentUserSafeEmail}`), { decorationId: decId });
             myProfile.decorationId = decId; // FIX: Update local cache
@@ -2106,22 +2130,22 @@ function loadDmList() {
             div.classList.add('channel-item', 'friend-item'); div.id = `dm-${fDataStatic.dmId}`;
             // Use the helper to render the initial DM item
             div.innerHTML = `${getAvatarHTML(cachedUser, 'avatar-small')}<span id="f-name-${fEmail}" class="c-name">${cachedUser.username || '...'}</span>`;
-            
+
             div.addEventListener('contextmenu', (e) => showContextMenu(e, 'dm', fEmail));
             let touchTimer;
             div.addEventListener('touchstart', (e) => { touchTimer = setTimeout(() => showContextMenu(e, 'dm', fEmail), 500); });
             div.addEventListener('touchend', () => clearTimeout(touchTimer));
             div.addEventListener('touchmove', () => clearTimeout(touchTimer));
             if (chatType === 'dm' && currentChatId === fDataStatic.dmId) div.classList.add('active');
-            
+
             onValue(ref(db, `users/${fEmail}`), (userSnap) => {
                 if (userSnap.exists()) {
                     const uData = userSnap.val(); globalUsersCache[fEmail] = uData;
-                    
+
                     // Update live! Replace the whole avatar container so decorations update instantly
                     const avatarWrapper = div.querySelector('.avatar-container');
                     if (avatarWrapper) avatarWrapper.outerHTML = getAvatarHTML(uData, 'avatar-small');
-                    
+
                     const name = document.getElementById(`f-name-${fEmail}`); if (name) name.innerText = uData.username;
                     div.onclick = () => openDM(fDataStatic.dmId, fEmail);
                 }
@@ -2132,10 +2156,15 @@ function loadDmList() {
     });
 }
 
-function openDM(dmId, friendEmail) {
+async function openDM(dmId, friendEmail) {
+    const sequence = ++dmOpenSequence;
+    try { dmId = await ensureDmPair(friendEmail); }
+    catch (err) { showToast('Could not open this conversation. Check your connection and the School Up integration setup.', 'error'); return; }
+    if (sequence !== dmOpenSequence) return;
+    currentDMOtherSafeEmail = friendEmail;
     leaveDownloadChannel();
     chatType = 'dm'; currentChatId = dmId;
-    const uData = globalUsersCache[friendEmail]; currentDMOtherUser = uData;
+    const uData = globalUsersCache[friendEmail] || { username: 'Skip friend', tag: '', email: friendEmail.replace(/,/g, '.') }; currentDMOtherUser = uData;
     myServerPerms = { viewChannels: true, sendMessages: true, placeEmojiStickers: true, manageMessages: false };
     myServerMemberData = {};
     update(ref(db, `dm_meta/${currentUserSafeEmail}/${friendEmail}`), { dmId, hidden: false });
@@ -2703,18 +2732,18 @@ document.getElementById('tab-cs-delete')?.addEventListener('click', () => {
 function loadMemberList(serverId) {
     if (unsubscribeMembers) unsubscribeMembers();
     const listContent = document.getElementById('member-list-content');
-    
+
     unsubscribeMembers = onValue(ref(db, `server_members/${serverId}`), async (membersSnap) => {
         // FIX: Give Online/Offline massive negative numbers so custom roles ALWAYS sort above them
         let groups = { online: { name: "Online", order: -9999998, members: [] }, offline: { name: "Offline", order: -9999999, members: [] } };
-        
+
         Object.keys(serverRolesCache).forEach(rId => {
             if (serverRolesCache[rId].hoist) groups[rId] = { name: serverRolesCache[rId].name, order: serverRolesCache[rId].order || 0, color: serverRolesCache[rId].color, members: [] };
         });
-        
+
         const memberPromises = []; currentServerMembersList = [];
         let onlineCount = 0; let totalCount = 0;
-        
+
         membersSnap.forEach(mSnap => {
             const memberEmail = mSnap.key; const memberInfo = mSnap.val(); totalCount++;
             const p = get(child(ref(db), `users/${memberEmail}`)).then(uSnap => {
@@ -2722,59 +2751,59 @@ function loadMemberList(serverId) {
                     const uData = uSnap.val(); const status = uData.status || 'offline';
                     uData.email = memberEmail; currentServerMembersList.push(uData); globalUsersCache[memberEmail] = uData;
                     if (status !== 'offline' && status !== 'invisible') onlineCount++;
-                    
+
                     // FIX: Start at negative infinity so the highest number wins
                     let highestHoistRole = null; let highestHoistOrder = -Infinity;
                     let userRoles = memberInfo.roles ? Object.keys(memberInfo.roles) : (memberInfo.role && memberInfo.role !== 'member' ? [memberInfo.role] : []);
-                    
-                    userRoles.forEach(rId => { 
-                        if (serverRolesCache[rId]?.hoist && serverRolesCache[rId].order > highestHoistOrder) { 
-                            highestHoistOrder = serverRolesCache[rId].order; 
-                            highestHoistRole = rId; 
-                        } 
+
+                    userRoles.forEach(rId => {
+                        if (serverRolesCache[rId]?.hoist && serverRolesCache[rId].order > highestHoistOrder) {
+                            highestHoistOrder = serverRolesCache[rId].order;
+                            highestHoistRole = rId;
+                        }
                     });
-                    
+
                     let targetGroup = 'offline';
                     if (status !== 'offline' && status !== 'invisible') {
                         targetGroup = (highestHoistRole && highestHoistRole !== 'everyone') ? highestHoistRole : 'online';
                     }
-                    
+
                     let nameColor = "var(--text-main)"; let colorOrder = -Infinity;
-                    userRoles.forEach(rId => { 
-                        if (serverRolesCache[rId]?.color !== '#abb2bf' && serverRolesCache[rId]?.order > colorOrder) { 
-                            colorOrder = serverRolesCache[rId].order; 
-                            nameColor = serverRolesCache[rId].color; 
-                        } 
+                    userRoles.forEach(rId => {
+                        if (serverRolesCache[rId]?.color !== '#abb2bf' && serverRolesCache[rId]?.order > colorOrder) {
+                            colorOrder = serverRolesCache[rId].order;
+                            nameColor = serverRolesCache[rId].color;
+                        }
                     });
-                    
+
                     if (groups[targetGroup]) groups[targetGroup].members.push({ email: memberEmail, data: uData, status, nameColor });
                 }
             });
             memberPromises.push(p);
         });
-        
+
         await Promise.all(memberPromises);
-        
+
         document.getElementById('server-stats-display').innerText = `${onlineCount} Online • ${totalCount} Members`;
         document.getElementById('server-stats-display').style.display = 'block';
         listContent.innerHTML = '';
-        
+
         // Sort the categories based on hierarchy (Highest order first)
         const sortedGroupKeys = Object.keys(groups).sort((a, b) => groups[b].order - groups[a].order);
-        
+
         sortedGroupKeys.forEach(gKey => {
             const group = groups[gKey]; if (group.members.length === 0) return;
-            
+
             // Sort members within the category alphabetically
             group.members.sort((a, b) => a.data.username.localeCompare(b.data.username));
-            
+
             const catDiv = document.createElement('div'); catDiv.className = 'member-category'; catDiv.innerText = `${group.name} — ${group.members.length}`;
             listContent.appendChild(catDiv);
-            
+
             group.members.forEach(m => {
                 const mDiv = document.createElement('div'); mDiv.className = 'member-item';
                 const userObjForAvatar = { ...m.data, status: m.status };
-                
+
                 mDiv.innerHTML = `${getAvatarHTML(userObjForAvatar, 'avatar-small')}<div class="member-username" style="color:${m.nameColor};">${m.data.username}</div>`;
                 mDiv.addEventListener('click', (e) => showGlobalUserProfile(m.email, e));
                 listContent.appendChild(mDiv);
@@ -3228,7 +3257,7 @@ function openAddAppModal(channelId, existingApp = null) {
                         <label class="add-app-label">What's New / Changelog</label>
                         <textarea id="aa-changelog" class="fs-input" rows="3" placeholder="What changed in this version...">${app.changelog || ''}</textarea>
                     </div>
-                    
+
                     <div class="add-app-images-section">
                         <h4 class="add-app-section-title">Images</h4>
                         <div class="add-app-row">
@@ -3246,7 +3275,7 @@ function openAddAppModal(channelId, existingApp = null) {
                             <textarea id="aa-screenshots" class="fs-input" rows="3" placeholder="https://screenshot1.png&#10;https://screenshot2.png">${screenshots.join('\n')}</textarea>
                         </div>
                     </div>
-                    
+
                     <div class="add-app-actions">
                         ${isEdit ? `<button id="aa-delete-btn" class="aa-delete-btn">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
@@ -3447,11 +3476,11 @@ function processMentionsAndText(text) {
 
     // FIX: Accurate Mention Detection (Checks for roles that already start with @)
     if (myProfile.username && text.includes('@' + myProfile.username)) isMentioned = true;
-    myServerRoles.forEach(role => { 
+    myServerRoles.forEach(role => {
         if (serverRolesCache[role]) {
             const rName = serverRolesCache[role].name;
             const checkStr = rName.startsWith('@') ? rName : '@' + rName;
-            if (text.includes(checkStr)) isMentioned = true; 
+            if (text.includes(checkStr)) isMentioned = true;
         }
     });
 
@@ -3474,6 +3503,43 @@ function processMentionsAndText(text) {
 
     return { html: processed, isMentioned, isEmojiOnly };
 }
+
+
+// Shared schedules are portable copies. No executable markup or account data.
+const schoolUpDays = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+function readSchoolUpSchedule(share) {
+    try {
+        if (share?.version !== 1 || typeof share.json !== 'string' || share.json.length > 120000) return null;
+        const raw = JSON.parse(share.json);
+        if (!raw || typeof raw.name !== 'string' || !raw.days || raw.name.length > 70) return null;
+        const days = {};
+        for (const day of schoolUpDays) {
+            const classes = raw.days[day] || [];
+            if (!Array.isArray(classes) || classes.length > 250) return null;
+            days[day] = classes.map(item => {
+                if (typeof item.name !== 'string' || !item.name.trim() || item.name.length > 120 || !/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/.test(item.start) || !/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/.test(item.end) || item.start >= item.end) throw Error('Invalid interval');
+                return { id: typeof item.id === 'string' ? item.id.slice(0,100) : crypto.randomUUID(), name: item.name, start: item.start, end: item.end };
+            });
+        }
+        return { id: typeof raw.id === 'string' ? raw.id.slice(0,100) : crypto.randomUUID(), name: raw.name, days };
+    } catch { return null; }
+}
+function schoolUpEscape(value) { return String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function schoolUpScheduleCard(share) {
+    const schedule = readSchoolUpSchedule(share); if (!schedule) return '';
+    const count = Object.values(schedule.days).reduce((n, day) => n + day.length, 0);
+    const preview = schoolUpDays.filter(day => schedule.days[day].length).map(day => `<section><h4>${day}</h4>${[...schedule.days[day]].sort((a,b)=>a.start.localeCompare(b.start)).map(subject=>`<p><time>${subject.start}–${subject.end}</time><span>${schoolUpEscape(subject.name)}</span></p>`).join('')}</section>`).join('');
+    return `<details class="schoolup-share"><summary><span class="schoolup-share-label">SCHOOL UP</span><strong>${schoolUpEscape(schedule.name)}</strong><span>${count} subjects · tap to preview</span></summary><div class="schoolup-share-week">${preview || '<p>No subjects yet.</p>'}</div><button class="schoolup-download" data-schoolup-json="${encodeURIComponent(JSON.stringify(schedule))}">Save schedule for School Up</button><small>Import this JSON file in School Up → Settings → Files & backups.</small></details>`;
+}
+document.addEventListener('click', event => {
+    const button = event.target.closest('[data-schoolup-json]'); if (!button) return;
+    const schedule = readSchoolUpSchedule({ version: 1, json: decodeURIComponent(button.dataset.schoolupJson) });
+    if (!schedule) return showToast('That schedule could not be read.', 'error');
+    const data = { format: 'school-up', version: 2, activeId: schedule.id, schedules: [schedule] };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+    const link = document.createElement('a'); link.href = url; link.download = (schedule.name.replace(/[^a-zA-Z0-9_-]+/g, '-').slice(0,60) || 'Schedule') + '.json';
+    document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1500);
+});
 
 async function buildMessageHtml(data) {
     const rawText = data.text || ""; // FIX: Guarantees text never crashes the regex
@@ -3529,7 +3595,7 @@ async function buildMessageHtml(data) {
         const imgHtml = data.embed.image?.url ? `<img src="${data.embed.image.url}" class="url-embed-img">` : '';
         const logoHtml = data.embed.logo?.url ? `<img src="${data.embed.logo.url}" style="width:14px;height:14px;border-radius:3px;object-fit:contain;">` : '';
         const desc = data.embed.description ? `<div class="url-embed-desc">${data.embed.description}</div>` : '';
-        
+
         contentHtml += `
         <a href="${data.embed.url || '#'}" target="_blank" class="url-embed" style="margin-left:42px;">
             <div class="url-embed-site">${logoHtml} ${site}</div>
@@ -3541,6 +3607,7 @@ async function buildMessageHtml(data) {
 
     // FIX: Removed the "contentHtml = contentHtml.replace..." line that was breaking the HTML!
 
+    contentHtml += schoolUpScheduleCard(data.schoolupSchedule);
     return { html: contentHtml, isMentioned: mentionData.isMentioned, embeds: tempEmbeds };
 }
 
@@ -3567,12 +3634,12 @@ async function fetchOlderMessages() {
     isFetchingMore = true;
     const oldScrollHeight = messagesDiv.scrollHeight;
     document.getElementById('chat-loading-spinner').style.display = 'block';
-    
+
     try {
         // FIX: Use endAt(oldestMsgTimestamp) to prevent skipping messages sent at the exact same millisecond
         const msgRef = query(ref(db, chatType === 'server' ? `messages/${currentChatId}` : `dms/${currentChatId}`), orderByChild('timestamp'), endAt(oldestMsgTimestamp), limitToLast(50));
         const snap = await get(msgRef);
-        
+
         if (snap.exists()) {
             const msgs = [];
             snap.forEach(c => {
@@ -3581,31 +3648,31 @@ async function fetchOlderMessages() {
                     msgs.push({ id: c.key, data: c.val() });
                 }
             });
-            
+
             if (msgs.length > 0) {
                 oldestMsgTimestamp = msgs[0].data.timestamp;
                 const fragment = document.createDocumentFragment();
                 let tempLastSender = null; let tempLastTime = 0;
-                for (const m of msgs) { 
-                    const el = await createMessageDOM(m.id, m.data, tempLastSender, tempLastTime); 
-                    fragment.appendChild(el); 
-                    tempLastSender = m.data.sender; tempLastTime = m.data.timestamp; 
+                for (const m of msgs) {
+                    const el = await createMessageDOM(m.id, m.data, tempLastSender, tempLastTime);
+                    fragment.appendChild(el);
+                    tempLastSender = m.data.sender; tempLastTime = m.data.timestamp;
                 }
                 messagesDiv.insertBefore(fragment, messagesDiv.firstChild);
-                
+
                 // Keep the screen exactly where the user was looking
                 messagesDiv.scrollTop = messagesDiv.scrollHeight - oldScrollHeight;
                 repositionAllStickers(); // prepended content shifted everything below it down
             }
-            
+
             // If we fetched fewer than 49 new messages, we've hit the absolute beginning!
-            if (msgs.length < 49) { 
-                oldestMsgTimestamp = null; 
-                insertWelcomeMessage(); 
+            if (msgs.length < 49) {
+                oldestMsgTimestamp = null;
+                insertWelcomeMessage();
             }
-        } else { 
-            oldestMsgTimestamp = null; 
-            insertWelcomeMessage(); 
+        } else {
+            oldestMsgTimestamp = null;
+            insertWelcomeMessage();
         }
     } catch (err) {
         console.error("History fetch error:", err);
@@ -3646,12 +3713,12 @@ async function createMessageDOM(msgId, data, prevSender, prevTime) {
 
     if (!isConsecutive) {
         const replyHtml = data.replyTo ? `<div class="reply-context"><strong>@${data.replyTo.username}</strong> ${data.replyTo.text}</div>` : "";
-        
+
         // --- FIX: Sanitize the email so we actually find the user's decorations in the cache! ---
         const safeSender = sanitizeEmail(data.sender);
         const userCacheObj = globalUsersCache[safeSender] || { avatar: data.avatar, status: 'offline' };
         const avatarWithDec = getAvatarHTML(userCacheObj, 'avatar-small');
-        
+
         const headerHtml = `${replyHtml}<div class="message-header">
             <div style="cursor:pointer;" onclick="showGlobalUserProfile('${safeSender}',event)">${avatarWithDec}</div>
             <span class="message-sender" style="color:${nameColor};cursor:pointer;" onclick="showGlobalUserProfile('${safeSender}',event)">${data.username}</span>
@@ -3783,13 +3850,13 @@ async function loadMessages(dbPath, chatNameLabel) {
         const tEl = document.getElementById('typing-indicator');
         if (tEl) {
             if (typers.length > 0) {
-                const text = typers.length === 1 ? `<strong>${typers[0]}</strong> is typing` : 
-                             typers.length === 2 ? `<strong>${typers[0]}</strong> and <strong>${typers[1]}</strong> are typing` : 
+                const text = typers.length === 1 ? `<strong>${typers[0]}</strong> is typing` :
+                             typers.length === 2 ? `<strong>${typers[0]}</strong> and <strong>${typers[1]}</strong> are typing` :
                              `Several people are typing`;
                 tEl.innerHTML = `<span class="typing-dots"><span>.</span><span>.</span><span>.</span></span> <span>${text}</span>`;
                 tEl.style.display = 'flex';
                 // Auto scroll a tiny bit to make room for indicator
-                messagesDiv.scrollTop += 20; 
+                messagesDiv.scrollTop += 20;
             } else {
                 tEl.style.display = 'none';
             }
@@ -3812,10 +3879,10 @@ async function loadMessages(dbPath, chatNameLabel) {
     let insertedDivider = false;
     document.getElementById('chat-loading-spinner').style.display = 'block';
     const msgRef = query(ref(db, dbPath), orderByChild('timestamp'), limitToLast(50));
-    
+
     const initialSnap = await get(msgRef);
-    let highestTimestamp = 0; 
-    
+    let highestTimestamp = 0;
+
     // FIX 1: Safely parse messages strictly in Firebase's chronological order
     const initialMessages = [];
     initialSnap.forEach(child => {
@@ -3837,7 +3904,7 @@ async function loadMessages(dbPath, chatNameLabel) {
         lastMsgSender = data.sender; lastMsgTime = data.timestamp;
         highestTimestamp = Math.max(highestTimestamp, data.timestamp);
     }
-    
+
     if (initialMessages.length < 50) { insertWelcomeMessage(); oldestMsgTimestamp = null; }
     document.getElementById('chat-loading-spinner').style.display = 'none';
     ensureStickerLayer();
@@ -3851,9 +3918,9 @@ async function loadMessages(dbPath, chatNameLabel) {
     subscribeStickers(currentChatId);
     onChatSwitched();
 
-    if (insertedDivider) { 
-        const divEl = messagesDiv.querySelector('.new-messages-divider'); 
-        if (divEl) setTimeout(() => divEl.scrollIntoView({ behavior: "smooth", block: "center" }), 100); 
+    if (insertedDivider) {
+        const divEl = messagesDiv.querySelector('.new-messages-divider');
+        if (divEl) setTimeout(() => divEl.scrollIntoView({ behavior: "smooth", block: "center" }), 100);
     }
     else scrollToBottom(); // FIX: Calls our new safe scroll
 
@@ -3879,17 +3946,17 @@ async function loadMessages(dbPath, chatNameLabel) {
         const mData = childSnap.val();
         const msgId = childSnap.key;
         renderReactions(msgId, mData.reactions || {});
-        
+
         const msgEl = document.getElementById(`msg-${msgId}`);
         if (msgEl) {
             const contentWrapper = msgEl.querySelector('.msg-content-wrapper');
             if (contentWrapper && !contentWrapper.querySelector('.edit-msg-input')) {
                 const currentDataStr = JSON.stringify({ text: mData.text, edited: mData.edited, embed: mData.embed });
-                
+
                 if (msgEl.dataset.raw !== currentDataStr) {
                     msgEl.dataset.raw = currentDataStr;
-                    buildMessageHtml(mData).then(res => { 
-                        contentWrapper.innerHTML = res.html; 
+                    buildMessageHtml(mData).then(res => {
+                        contentWrapper.innerHTML = res.html;
                         bindImageClick(contentWrapper.querySelector('.message-image, .message-gif'));
                     });
                 }
@@ -3923,7 +3990,7 @@ msgInput?.addEventListener('input', function () {
     this.style.height = 'auto';
     this.style.height = Math.min(this.scrollHeight, 200) + 'px';
     const val = this.value; const cursorPos = this.selectionStart;
-    
+
     // Broadcast Typing Indicator
     if (currentChatId) {
         if (!myTypingTimeout) set(ref(db, `typing/${currentChatId}/${currentUserSafeEmail}`), Date.now());
@@ -4668,7 +4735,7 @@ function appendStickerEl(s, animateIn) {
 }
 
 // ---- Drag from picker: PC ----
-// suppressNextClick: because mousedown+mouseup on the same ep-emoji element 
+// suppressNextClick: because mousedown+mouseup on the same ep-emoji element
 // would fire its onclick handler even though we just did a drag. We set this flag
 // in the mousedown handler and clear it after the click fires.
 function initPickerEmojiDrag(el, emoji, isCustom, customUrl) {
@@ -5564,26 +5631,26 @@ let isSwiping = false;
 
 mainViewEl.addEventListener('touchstart', (e) => {
     if (window.innerWidth > 768) return;
-    
+
     // Only trigger if swiping from the very left edge (first 30px of screen)
-    if (e.touches[0].clientX > 30) return; 
-    
+    if (e.touches[0].clientX > 30) return;
+
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
     isSwiping = true;
-    
+
     // Temporarily remove the CSS transition so the screen sticks exactly to your finger
-    mainViewEl.style.transition = 'none'; 
+    mainViewEl.style.transition = 'none';
 }, { passive: true });
 
 mainViewEl.addEventListener('touchmove', (e) => {
     if (!isSwiping) return;
-    
+
     const deltaX = e.touches[0].clientX - touchStartX;
     const deltaY = Math.abs(e.touches[0].clientY - touchStartY);
-    
-    // FIX: Ultra-strict scroll detection. 
-    // If the user's finger moves vertically more than horizontally early in the touch, 
+
+    // FIX: Ultra-strict scroll detection.
+    // If the user's finger moves vertically more than horizontally early in the touch,
     // instantly abort the swipe lock and let them scroll the chat normally!
     if (deltaY > deltaX) {
         isSwiping = false;
@@ -5601,14 +5668,14 @@ mainViewEl.addEventListener('touchmove', (e) => {
 mainViewEl.addEventListener('touchend', (e) => {
     if (!isSwiping) return;
     isSwiping = false;
-    
+
     // Restore the smooth CSS snap transition
-    mainViewEl.style.transition = ''; 
-    
+    mainViewEl.style.transition = '';
+
     const deltaX = e.changedTouches[0].clientX - touchStartX;
-    
+
     // If they swiped past 25% of the screen, trigger the back action
-    if (deltaX > window.innerWidth / 4) { 
+    if (deltaX > window.innerWidth / 4) {
         document.body.classList.remove('mobile-chat-active', 'mobile-home-active');
         mainViewEl.style.transform = ''; // Let CSS take over
     } else {
@@ -5636,7 +5703,7 @@ let seenGifIds = new Set(); // Duplication Guard!
 async function loadTrendingGifs(loadMore = false) {
     if (isFetchingGifs || (!hasMoreGifs && loadMore)) return;
     isFetchingGifs = true;
-    
+
     if (!loadMore) {
         document.getElementById('gif-grid').innerHTML = '';
         gifPage = 1;
@@ -5650,7 +5717,7 @@ async function loadTrendingGifs(loadMore = false) {
         const res = await fetch(`https://api.klipy.com/v2/featured?key=${KLIPY_API_KEY}&limit=20&page=${gifPage}&media_filter=gif`);
         const data = await res.json();
         document.getElementById('gif-loading').style.display = 'none';
-        
+
         if (data.results && data.results.length > 0) {
             renderGifResults(data.results, loadMore);
             gifPage++;
@@ -5667,7 +5734,7 @@ async function loadTrendingGifs(loadMore = false) {
 async function searchGifs(query, loadMore = false) {
     if (isFetchingGifs || (!hasMoreGifs && loadMore)) return;
     isFetchingGifs = true;
-    
+
     if (!loadMore) {
         document.getElementById('gif-grid').innerHTML = '';
         gifPage = 1;
@@ -5681,7 +5748,7 @@ async function searchGifs(query, loadMore = false) {
         const res = await fetch(`https://api.klipy.com/v2/search?key=${KLIPY_API_KEY}&q=${encodeURIComponent(query)}&limit=20&page=${gifPage}&media_filter=gif`);
         const data = await res.json();
         document.getElementById('gif-loading').style.display = 'none';
-        
+
         if (data.results && data.results.length > 0) {
             renderGifResults(data.results, loadMore);
             gifPage++;
@@ -5698,21 +5765,21 @@ async function searchGifs(query, loadMore = false) {
 function renderGifResults(results, append = false) {
     const grid = document.getElementById('gif-grid');
     if (!append) grid.innerHTML = '';
-    
+
     results.forEach(gif => {
         // FIX: Prevent identical GIFs from stacking
         const uniqueId = gif.id || gif.url;
         if (seenGifIds.has(uniqueId)) return;
         seenGifIds.add(uniqueId);
 
-        const item = document.createElement('div'); 
+        const item = document.createElement('div');
         item.className = 'gif-item';
-        
+
         const preview = gif.media_formats?.tinygif?.url || gif.media_formats?.gif?.url || gif.url;
         const full = gif.media_formats?.gif?.url || gif.url;
-        
+
         item.innerHTML = `<img src="${preview}" alt="gif" loading="lazy">`;
-        
+
         // --- KLIPY ADVERTISEMENT HANDLING ---
         if (gif.is_ad || gif.type === 'ad') {
             const adBadge = document.createElement('div');
@@ -5735,14 +5802,14 @@ let gifSearchTimeout = null;
 document.getElementById('gif-search-input')?.addEventListener('input', (e) => {
     clearTimeout(gifSearchTimeout);
     currentGifQuery = e.target.value.trim();
-    gifSearchTimeout = setTimeout(() => { 
-        if (currentGifQuery) searchGifs(currentGifQuery, false); 
-        else loadTrendingGifs(false); 
+    gifSearchTimeout = setTimeout(() => {
+        if (currentGifQuery) searchGifs(currentGifQuery, false);
+        else loadTrendingGifs(false);
     }, 500);
 });
 
 document.getElementById('gif-search-btn')?.addEventListener('click', () => {
-    if (currentGifQuery) searchGifs(currentGifQuery, false); 
+    if (currentGifQuery) searchGifs(currentGifQuery, false);
     else loadTrendingGifs(false);
 });
 
@@ -5785,7 +5852,7 @@ async function sendGif(gifUrl) {
 async function handleAdminBadge(isGranting) {
     const targetEmailRaw = document.getElementById('admin-target-email').value.trim().toLowerCase();
     const badgeType = document.getElementById('admin-badge-select').value;
-    
+
     if (!targetEmailRaw) {
         return customAlert("Please enter a target user's email.", "Error");
     }
@@ -5797,10 +5864,10 @@ async function handleAdminBadge(isGranting) {
         await update(ref(db, `users/${targetSafeEmail}/badges`), {
             [badgeType]: isGranting ? true : null
         });
-        
+
         showToast(`Badge successfully ${isGranting ? 'granted to' : 'revoked from'} ${targetEmailRaw}!`, 'success');
         document.getElementById('admin-target-email').value = ''; // clear the input
-        
+
     } catch (error) {
         console.error(error);
         customAlert("Permission Denied! Are you sure you are logged in as the Admin?", "Security Blocked");
@@ -5946,8 +6013,10 @@ async function sendMessage() {
         document.getElementById('attachment-preview-area').style.display = 'none';
     }
 
-    const sentMsgRef = push(ref(db, path), msgPayload);
-    
+    const sentMsgRef = push(ref(db, path));
+    try { await set(sentMsgRef, msgPayload); }
+    catch (err) { showToast('Message could not be sent. Your draft has been kept.', 'error'); return; }
+
     // --- NEW: LINK EMBED PREVIEW FETCHING ---
     const urls = text.match(/(https?:\/\/[^\s]+)/g);
     if (urls && urls.length > 0) {
@@ -5967,10 +6036,9 @@ async function sendMessage() {
     mentionMenu.style.display = 'none';
 
     if (chatType === 'dm') {
-        const parts = currentChatId.split('_');
-        const friendEmail = parts.find(p => p !== currentUserSafeEmail);
+        const friendEmail = currentDMOtherSafeEmail;
         if (friendEmail) {
-            touchDmMeta(currentUserSafeEmail, friendEmail);
+            touchDmMeta(currentUserSafeEmail, friendEmail).catch(() => showToast('Message sent, but the conversation list could not refresh.', 'error'));
         }
     }
     update(ref(db, `users/${currentUserSafeEmail}/lastRead`), { [currentChatId]: Date.now() });
@@ -5985,7 +6053,7 @@ document.getElementById('msg-input')?.addEventListener('keydown', (e) => {
 // --- NOTIFICATIONS ---
 // ==========================================
 // 1. Load the audio file
-const notifSound = new Audio('ping.mp3'); 
+const notifSound = new Audio('ping.mp3');
 
 function startNotificationListeners() {
     // Ask the browser/OS for permission to show popups on startup
@@ -5995,9 +6063,10 @@ function startNotificationListeners() {
 
     if (dmsNotifListener) dmsNotifListener();
     if (serversNotifListener) serversNotifListener();
-    
-    dmsNotifListener = onChildAdded(ref(db, `dm_meta/${currentUserSafeEmail}`), (childSnapshot) => {
-        const dmId = childSnapshot.val().dmId;
+
+    dmsNotifListener = onChildAdded(ref(db, `dm_meta/${currentUserSafeEmail}`), async (childSnapshot) => {
+        let dmId;
+        try { dmId = await ensureDmPair(childSnapshot.key); } catch { return; }
         onChildAdded(query(ref(db, `dms/${dmId}`), limitToLast(1)), (msg) => {
             const mData = msg.val();
             if (notificationsActive && currentChatId !== dmId && mData.timestamp > appStartTime && mData.sender !== auth.currentUser.email) {
@@ -6005,7 +6074,7 @@ function startNotificationListeners() {
             }
         });
     });
-    
+
     serversNotifListener = onChildAdded(ref(db, `users/${currentUserSafeEmail}/servers`), (childSnapshot) => {
         const serverId = childSnapshot.key;
         onChildAdded(ref(db, `channels/${serverId}`), (cSnap) => {
@@ -6024,30 +6093,30 @@ function startNotificationListeners() {
 
 function markUnread(type, id, serverId = null, isMention = false, messageData = null) {
     // Visual Badges
-    if (type === 'dm') { 
-        unreadState.dms.add(id); 
-        updateBadge(`dm-${id}`, true, false, isMention); 
-        updateBadge('home-btn', true, true, isMention); 
-    } else if (type === 'channel') { 
-        unreadState.channels.add(id); 
-        unreadState.servers.add(serverId); 
-        updateBadge(`channel-${id}`, true, false, isMention); 
-        updateBadge(`server-${serverId}`, true, true, isMention); 
+    if (type === 'dm') {
+        unreadState.dms.add(id);
+        updateBadge(`dm-${id}`, true, false, isMention);
+        updateBadge('home-btn', true, true, isMention);
+    } else if (type === 'channel') {
+        unreadState.channels.add(id);
+        unreadState.servers.add(serverId);
+        updateBadge(`channel-${id}`, true, false, isMention);
+        updateBadge(`server-${serverId}`, true, true, isMention);
     }
 
     // --- SOUND & POPUP LOGIC ---
     if (messageData && myProfile) {
         // Only trigger if Online or Invisible ('offline' in your db)
         if (myProfile.status === 'online' || myProfile.status === 'offline') {
-            
+
             // 1. Play the Discord-style ping
             notifSound.play().catch(e => console.log("Audio autoplay blocked until user clicks"));
-            
+
             // 2. Show native OS notification
             if (Notification.permission === "granted") {
                 let title = type === 'dm' ? `Direct Message from ${messageData.username}` : `New message in Server`;
                 if (isMention) title = `You were mentioned by ${messageData.username}`;
-                
+
                 let plainText = (messageData.text || '').replace(/<[^>]*>?/gm, ''); // Strip HTML
                 if (!plainText && messageData.imageUrl) plainText = "Sent an image";
                 if (!plainText && messageData.fileUrl) plainText = "Sent a file";
