@@ -1,7 +1,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 import { getDatabase, ref, push, onChildAdded, onChildRemoved, onChildChanged, onValue, set, get, child, remove, onDisconnect, query, limitToLast, update, orderByChild, startAt, endAt, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { createSkipData } from "./skip-data.js?v=dmfix3";
+import { createSkipSocial, socialMessageMarkup } from "./skip-social.js?v=social4";
+import { createSkipData } from "./skip-data.js?v=social4";
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-storage.js";
 
 // ==========================================
@@ -25,6 +26,15 @@ const auth = getAuth(app);
 const db = getDatabase(app);
 const storage = getStorage(app);
 const schoolUpData = createSkipData({ auth, db, sdk: { ref, get, update, runTransaction } });
+const social = createSkipSocial({auth,db,sdk:{ref,get,set,remove,onValue,runTransaction,push,query,orderByChild,limitToLast},
+    ensureDM: peer => ensureDmPair(peer),
+    getWorkspace: async () => { const uid=auth.currentUser?.uid;if(!uid)return null;const value=(await get(ref(db,'schoolup_accounts/'+uid+'/workspace'))).val();return value?.dataJson?JSON.parse(value.dataJson):null; },
+    send: async (extra,peer) => {const owner=auth.currentUser;const id=await ensureDmPair(peer);if(auth.currentUser?.uid!==owner?.uid)throw Error('Your account changed.');const me=sanitizeEmail(owner.email);const key=push(ref(db,'dms/'+id)).key;await update(ref(db),{
+        ['dms/'+id+'/'+key]:{sender:owner.email,username:myProfile.username,avatar:myProfile.avatar||'',timestamp:Date.now(),roleId:'member',...extra},
+        ['dm_meta/'+me+'/'+peer]:{dmId:id,hidden:false,lastActivity:Date.now()},
+        ['dm_meta/'+peer+'/'+me]:{dmId:id,hidden:false,lastActivity:Date.now()}
+    });},
+    toast: message => showToast(schoolUpEscape(message),'info')});
 const verifiedDmPairs = new Map();
 let dmOpenSequence = 0;
 let currentDMOtherSafeEmail = null;
@@ -1000,6 +1010,7 @@ document.getElementById('login-btn')?.addEventListener('click', async () => {
 });
 
 onAuthStateChanged(auth, async (user) => {
+    social.detach();
     hideAuthLoadingScreen();
     if (user) {
         authSection.style.display = 'none';
@@ -1597,6 +1608,7 @@ function switchToHomeView() {
     document.getElementById('server-stats-display').style.display = 'none';
     document.getElementById('home-sidebar-content').style.display = 'block';
     document.getElementById('channel-list').style.display = 'none';
+    social.detach();
     document.getElementById('chat-area').style.display = 'none';
     document.getElementById('home-area').style.display = 'flex';
     document.getElementById('server-dropdown').style.display = 'none';
@@ -2156,6 +2168,7 @@ function loadDmList() {
 }
 
 async function openDM(dmId, friendEmail) {
+    social.detach();
     const sequence = ++dmOpenSequence;
     try { dmId = await ensureDmPair(friendEmail); }
     catch (err) {
@@ -2189,6 +2202,7 @@ async function openDM(dmId, friendEmail) {
     if (activeDmEl) activeDmEl.classList.add('active');
     enableChat(); loadMessages(`dms/${currentChatId}`, `@${uData.username}`);
     loadDMMemberList(friendEmail);
+    social.attach({id:dmId,peer:friendEmail,surface:document.getElementById('chat-area'),header:document.getElementById('chat-header'),messages:document.getElementById('messages')});
 }
 
 function loadDMMemberList(friendEmail) {
@@ -3614,6 +3628,7 @@ async function buildMessageHtml(data) {
     // FIX: Removed the "contentHtml = contentHtml.replace..." line that was breaking the HTML!
 
     contentHtml += schoolUpScheduleCard(data.schoolupSchedule);
+    contentHtml += socialMessageMarkup(data);
     return { html: contentHtml, isMentioned: mentionData.isMentioned, embeds: tempEmbeds };
 }
 
@@ -3840,6 +3855,7 @@ function renderReactions(msgId, reactionsObj) {
 let unsubscribeTyping = null;
 
 async function loadMessages(dbPath, chatNameLabel) {
+    if (!dbPath.startsWith("dms/")) social.detach();
     messagesDiv.innerHTML = '';
     currentChatLabelText = chatNameLabel;
     // NEW: Listen for typing activity
@@ -4113,6 +4129,7 @@ function ensureStickerLayer() {
 }
 
 function onChatSwitched() {
+    if (chatType !== "dm") social.detach();
     // Visual reset only — population now happens reactively via subscribeStickers()
     // which loadMessages() calls once the new chat's DOM is ready.
     stickerLayerVisible = true;
@@ -5842,11 +5859,13 @@ async function sendGif(gifUrl) {
     let roleId = 'member';
     if (chatType === 'server') { const mSnap = await get(ref(db, `server_members/${currentServerId}/${currentUserSafeEmail}/role`)); roleId = mSnap.val() || 'member'; }
     const msgPayload = { sender: auth.currentUser.email, username: myProfile.username, avatar: myProfile.avatar, text: '', imageUrl: gifUrl, gifUrl: true, timestamp: Date.now(), roleId };
+    if (chatType === "dm") Object.assign(msgPayload, social.effectPayload());
     if (replyingToMessage) { msgPayload.replyTo = replyingToMessage; replyingToMessage = null; document.getElementById('reply-banner').style.display = 'none'; }
-    push(ref(db, path), msgPayload);
+    try { await push(ref(db, path), msgPayload); if (path === "dms/"+currentChatId) social.clearEffect(); }
+    catch { showToast("GIF could not be sent. Please try again.", "error"); return; }
     if (chatType === 'dm') {
-        const friendEmail = currentChatId.replace(currentUserSafeEmail, '').replace(/_/g, '').replace(currentUserSafeEmail, '');
-        touchDmMeta(currentUserSafeEmail, friendEmail);
+        const friendEmail = currentDMOtherSafeEmail;
+        if (friendEmail) touchDmMeta(currentUserSafeEmail, friendEmail).catch(() => {});
     }
     update(ref(db, `users/${currentUserSafeEmail}/lastRead`), { [currentChatId]: Date.now() });
 }
@@ -5983,6 +6002,7 @@ async function sendMessage() {
     if (chatType === 'server') { const mSnap = await get(ref(db, `server_members/${currentServerId}/${currentUserSafeEmail}/role`)); roleId = mSnap.val() || 'member'; }
 
     let msgPayload = { sender: auth.currentUser.email, username: myProfile.username, avatar: myProfile.avatar, text, timestamp: Date.now(), roleId };
+    if (chatType === "dm") Object.assign(msgPayload, social.effectPayload());
 
     if (replyingToMessage) { msgPayload.replyTo = replyingToMessage; replyingToMessage = null; document.getElementById('reply-banner').style.display = 'none'; }
 
@@ -6020,7 +6040,7 @@ async function sendMessage() {
     }
 
     const sentMsgRef = push(ref(db, path));
-    try { await set(sentMsgRef, msgPayload); }
+    try { await set(sentMsgRef, msgPayload); if (path === 'dms/'+currentChatId) social.clearEffect(); }
     catch (err) { showToast('Message could not be sent. Your draft has been kept.', 'error'); return; }
 
     // --- NEW: LINK EMBED PREVIEW FETCHING ---
