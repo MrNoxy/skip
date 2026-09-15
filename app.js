@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 import { getDatabase, ref, push, onChildAdded, onChildRemoved, onChildChanged, onValue, set, get, child, remove, onDisconnect, query, limitToLast, update, orderByChild, startAt, endAt, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-functions.js";
+import { createSkipData } from "./skip-data.js?v=dmfix3";
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-storage.js";
 
 // ==========================================
@@ -24,8 +24,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getDatabase(app);
 const storage = getStorage(app);
-const schoolUpFunctions = getFunctions(app, 'europe-west1');
-const ensureSchoolUpDm = httpsCallable(schoolUpFunctions, 'schoolupEnsureDM');
+const schoolUpData = createSkipData({ auth, db, sdk: { ref, get, update, runTransaction } });
 const verifiedDmPairs = new Map();
 let dmOpenSequence = 0;
 let currentDMOtherSafeEmail = null;
@@ -33,10 +32,10 @@ async function ensureDmPair(otherSafe) {
     const owner = auth.currentUser?.uid;
     const cacheKey = owner + ':' + otherSafe;
     if (verifiedDmPairs.has(cacheKey)) return verifiedDmPairs.get(cacheKey);
-    const result = await ensureSchoolUpDm({ other: otherSafe });
+    const result = await schoolUpData.ensureDM(otherSafe);
     if (auth.currentUser?.uid !== owner) throw new Error('Your account changed. Open the conversation again.');
-    verifiedDmPairs.set(cacheKey, result.data.dmId);
-    return result.data.dmId;
+    verifiedDmPairs.set(cacheKey, result.dmId);
+    return result.dmId;
 }
 const skipTagKey = (name, tag) => `${name}_${tag}`.replace(/\./g, ',');
 async function claimSkipTag(username, tag, owner) {
@@ -2159,7 +2158,14 @@ function loadDmList() {
 async function openDM(dmId, friendEmail) {
     const sequence = ++dmOpenSequence;
     try { dmId = await ensureDmPair(friendEmail); }
-    catch (err) { showToast('Could not open this conversation. Check your connection and the School Up integration setup.', 'error'); return; }
+    catch (err) {
+        if (sequence !== dmOpenSequence) return;
+        console.error('[Skip DM open]', err?.code || 'unknown', err?.message || '');
+        const detail = typeof err?.code === 'string' && err.code.startsWith('schoolup/')
+            ? err.message : 'Could not open this conversation. Check your connection and try again. The console has the error details.';
+        showToast(detail, 'error');
+        return;
+    }
     if (sequence !== dmOpenSequence) return;
     currentDMOtherSafeEmail = friendEmail;
     leaveDownloadChannel();
