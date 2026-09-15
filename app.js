@@ -1,8 +1,9 @@
+import { THEME_LIBRARY, normalizeChatTheme, themeTokens, paintWallpaper, readThemeImage } from "./skip-themes.js?v=studio5";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 import { getDatabase, ref, push, onChildAdded, onChildRemoved, onChildChanged, onValue, set, get, child, remove, onDisconnect, query, limitToLast, update, orderByChild, startAt, endAt, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { createSkipSocial, socialMessageMarkup } from "./skip-social.js?v=social4";
-import { createSkipData } from "./skip-data.js?v=social4";
+import { createSkipSocial, socialMessageMarkup } from "./skip-social.js?v=studio5";
+import { createSkipData } from "./skip-data.js?v=studio5";
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-storage.js";
 
 // ==========================================
@@ -26,9 +27,8 @@ const auth = getAuth(app);
 const db = getDatabase(app);
 const storage = getStorage(app);
 const schoolUpData = createSkipData({ auth, db, sdk: { ref, get, update, runTransaction } });
-const social = createSkipSocial({auth,db,sdk:{ref,get,set,remove,onValue,runTransaction,push,query,orderByChild,limitToLast},
+const social = createSkipSocial({auth,db,appName:"skip",themeKit:{THEME_LIBRARY,normalizeChatTheme,themeTokens,paintWallpaper,readThemeImage},sdk:{ref,get,set,remove,onValue,runTransaction,push,query,orderByChild,limitToLast},
     ensureDM: peer => ensureDmPair(peer),
-    getWorkspace: async () => { const uid=auth.currentUser?.uid;if(!uid)return null;const value=(await get(ref(db,'schoolup_accounts/'+uid+'/workspace'))).val();return value?.dataJson?JSON.parse(value.dataJson):null; },
     send: async (extra,peer) => {const owner=auth.currentUser;const id=await ensureDmPair(peer);if(auth.currentUser?.uid!==owner?.uid)throw Error('Your account changed.');const me=sanitizeEmail(owner.email);const key=push(ref(db,'dms/'+id)).key;await update(ref(db),{
         ['dms/'+id+'/'+key]:{sender:owner.email,username:myProfile.username,avatar:myProfile.avatar||'',timestamp:Date.now(),roleId:'member',...extra},
         ['dm_meta/'+me+'/'+peer]:{dmId:id,hidden:false,lastActivity:Date.now()},
@@ -1011,6 +1011,7 @@ document.getElementById('login-btn')?.addEventListener('click', async () => {
 
 onAuthStateChanged(auth, async (user) => {
     social.detach();
+    social.setUser(user);
     hideAuthLoadingScreen();
     if (user) {
         authSection.style.display = 'none';
@@ -2202,7 +2203,6 @@ async function openDM(dmId, friendEmail) {
     if (activeDmEl) activeDmEl.classList.add('active');
     enableChat(); loadMessages(`dms/${currentChatId}`, `@${uData.username}`);
     loadDMMemberList(friendEmail);
-    social.attach({id:dmId,peer:friendEmail,surface:document.getElementById('chat-area'),header:document.getElementById('chat-header'),messages:document.getElementById('messages')});
 }
 
 function loadDMMemberList(friendEmail) {
@@ -2955,6 +2955,7 @@ let currentDownloadChannelId = null;
 let unsubscribeDownloadChannel = null;
 
 function openDownloadChannel(channelId, channelName) {
+    social.detach();
     currentDownloadChannelId = channelId;
     chatType = 'download';
     currentChatId = channelId;
@@ -3562,6 +3563,7 @@ document.addEventListener('click', event => {
 });
 
 async function buildMessageHtml(data) {
+    if (data.skipGame) data={...data,text:""};
     const rawText = data.text || ""; // FIX: Guarantees text never crashes the regex
     const mentionData = processMentionsAndText(rawText);
     const editedHtml = data.edited ? `<span style="font-size:10px;color:var(--text-muted);margin-left:5px;">(edited)</span>` : '';
@@ -3601,7 +3603,7 @@ async function buildMessageHtml(data) {
         contentHtml += `<a href="${data.fileUrl}" target="_blank" download="${data.fileName || 'file'}" class="message-file-embed" style="margin-left:42px;" onclick="event.stopPropagation()">
             <div class="message-file-icon">${icon}</div>
             <div class="message-file-info">
-                <div class="message-file-name">${data.fileName || 'File'}</div>
+                <div class="message-file-name">${schoolUpEscape(data.fileName || 'File')}</div>
                 <div class="message-file-size">${data.fileSize ? formatBytes(data.fileSize) : ''} · Click to download</div>
             </div>
             <div style="margin-left:auto;color:var(--text-muted);">${icons.download}</div>
@@ -3825,6 +3827,7 @@ async function createMessageDOM(msgId, data, prevSender, prevTime) {
     bindImageClick(msgElement.querySelector('.message-gif'));
 
     // FIX: Save a snapshot of this message's state to detect silent embed updates
+    msgElement.__skipMessage = data;
     msgElement.dataset.raw = JSON.stringify({ text: data.text, edited: data.edited, embed: data.embed });
 
     return msgElement;
@@ -3855,7 +3858,7 @@ function renderReactions(msgId, reactionsObj) {
 let unsubscribeTyping = null;
 
 async function loadMessages(dbPath, chatNameLabel) {
-    if (!dbPath.startsWith("dms/")) social.detach();
+    social.attach({id:currentChatId,type:dbPath.startsWith('dms/')?'dm':'server',peer:currentDMOtherSafeEmail,surface:document.getElementById('chat-area'),title:document.getElementById('chat-title'),messages:messagesDiv,composer:document.getElementById('message-input-wrapper'),input:document.getElementById('msg-input'),sendButton:document.getElementById('send-btn'),attachButton:document.getElementById('upload-file-btn'),pickFile:pickSkipFile,getMessage:id=>document.getElementById('msg-'+id)?.__skipMessage});
     messagesDiv.innerHTML = '';
     currentChatLabelText = chatNameLabel;
     // NEW: Listen for typing activity
@@ -3971,6 +3974,7 @@ async function loadMessages(dbPath, chatNameLabel) {
 
         const msgEl = document.getElementById(`msg-${msgId}`);
         if (msgEl) {
+            msgEl.__skipMessage = mData;
             const contentWrapper = msgEl.querySelector('.msg-content-wrapper');
             if (contentWrapper && !contentWrapper.querySelector('.edit-msg-input')) {
                 const currentDataStr = JSON.stringify({ text: mData.text, edited: mData.edited, embed: mData.embed });
@@ -4129,7 +4133,7 @@ function ensureStickerLayer() {
 }
 
 function onChatSwitched() {
-    if (chatType !== "dm") social.detach();
+
     // Visual reset only — population now happens reactively via subscribeStickers()
     // which loadMessages() calls once the new chat's DOM is ready.
     stickerLayerVisible = true;
@@ -5859,7 +5863,7 @@ async function sendGif(gifUrl) {
     let roleId = 'member';
     if (chatType === 'server') { const mSnap = await get(ref(db, `server_members/${currentServerId}/${currentUserSafeEmail}/role`)); roleId = mSnap.val() || 'member'; }
     const msgPayload = { sender: auth.currentUser.email, username: myProfile.username, avatar: myProfile.avatar, text: '', imageUrl: gifUrl, gifUrl: true, timestamp: Date.now(), roleId };
-    if (chatType === "dm") Object.assign(msgPayload, social.effectPayload());
+    Object.assign(msgPayload, social.effectPayload());
     if (replyingToMessage) { msgPayload.replyTo = replyingToMessage; replyingToMessage = null; document.getElementById('reply-banner').style.display = 'none'; }
     try { await push(ref(db, path), msgPayload); if (path === "dms/"+currentChatId) social.clearEffect(); }
     catch { showToast("GIF could not be sent. Please try again.", "error"); return; }
@@ -5906,10 +5910,12 @@ document.getElementById('admin-revoke-btn')?.addEventListener('click', () => han
 // ==========================================
 // --- FILE UPLOAD (Firebase Storage) ---
 // ==========================================
-document.getElementById('upload-file-btn')?.addEventListener('click', () => document.getElementById('file-upload').click());
+function pickSkipFile(mode){const input=document.getElementById('file-upload');input.accept=mode==='file'?'*/*':'image/*,video/*';if(mode==='camera')input.setAttribute('capture','environment');else input.removeAttribute('capture');input.click();}
+document.getElementById('open-skip-appearance')?.addEventListener('click',()=>social.open('appearance'));
 
 document.getElementById('file-upload')?.addEventListener('change', async (e) => {
     const file = e.target.files[0]; if (!file || !currentChatId) return;
+    const attachmentChat = currentChatId, attachmentOwner = auth.currentUser?.uid, attachmentSequence = dmOpenSequence;
     const maxSize = 25 * 1024 * 1024; // 25MB limit
     if (file.size > maxSize) { customAlert(`File too large. Max size is 25MB.`, "Error"); return; }
 
@@ -5922,6 +5928,7 @@ document.getElementById('file-upload')?.addEventListener('change', async (e) => 
         // Keep images/GIFs as base64 for quick viewing
         const reader = new FileReader();
         reader.onload = (ev) => {
+            if(currentChatId !== attachmentChat || auth.currentUser?.uid !== attachmentOwner || dmOpenSequence !== attachmentSequence) return;
             pendingAttachment = { type: isGif ? 'gif' : 'image', data: ev.target.result, mimeType: file.type, name: file.name };
             document.getElementById('attachment-preview-img').src = ev.target.result;
             document.getElementById('attachment-preview-img').style.display = 'block';
@@ -5946,7 +5953,7 @@ document.getElementById('file-upload')?.addEventListener('change', async (e) => 
         const filePreview = document.getElementById('attachment-preview-file');
         filePreview.style.display = 'flex';
         filePreview.style.cssText = 'display:flex; align-items:center; gap:10px; color:var(--text-bright);';
-        filePreview.innerHTML = `${icons.file} <div><div style="font-weight:600;">${file.name}</div><div style="font-size:11px;color:var(--text-muted);">${formatBytes(file.size)}</div></div>`;
+        filePreview.innerHTML = `${icons.file} <div><div style="font-weight:600;">${schoolUpEscape(file.name)}</div><div style="font-size:11px;color:var(--text-muted);">${formatBytes(file.size)}</div></div>`;
         document.getElementById('attachment-preview-area').style.display = 'flex';
     }
     document.getElementById('file-upload').value = "";
@@ -6002,7 +6009,7 @@ async function sendMessage() {
     if (chatType === 'server') { const mSnap = await get(ref(db, `server_members/${currentServerId}/${currentUserSafeEmail}/role`)); roleId = mSnap.val() || 'member'; }
 
     let msgPayload = { sender: auth.currentUser.email, username: myProfile.username, avatar: myProfile.avatar, text, timestamp: Date.now(), roleId };
-    if (chatType === "dm") Object.assign(msgPayload, social.effectPayload());
+    Object.assign(msgPayload, social.effectPayload());
 
     if (replyingToMessage) { msgPayload.replyTo = replyingToMessage; replyingToMessage = null; document.getElementById('reply-banner').style.display = 'none'; }
 
@@ -6040,7 +6047,7 @@ async function sendMessage() {
     }
 
     const sentMsgRef = push(ref(db, path));
-    try { await set(sentMsgRef, msgPayload); if (path === 'dms/'+currentChatId) social.clearEffect(); }
+    try { await set(sentMsgRef, msgPayload); if (path === (chatType==='dm'?'dms/':'messages/')+currentChatId) social.clearEffect(); }
     catch (err) { showToast('Message could not be sent. Your draft has been kept.', 'error'); return; }
 
     // --- NEW: LINK EMBED PREVIEW FETCHING ---

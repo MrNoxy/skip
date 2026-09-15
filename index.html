@@ -8,7 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <link rel="stylesheet" href="skip-social.css?v=social4">
+    <link rel="stylesheet" href="skip-social.css?v=studio5">
 </head>
 <body>
     <div id="toast-container"></div>
@@ -586,6 +586,7 @@
                 <div class="fs-tab" data-tab="security" id="tab-us-security">Security</div>
                 <div class="fs-tab" data-tab="emojis" id="tab-us-emojis">Personal Emojis</div>
                 <div class="fs-tab" data-tab="decorations" id="tab-us-decorations">Avatar Decorations</div>
+                <div class="fs-tab" data-tab="appearance" id="tab-us-appearance">Appearance</div>
                 <div class="fs-tab" data-tab="advanced" id="tab-us-advanced">Advanced</div>
 
                 <div class="fs-tab" data-tab="admin" id="tab-us-admin" style="display: none; color: var(--accent-purple);">👑 Admin Dashboard</div>
@@ -609,6 +610,7 @@
                     <h2 style="margin: 0; color: var(--text-bright);">User Settings</h2>
                 </div>
 
+        <div class="ss-pane" id="pane-us-appearance" style="display:none"><h3>Make Skip yours</h3><p>Color themes, emoji wallpapers, and your own photos or GIFs.</p><button id="open-skip-appearance" class="action-btn">Choose your theme</button></div>
         <div class="ss-pane" id="pane-us-decorations" style="display: none;">
                 <h3 style="color:var(--text-muted); font-size:11px; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:15px;">Shop / Inventory</h3>
                 <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">Equip an animated avatar decoration to show off in chat and profiles.</p>
@@ -1046,7 +1048,7 @@
         </div>
     </div>
 
-    <script type="module" src="app.js?v=social4"></script>
+    <script type="module" src="app.js?v=studio5"></script>
     <script>
         document.getElementById('close-server-settings-btn-desktop').onclick = () => document.getElementById('server-settings-modal').style.display = 'none';
         document.getElementById('close-channel-settings-btn-desktop').onclick = () => document.getElementById('channel-settings-modal').style.display = 'none';
