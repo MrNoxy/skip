@@ -1,9 +1,9 @@
-import { THEME_LIBRARY, normalizeChatTheme, themeTokens, paintWallpaper, readThemeImage } from "./skip-themes.js?v=studio5";
+import { THEME_LIBRARY, normalizeChatTheme, themeTokens, paintWallpaper, readThemeImage } from "./skip-themes.js?v=mobile6";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 import { getDatabase, ref, push, onChildAdded, onChildRemoved, onChildChanged, onValue, set, get, child, remove, onDisconnect, query, limitToLast, update, orderByChild, startAt, endAt, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { createSkipSocial, socialMessageMarkup } from "./skip-social.js?v=studio5";
-import { createSkipData } from "./skip-data.js?v=studio5";
+import { createSkipSocial, socialMessageMarkup } from "./skip-social.js?v=mobile6";
+import { createSkipData } from "./skip-data.js?v=mobile6";
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-storage.js";
 
 // ==========================================
@@ -1010,6 +1010,7 @@ document.getElementById('login-btn')?.addEventListener('click', async () => {
 });
 
 onAuthStateChanged(auth, async (user) => {
+    closeMessageActions();
     social.detach();
     social.setUser(user);
     hideAuthLoadingScreen();
@@ -1609,6 +1610,7 @@ function switchToHomeView() {
     document.getElementById('server-stats-display').style.display = 'none';
     document.getElementById('home-sidebar-content').style.display = 'block';
     document.getElementById('channel-list').style.display = 'none';
+    closeMessageActions();
     social.detach();
     document.getElementById('chat-area').style.display = 'none';
     document.getElementById('home-area').style.display = 'flex';
@@ -2169,6 +2171,7 @@ function loadDmList() {
 }
 
 async function openDM(dmId, friendEmail) {
+    closeMessageActions();
     social.detach();
     const sequence = ++dmOpenSequence;
     try { dmId = await ensureDmPair(friendEmail); }
@@ -2955,6 +2958,7 @@ let currentDownloadChannelId = null;
 let unsubscribeDownloadChannel = null;
 
 function openDownloadChannel(channelId, channelName) {
+    closeMessageActions();
     social.detach();
     currentDownloadChannelId = channelId;
     chatType = 'download';
@@ -3637,6 +3641,91 @@ async function buildMessageHtml(data) {
 let lastMsgSender = null; let lastMsgTime = 0;
 const scrollBtn = document.getElementById('scroll-bottom-btn');
 const messagesDiv = document.getElementById('messages');
+// One delegated gesture controller for the message list, including paginated rows.
+let messageActionSheet = null, actionSource = null, messageHold = null, heldMessage = null;
+let holdClickUntil = 0, actionFocus = null;
+function cancelMessageHold() { clearTimeout(messageHold?.timer); messageHold = null; }
+function closeMessageActions() {
+    cancelMessageHold();
+    if (messageActionSheet?.open) messageActionSheet.close();
+    actionSource?.classList.remove('message-action-selected');
+    actionSource = null;
+}
+function validActionSource(row) {
+    const c = row?.__skipContext;
+    return !!(row?.isConnected && c && c.uid === auth.currentUser?.uid && c.id === currentChatId && c.type === chatType);
+}
+function openMessageActions(row) {
+    if (!validActionSource(row)) return;
+    if (!messageActionSheet) {
+        messageActionSheet = document.createElement('dialog');
+        messageActionSheet.className = 'message-action-sheet';
+        messageActionSheet.setAttribute('aria-labelledby','message-action-heading');
+        document.body.append(messageActionSheet);
+        messageActionSheet.addEventListener('click', e => { if(e.target === messageActionSheet) closeMessageActions(); });
+        messageActionSheet.addEventListener('close', () => {
+            actionSource?.classList.remove('message-action-selected'); actionSource = null;
+            if(actionFocus?.isConnected) actionFocus.focus({preventScroll:true});
+        });
+    }
+    actionSource?.classList.remove('message-action-selected'); actionSource = row;
+    row.classList.add('message-action-selected'); actionFocus = row;
+    const m = row.__skipMessage || {};
+    messageActionSheet.innerHTML = '<div class="message-sheet-grip" aria-hidden="true"></div><header><h2 id="message-action-heading">Message</h2><button type="button" class="message-sheet-close" aria-label="Close message actions">×</button></header><div class="message-sheet-preview"><strong></strong><p></p></div><div class="message-sheet-actions"></div>';
+    messageActionSheet.querySelector('.message-sheet-preview strong').textContent = m.username || 'Message';
+    messageActionSheet.querySelector('.message-sheet-preview p').textContent = (m.text || (m.skipGame ? 'Game invitation' : 'Attachment')).slice(0,180);
+    messageActionSheet.querySelector('.message-sheet-close').onclick = closeMessageActions;
+    const list = messageActionSheet.querySelector('.message-sheet-actions');
+    for (const source of row.querySelectorAll('.msg-action-btn:not(.more)')) {
+        const button = document.createElement('button');
+        button.type = 'button'; button.className = 'message-sheet-action' + (source.classList.contains('del') ? ' danger' : '');
+        button.innerHTML = source.innerHTML;
+        button.onclick = () => {
+            if (!validActionSource(row)) { closeMessageActions(); return; }
+            heldMessage = null; holdClickUntil = 0;
+            closeMessageActions(); source.click();
+        };
+        list.append(button);
+    }
+    if (!messageActionSheet.open) messageActionSheet.showModal();
+    messageActionSheet.querySelector('.message-sheet-action')?.focus({preventScroll:true});
+}
+messagesDiv.addEventListener('pointerdown', e => {
+    cancelMessageHold();
+    if (e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
+    if (e.isPrimary === false) return;
+    const row = e.target.closest('.message');
+    if (!row || e.target.closest('button,a,input,textarea,video,audio,.message-header,.reply-context')) return;
+    const pending = {row,x:e.clientX,y:e.clientY,pointer:e.pointerId};
+    pending.timer = setTimeout(() => {
+        if (messageHold !== pending || !validActionSource(row)) return;
+        heldMessage = row; holdClickUntil = Date.now()+1200;
+        openMessageActions(row);
+    },450);
+    messageHold = pending;
+}, {passive:true});
+messagesDiv.addEventListener('pointermove', e => {
+    if (messageHold && Math.hypot(e.clientX-messageHold.x,e.clientY-messageHold.y)>10) cancelMessageHold();
+}, {passive:true});
+document.addEventListener('pointerup', () => { if(heldMessage) holdClickUntil=Date.now()+800; cancelMessageHold(); }, {passive:true});
+document.addEventListener('pointercancel', cancelMessageHold, {passive:true});
+messagesDiv.addEventListener('scroll', cancelMessageHold, {passive:true});
+messagesDiv.addEventListener('click', e => {
+    if (!e.target.closest('.msg-actions') && heldMessage?.contains(e.target) && Date.now()<holdClickUntil) { e.preventDefault(); e.stopImmediatePropagation(); heldMessage=null; }
+}, true);
+messagesDiv.addEventListener('contextmenu', e => {
+    const row=e.target.closest('.message');
+    if (!row || e.target.closest('a,input,textarea,video,audio')) return;
+    e.preventDefault(); cancelMessageHold(); heldMessage=row;holdClickUntil=Date.now()+1200;openMessageActions(row);
+});
+messagesDiv.addEventListener('keydown', e => {
+    if(e.key==='ContextMenu' || (e.shiftKey && e.key==='F10')) {
+        const row=e.target.closest('.message');if(row){e.preventDefault();openMessageActions(row);}
+    }
+});
+window.addEventListener('blur', cancelMessageHold);
+document.addEventListener('visibilitychange', () => { if(document.hidden) closeMessageActions(); });
+
 let oldestMsgTimestamp = null; let isFetchingMore = false; let currentChatLabelText = "";
 
 messagesDiv?.addEventListener('scroll', () => {
@@ -3707,11 +3796,14 @@ async function fetchOlderMessages() {
 }
 
 async function createMessageDOM(msgId, data, prevSender, prevTime) {
+    const messageContext = {id:currentChatId,type:chatType,uid:auth.currentUser?.uid};
     const isConsecutive = (prevSender === data.sender) && (data.timestamp - prevTime < 300000) && !data.replyTo;
     const msgElement = document.createElement('div');
     msgElement.classList.add('message');
     if (isConsecutive) msgElement.classList.add('consecutive'); else msgElement.classList.add('message-group-start');
     msgElement.id = `msg-${msgId}`;
+    msgElement.__skipContext = messageContext;
+    msgElement.tabIndex = 0;
 
     const buildRes = await buildMessageHtml(data);
     // FIX: Show yellow highlight even if YOU sent it
@@ -3723,11 +3815,13 @@ async function createMessageDOM(msgId, data, prevSender, prevTime) {
     if (chatType === 'server' && data.roleId && data.roleId !== 'member' && data.roleId !== 'owner') { const rSnap = await get(ref(db, `servers/${currentServerId}/roles/${data.roleId}`)); if (rSnap.exists()) nameColor = rSnap.val().color; }
     if (data.roleId === 'system') nameColor = "var(--accent-primary)";
 
-    const actionsHtml = `<div class="msg-actions">
-        <button class="msg-action-btn react" onclick="openEmojiPickerForReaction('${msgId}',event)">${icons.addReaction} React</button>
-        <button class="msg-action-btn reply">${icons.reply} Reply</button>
-        ${canEdit ? `<button class="msg-action-btn edit-msg">${icons.gear} Edit</button>` : ''}
-        ${canDelete ? `<button class="msg-action-btn del">${icons.trash} Delete</button>` : ''}
+    const actionsHtml = `<div class="msg-actions" role="group" aria-label="Message actions">
+        <button type="button" class="msg-action-btn react" aria-label="React" title="React">${icons.addReaction}<span>React</span></button>
+        <button type="button" class="msg-action-btn reply" aria-label="Reply" title="Reply">${icons.reply}<span>Reply</span></button>
+        <button type="button" class="msg-action-btn copy" aria-label="Copy text" title="Copy text"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/></svg><span>Copy text</span></button>
+        ${canEdit ? `<button type="button" class="msg-action-btn edit-msg" aria-label="Edit message" title="Edit"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m15 4 5 5M4 20l5-1L21 7l-5-5L4 14z"/></svg><span>Edit message</span></button>` : ''}
+        ${canDelete ? `<button type="button" class="msg-action-btn del" aria-label="Delete message" title="Delete">${icons.trash}<span>Delete message</span></button>` : ''}
+        <button type="button" class="msg-action-btn more" aria-label="More message actions" title="More actions">•••</button>
     </div>`;
 
     const timeStr = new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -3786,42 +3880,57 @@ async function createMessageDOM(msgId, data, prevSender, prevTime) {
         }
     });
 
-    // Message action listeners
+    // All entry points use the same permission-filtered actions and bound chat.
+    msgElement.querySelector('.msg-action-btn.more').onclick = () => openMessageActions(msgElement);
+    msgElement.querySelector('.msg-action-btn.react').onclick = (e) => { if(validActionSource(msgElement)) window.openEmojiPickerForReaction(msgId,e); };
+    msgElement.querySelector('.msg-action-btn.copy').onclick = async () => {
+        if(!validActionSource(msgElement)) return;
+        try { await navigator.clipboard.writeText(msgElement.__skipMessage?.text || ''); showToast('Message copied','success'); }
+        catch { showToast('Clipboard access is unavailable in this browser.','error'); }
+    };
     const delBtn = msgElement.querySelector('.msg-action-btn.del');
     if (delBtn) {
         delBtn.addEventListener('click', (e) => {
-            const path = `${chatType === 'server' ? 'messages' : 'dms'}/${currentChatId}/${msgId}`;
+            if (!validActionSource(msgElement)) return;
+            const path = `${messageContext.type === 'server' ? 'messages' : 'dms'}/${messageContext.id}/${msgId}`;
             if (e.shiftKey) remove(ref(db, path));
-            else customConfirm("Delete this message?", "Delete Message", async (yes) => { if (yes) await remove(ref(db, path)); });
+            else customConfirm("Delete this message?", "Delete Message", async (yes) => { if (yes && auth.currentUser?.uid === messageContext.uid) await remove(ref(db, path)); });
         });
     }
 
     const editBtn = msgElement.querySelector('.msg-action-btn.edit-msg');
     if (editBtn) {
         editBtn.addEventListener('click', () => {
+            if (!validActionSource(msgElement)) return;
             const contentWrapper = msgElement.querySelector('.msg-content-wrapper');
             const originalHtml = contentWrapper.innerHTML;
-            const rawText = data.text || '';
-            contentWrapper.innerHTML = `<div style="margin-left:42px;"><textarea class="edit-msg-input" style="width:100%;background:var(--bg-tertiary);color:var(--text-bright);border:1px solid var(--border-color);border-radius:6px;padding:10px;margin-top:5px;resize:vertical;font-family:inherit;font-size:14px;">${rawText.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</textarea><div style="display:flex;gap:10px;margin-top:5px;font-size:12px;"><button class="save-edit-btn small-btn">Save</button><button class="cancel-edit-btn small-btn" style="background:transparent;border:1px solid var(--text-muted);color:var(--text-muted);">Cancel</button><span style="color:var(--text-muted);margin-left:auto;align-self:center;font-size:11px;">Enter to save · Shift+Enter for new line</span></div></div>`;
+            const rawText = msgElement.__skipMessage?.text || '';
+            contentWrapper.innerHTML = `<div class="message-edit-form"><textarea class="edit-msg-input" style="width:100%;background:var(--bg-tertiary);color:var(--text-bright);border:1px solid var(--border-color);border-radius:6px;padding:10px;margin-top:5px;resize:vertical;font-family:inherit;font-size:14px;">${rawText.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</textarea><div style="display:flex;gap:10px;margin-top:5px;font-size:12px;"><button class="save-edit-btn small-btn">Save</button><button class="cancel-edit-btn small-btn" style="background:transparent;border:1px solid var(--text-muted);color:var(--text-muted);">Cancel</button><span style="color:var(--text-muted);margin-left:auto;align-self:center;font-size:11px;">Enter to save · Shift+Enter for new line</span></div></div>`;
             const ta = contentWrapper.querySelector('.edit-msg-input');
             ta.style.height = ta.scrollHeight + 'px';
             ta.addEventListener('input', function () { this.style.height = 'auto'; this.style.height = this.scrollHeight + 'px'; });
             ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); contentWrapper.querySelector('.save-edit-btn').click(); } });
             ta.focus();
             contentWrapper.querySelector('.cancel-edit-btn').onclick = () => { contentWrapper.innerHTML = originalHtml; bindImageClick(contentWrapper.querySelector('.message-image, .message-gif')); };
-            contentWrapper.querySelector('.save-edit-btn').onclick = () => {
+            contentWrapper.querySelector('.save-edit-btn').onclick = async () => {
+                if(!validActionSource(msgElement)) return;
                 const newText = ta.value.trim();
                 if (newText && newText !== rawText) {
-                    data.text = newText; data.edited = true;
-                    buildMessageHtml(data).then(res => { contentWrapper.innerHTML = res.html; bindImageClick(contentWrapper.querySelector('.message-image, .message-gif')); });
-                    update(ref(db, `${chatType === 'server' ? 'messages' : 'dms'}/${currentChatId}/${msgId}`), { text: newText, edited: true });
+                    const save = contentWrapper.querySelector('.save-edit-btn'); save.disabled = true;
+                    try {
+                        await update(ref(db, `${messageContext.type === 'server' ? 'messages' : 'dms'}/${messageContext.id}/${msgId}`), {text:newText,edited:true});
+                        if(!validActionSource(msgElement)) return;
+                        data.text = newText; data.edited = true;
+                        const res = await buildMessageHtml(data);
+                        if(validActionSource(msgElement)){contentWrapper.innerHTML=res.html;bindImageClick(contentWrapper.querySelector('.message-image, .message-gif'));}
+                    } catch { showToast('Could not save. Your edit is still here.','error'); save.disabled=false; }
                 } else { contentWrapper.innerHTML = originalHtml; bindImageClick(contentWrapper.querySelector('.message-image, .message-gif')); }
             };
         });
     }
 
     const replyBtn = msgElement.querySelector('.msg-action-btn.reply');
-    if (replyBtn) replyBtn.addEventListener('click', () => triggerReply(msgId, data.username, data.text || "Attachment..."));
+    if (replyBtn) replyBtn.addEventListener('click', () => { if(validActionSource(msgElement)) triggerReply(msgId, data.username, msgElement.__skipMessage?.text || "Attachment..."); });
 
     bindImageClick(msgElement.querySelector('.message-image'));
     bindImageClick(msgElement.querySelector('.message-gif'));
@@ -3858,6 +3967,7 @@ function renderReactions(msgId, reactionsObj) {
 let unsubscribeTyping = null;
 
 async function loadMessages(dbPath, chatNameLabel) {
+    closeMessageActions();
     social.attach({id:currentChatId,type:dbPath.startsWith('dms/')?'dm':'server',peer:currentDMOtherSafeEmail,surface:document.getElementById('chat-area'),title:document.getElementById('chat-title'),messages:messagesDiv,composer:document.getElementById('message-input-wrapper'),input:document.getElementById('msg-input'),sendButton:document.getElementById('send-btn'),attachButton:document.getElementById('upload-file-btn'),pickFile:pickSkipFile,getMessage:id=>document.getElementById('msg-'+id)?.__skipMessage});
     messagesDiv.innerHTML = '';
     currentChatLabelText = chatNameLabel;
@@ -3963,7 +4073,7 @@ async function loadMessages(dbPath, chatNameLabel) {
         }
     });
 
-    unsubscribeMessagesRemoved = onChildRemoved(ref(db, dbPath), (snapshot) => { const msgEl = document.getElementById(`msg-${snapshot.key}`); if (msgEl) msgEl.remove(); });
+    unsubscribeMessagesRemoved = onChildRemoved(ref(db, dbPath), (snapshot) => { const msgEl = document.getElementById(`msg-${snapshot.key}`); if (msgEl) { if(actionSource===msgEl) closeMessageActions(); msgEl.remove(); } });
 
     // FIX 2: Only update specific messages that change (saves massive memory & stops glitches)
     if (unsubscribeMessagesChanged) unsubscribeMessagesChanged();

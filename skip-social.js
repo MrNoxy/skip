@@ -182,6 +182,7 @@ export function createSkipSocial({
       }
     },
     motion = matchMedia("(prefers-reduced-motion: reduce)");
+  document.documentElement.dataset.chatApp = appName;
   const effectsOn = () => pref("skip_effects_enabled") && !motion.matches;
   function current(dm = false) {
     if (!context || context.uid !== auth.currentUser?.uid)
@@ -750,6 +751,7 @@ export function createSkipSocial({
     if (dialog) return;
     dialog = document.createElement("dialog");
     dialog.className = "sp-dialog";
+    dialog.dataset.app = appName;
     dialog.innerHTML =
       '<header><div><small id="sp-eyebrow"></small><h2 id="sp-title"></h2></div><button type="button" id="sp-close" aria-label="Close">×</button></header><div id="sp-body"></div><p id="sp-error" role="alert"></p>';
     dialog.setAttribute("aria-labelledby", "sp-title");
@@ -983,15 +985,15 @@ export function createSkipSocial({
     body().innerHTML =
       '<p class="sp-lead">' +
       (editorScope === "global"
-        ? "Your colors, everywhere. A DM’s own look takes over only while that conversation is open."
-        : "Changes apply immediately for both people, across the full app while this DM is open.") +
-      '</p><div class="sp-theme-tabs"><button data-theme-tab="library" class="active">Themes</button><button data-theme-tab="emoji">Emoji</button><button data-theme-tab="image">Photo / GIF</button></div><div id="sp-theme-options"></div><div class="sp-theme-stage"><div id="sp-theme-wall"></div><div class="sp-theme-mock"><aside>skip<br>◌<br>◌</aside><section><b>A little more you</b><p>Hey, I love this look</p><p class="own">This is the one ✨</p></section></div></div><div id="sp-theme-controls"></div><div class="sp-row"><button id="sp-use-theme" class="sp-primary">Use this theme</button><button id="sp-reset-theme">Use my default</button></div>' +
+        ? "Your default look across Skip."
+        : "A shared look for this conversation.") +
+      '</p><div class="sp-theme-tabs"><button data-theme-tab="library" class="active">Themes</button><button data-theme-tab="emoji">Emoji</button><button data-theme-tab="image">Photo / GIF</button></div><div id="sp-theme-options"></div><div class="sp-theme-stage"><div id="sp-theme-wall"></div><div class="sp-theme-mock"><aside>skip<br>◌<br>◌</aside><section><b>A little more you</b><p>Hey, I love this look</p><p class="own">This is the one ✨</p></section></div></div><div id="sp-theme-controls"></div><div class="sp-row sp-theme-footer"><button id="sp-use-theme" class="sp-primary">Use this theme</button><button id="sp-reset-theme">Use my default</button></div>' +
       (editorScope === "dm"
-        ? '<hr><label>Conversation name<input id="sp-dm-title" maxlength="40" value="' +
+        ? '<details class="sp-details sp-chat-details"><summary>Names & nicknames</summary><label>Conversation name<input id="sp-dm-title" maxlength="40" value="' +
           esc(space.title || "") +
           '" placeholder="A name for this chat"></label><button id="sp-save-title">Save name</button><label>Your nickname<input id="sp-nickname" maxlength="30" value="' +
           esc(nicknames[context.me] || "") +
-          '" placeholder="Only in this DM"></label><button id="sp-save-nickname">Save nickname</button>'
+          '" placeholder="Only in this DM"></label><button id="sp-save-nickname">Save nickname</button></details>'
         : "");
     let selectedTab = "library";
     const panel = dialog.querySelector("#sp-theme-options"),
@@ -1003,6 +1005,8 @@ export function createSkipSocial({
         dialog.querySelector(".sp-theme-stage").style.setProperty(k, v);
     };
     const renderOptions = () => {
+      dialog.dataset.themeTab = selectedTab;
+      dialog.querySelector("#sp-use-theme").hidden = selectedTab === "library";
       if (selectedTab === "library") {
         panel.innerHTML =
           '<div class="sp-theme-grid">' +
@@ -1029,7 +1033,10 @@ export function createSkipSocial({
             b.disabled = true;
             try {
               await saveTheme(editorDraft);
-              if (token === editorSession) toast("Theme applied");
+              if (token === editorSession) {
+                for (const tile of panel.querySelectorAll('[data-theme-preset]')) tile.setAttribute('aria-pressed', String(tile === b));
+                toast("Theme applied");
+              }
             } catch (e) {
               fail(e);
             } finally {
@@ -1047,7 +1054,7 @@ export function createSkipSocial({
               icon("gallery") +
               '<b>Choose a photo or GIF</b><small>Photos are resized. Animated GIFs: up to 800 KB.</small><input id="sp-theme-photo" type="file" accept="image/png,image/jpeg,image/webp,image/gif"></label>';
         controls.innerHTML =
-          '<div class="sp-row"><label>Background<input type="color" id="sp-bg" value="' +
+          '<details class="sp-details sp-tuning"><summary>Fine-tune colors & wallpaper</summary><div class="sp-row"><label>Background<input type="color" id="sp-bg" value="' +
           editorDraft.background +
           '"></label><label>Accent<input type="color" id="sp-accent" value="' +
           editorDraft.accent +
@@ -1061,7 +1068,7 @@ export function createSkipSocial({
               '"></label>') +
           '<label>Dim wallpaper<input id="sp-dim" type="range" min="0" max="85" value="' +
           editorDraft.dim +
-          '"></label>';
+          '"></label></details>';
         dialog.querySelector("#sp-mode").value = editorDraft.mode;
         for (const [id, key] of [
           ["sp-bg", "background"],
@@ -1106,6 +1113,7 @@ export function createSkipSocial({
             }
           };
       }
+      for (const tile of panel.querySelectorAll('[data-theme-preset]')) tile.setAttribute('aria-pressed', String(tile.dataset.themePreset === editorDraft.preset));
       preview();
     };
     for (const b of dialog.querySelectorAll("[data-theme-tab]"))
@@ -1114,6 +1122,7 @@ export function createSkipSocial({
         for (const x of dialog.querySelectorAll("[data-theme-tab]"))
           x.classList.toggle("active", x === b);
         renderOptions();
+        for (const x of dialog.querySelectorAll('[data-theme-tab]')) x.setAttribute('aria-pressed', String(x === b));
       };
     bind("sp-use-theme", async () => {
       await saveTheme(editorDraft);
@@ -1273,8 +1282,10 @@ export function createSkipSocial({
   function renderGames() {
     if (!context || !dialog) return;
     const g = gameRecord || games[selectedGame];
+    dialog.dataset.gameView = g ? "board" : "picker";
+    dialog.querySelector("#sp-title").textContent = g ? gameName(g.kind) : "Games";
     body().innerHTML =
-      '<div class="sp-game-picker">' +
+      '<div id="sp-game-browser"><div class="sp-game-picker">' +
       ["ttt", "four"]
         .map(
           (kind) =>
@@ -1293,7 +1304,7 @@ export function createSkipSocial({
             '</small><span class="sp-game-cta">Invite to play ↗</span></button>',
         )
         .join("") +
-      '</div><div id="sp-game-board"></div><h3>Recent games</h3><div class="sp-recent-games">' +
+      '</div><details class="sp-details sp-history"><summary>Recent games (' + Object.keys(games).length + ')</summary><div class="sp-recent-games">' +
       Object.entries(games)
         .sort((a, b) => b[1].createdAt - a[1].createdAt)
         .map(
@@ -1313,7 +1324,10 @@ export function createSkipSocial({
             "</small></button>",
         )
         .join("") +
-      "</div>";
+      '</div></details></div><div id="sp-game-board"></div>';
+    if (g) {
+      dialog.querySelector("#sp-game-browser").hidden = true;
+    }
     for (const b of dialog.querySelectorAll("[data-new-game]"))
       b.onclick = async () => {
         b.disabled = true;
@@ -1348,7 +1362,7 @@ export function createSkipSocial({
                   : "Your friend’s turn",
       panel = dialog.querySelector("#sp-game-board");
     panel.innerHTML =
-      '<section class="sp-game-panel"><h3>' +
+      '<button type="button" id="sp-all-games" class="sp-back">← All games</button><section class="sp-game-panel"><h3>' +
       caption +
       "</h3><p>" +
       gameName(g.kind) +
@@ -1397,6 +1411,9 @@ export function createSkipSocial({
         ? '<button id="sp-resend-game">Resend invitation</button>'
         : "") +
       "</div></section>";
+    bind("sp-all-games", () => {
+      gameOff?.(); gameOff = null; selectedGame = null; gameRecord = null; renderGames();
+    });
     bind("sp-join-game", () => changeGame("accept"));
     bind("sp-close-game", () => changeGame("close"));
     bind("sp-resend-game", () =>

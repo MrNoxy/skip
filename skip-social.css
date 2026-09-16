@@ -966,3 +966,107 @@
 }
 
 .sp-attachment-preview[hidden] { display: none !important; }
+
+/* Focused layouts: the board and chooser never compete for vertical space. */
+.sp-dialog { padding: 0; overflow: hidden; }
+.sp-dialog[open] { display: flex; flex-direction: column; }
+.sp-dialog > header { flex: none; padding: 18px 20px 12px; margin: 0; }
+.sp-dialog #sp-body { padding: 0 20px 16px; overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
+.sp-dialog #sp-error { flex: none; margin: 0; padding: 0 20px; }
+.sp-dialog #sp-error:not(:empty) { padding-bottom: 12px; }
+.sp-dialog [hidden] { display: none !important; }
+.sp-dialog .sp-lead { font-size: 13px; margin: 0 0 12px; }
+.sp-details { border-top: 1px solid color-mix(in srgb, currentColor 15%, transparent); margin-top: 12px; }
+.sp-details > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; list-style: none; }
+.sp-details > summary::after { content: '›'; font-size: 22px; margin-left: auto; transition: transform 160ms ease; }
+.sp-details[open] > summary::after { transform: rotate(90deg); }
+.sp-details > summary::-webkit-details-marker { display: none; }
+.sp-details > summary:focus-visible { outline: 2px solid var(--sp-accent); outline-offset: -2px; }
+.sp-game-picker { grid-template-columns: 1fr; gap: 8px; }
+.sp-game-picker > button { display: grid; grid-template-columns: 52px 1fr; gap: 2px 12px; text-align: left; padding: 12px; align-items: center; }
+.sp-game-picker .sp-game-art { grid-row: 1 / 4; height: 52px; width: 52px; font-size: 19px; line-height: 1; border-radius: 10px; margin: 0; }
+.sp-game-picker strong { margin: 0; font-size: 15px; }
+.sp-game-picker small { margin: 0; font-size: 12px; }
+.sp-game-cta { margin: 2px 0 0; font-size: 12px; }
+.sp-recent-games { max-height: 220px; overflow-y: auto; overscroll-behavior: contain; }
+.sp-game-panel { border: 0; padding: 0; margin-top: 12px; }
+.sp-game-panel > h3 { margin: 0; font-size: 17px; }
+.sp-game-panel > p { margin: 2px 0 8px; color: var(--sp-muted); font-size: 12px; }
+.sp-board { width: min(100%, 300px, 43dvh); margin: 12px auto; }
+.sp-board.four { width: min(100%, 350px, 50dvh); }
+.sp-dialog .sp-back { min-height: 36px; padding: 4px 0; border: 0; background: transparent; color: var(--sp-muted); }
+.sp-dialog .sp-game-panel .sp-row { flex-wrap: wrap; }
+.sp-theme-grid { grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; }
+.sp-dialog .sp-theme-tile { padding: 7px 3px; border-radius: 10px; }
+.sp-theme-tile > span { height: 36px; font-size: 21px; }
+.sp-theme-tile > b { font-size: 11px; margin-top: 4px; }
+.sp-dialog .sp-theme-tile[aria-pressed=true] { outline: 2px solid var(--sp-accent); outline-offset: -2px; }
+.sp-dialog[data-theme-tab=library] .sp-theme-stage { display: none; }
+.sp-theme-stage { height: 104px; margin: 10px 0; border-radius: 12px; }
+.sp-theme-mock { height: 100%; }
+.sp-theme-mock aside { padding: 10px; font-size: 11px; }
+.sp-theme-mock section { padding: 10px; }
+.sp-theme-mock section b { display: none; }
+.sp-theme-mock section p { margin: 0 0 4px; padding: 6px 10px; font-size: 12px; }
+.sp-theme-footer { margin-top: 10px; }
+.sp-upload-tile { padding: 12px; gap: 4px; }
+.sp-upload-tile svg { width: 24px; height: 24px; }
+.sp-dialog .sp-chat-details input { margin-bottom: 6px; }
+@media (max-width:600px) {
+  .sp-dialog { width: calc(100% - 16px); max-height: calc(100dvh - 24px); padding: 0; }
+  .sp-dialog > header { padding: 14px 16px 10px; }
+  .sp-dialog #sp-body { padding: 0 16px max(12px,env(safe-area-inset-bottom)); }
+  .sp-dialog h2 { font-size: 21px; }
+  .sp-dialog header small { display: none; }
+  .sp-dialog .sp-theme-tile > b { font-size: 11px; }
+  .sp-dialog .sp-game-picker strong { font-size: 14px; }
+  .sp-dialog .sp-theme-tabs { margin-bottom: 10px; }
+  .sp-dialog input:not([type=range]), .sp-dialog select { font-size: 16px; }
+}
+/* Same shared behavior, each app's own visual language. */
+:root[data-chat-app=skip] :is(.sp-dialog,.sp-popover) {
+  --sp-bg: var(--bg-secondary); --sp-text: var(--text-bright);
+  --sp-muted: var(--text-main); --sp-accent: var(--accent-primary); --sp-ink: var(--sk-ink,#fff);
+  font-family: inherit; font-size: 14px; border-color: var(--border-color); border-radius: 12px;
+  box-shadow: 0 12px 36px #0005;
+}
+:root[data-chat-app=skip] .sp-dialog { width: min(440px,calc(100vw - 24px)); }
+:root[data-chat-app=skip] .sp-dialog::backdrop { backdrop-filter: blur(3px); background: #0008; }
+:root[data-chat-app=skip] :is(.sp-dialog,.sp-popover) button { border-radius: 8px; font-family: inherit; }
+:root[data-chat-app=skip] :is(.sp-dialog,.sp-popover) h2 { font-size: 19px; letter-spacing: -.3px; }
+:root[data-chat-app=skip] .sp-dialog header small { display: none; }
+:root[data-chat-app=skip] :is(.sp-dialog,.sp-popover) input:not([type=range]),
+:root[data-chat-app=skip] .sp-dialog select { background: var(--bg-tertiary); border-color: var(--border-color); border-radius: 8px; }
+:root[data-chat-app=skip] .sp-theme-tabs { background: var(--bg-tertiary); border-radius: 8px; }
+:root[data-chat-app=skip] .sp-theme-tabs .active { background: var(--bg-hover); color: var(--text-bright); }
+:root[data-chat-app=skip] .sp-game-picker > button { background: var(--bg-tertiary); border: 1px solid var(--border-color); }
+:root[data-chat-app=skip] .sp-game-picker > button:hover { border-color: var(--accent-primary); }
+:root[data-chat-app=skip] .sp-game-art { background: var(--bg-hover); color: var(--accent-primary); }
+:root[data-chat-app=skip] .sp-game-invite { background: var(--bg-secondary); color: var(--text-bright); border: 1px solid var(--border-color); border-left: 3px solid var(--accent-primary); border-radius: 8px; padding: 12px; gap: 12px; max-width: 350px; font-family: inherit; }
+:root[data-chat-app=skip] .sp-game-invite strong { font-size: 15px; letter-spacing: 0; margin-top: 0; }
+:root[data-chat-app=skip] .sp-game-invite small { font-size: 10px; letter-spacing: .5px; }
+:root[data-chat-app=skip] .sp-game-invite p { margin: 4px 0 8px; color: var(--text-main); opacity: 1; }
+:root[data-chat-app=skip] .sp-game-emblem { width: 40px; height: 44px; border-radius: 8px; font-size: 19px; background: var(--bg-tertiary); color: var(--accent-primary); }
+:root[data-chat-app=skip] .sp-invite-actions button { margin: 0; border-radius: 6px; background: var(--bg-hover); color: var(--text-bright); padding: 7px 12px; }
+:root[data-chat-app=skip] .sp-invite-actions .sp-primary { background: var(--accent-primary); color: var(--sk-ink,#fff); }
+:root[data-chat-app=skip] .sp-effect-mark { color: var(--accent-primary); }
+:root[data-chat-app=skip] .sp-preview-bubble { border-radius: 8px; }
+@media(max-width:600px) {
+  :root[data-chat-app=skip] .sp-dialog { margin: auto auto 0; width: 100%; max-height: calc(100dvh - max(16px,env(safe-area-inset-top))); border-radius: 16px 16px 0 0; border-bottom: 0; }
+  :root[data-chat-app=skip] .sp-dialog > header::before { content: ''; position: absolute; width: 32px; height: 3px; border-radius: 4px; background: var(--border-color); top: 7px; left: calc(50% - 16px); }
+  :root[data-chat-app=skip] .sp-dialog > header { padding-top: 18px; }
+}
+:root[data-chat-app=skip] .sp-menu button { min-height: 44px; padding: 6px 8px; font-size: 14px; gap: 10px; }
+:root[data-chat-app=skip] .sp-menu-icon { width: 30px; height: 30px; border-radius: 7px; background: var(--bg-tertiary); color: var(--text-main); }
+:root[data-chat-app=skip] .sp-menu button:hover { background: var(--bg-hover); }
+:root[data-chat-app=skip] .sp-effect-sheet { padding: 14px; }
+:root[data-chat-app=skip] .sp-effect-options button { background: var(--bg-tertiary); }
+:root[data-chat-app=skip] .sp-effect-options button[aria-pressed=true] { border-color: var(--accent-primary); background: var(--bg-hover); }
+.sp-theme-grid { max-height: none; overflow: visible; }
+.sp-dialog .sp-theme-tile { height: 72px; }
+.sp-theme-tile > span { margin-bottom: 0; }
+/* Preserve Skip's flat message layout even when a wallpaper is selected. */
+:root[data-chat-app=skip].sk-themed .msg-content-wrapper { padding: 0; border-radius: 0; background: transparent !important; }
+:root[data-chat-app=skip].sk-themed #chat-area { background: color-mix(in srgb,var(--sk-surface) 78%,transparent) !important; }
+:root[data-chat-app=skip] .sp-effect-options button[aria-pressed=true] { color: var(--text-bright); outline: 1px solid var(--accent-primary); }
+:root[data-chat-app=skip] .sp-game-invite { margin-left: 42px; max-width: min(350px,calc(100% - 42px)); }
